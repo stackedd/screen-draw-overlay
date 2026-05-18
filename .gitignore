@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode
+DerivedData/
+*.xcuserdata/
+*.xcuserstate
+
+# Build output
+dist/
+*.app
+*.dSYM
+*.zip
+
+# Logs
+*.log
