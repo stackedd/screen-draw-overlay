@@ -568,6 +568,14 @@ final class OverlayPanel: NSPanel {
 final class DrawingView: NSView {
     private static let strokeLineWidth: CGFloat = 4
 
+    // Always shown, in both modes: this is the way out of a screen that has stopped
+    // responding to clicks, so it is a safety line, not decoration.
+    private static let indicatorHintText = "⌃⌥⌘Esc to exit"
+    private static let indicatorPaddingX: CGFloat = 8
+    private static let indicatorPaddingY: CGFloat = 5
+    private static let indicatorLineGap: CGFloat = 2
+    private static let indicatorMargin: CGFloat = 14
+
     private var paths: [NSBezierPath] = []
     private var currentPath: NSBezierPath?
     private var lastStrokePoint: NSPoint?
@@ -780,19 +788,17 @@ final class DrawingView: NSView {
             return
         }
 
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.92)
-        ]
-        let attributedText = NSAttributedString(string: indicatorText, attributes: attributes)
-        let paddingX: CGFloat = 8
-        let paddingY: CGFloat = 5
+        let (mode, hint) = indicatorLines()
 
         indicatorBackgroundColor.setFill()
         NSBezierPath(roundedRect: indicatorRect, xRadius: 5, yRadius: 5).fill()
 
-        attributedText.draw(at: NSPoint(x: indicatorRect.minX + paddingX,
-                                        y: indicatorRect.minY + paddingY))
+        // Bottom line first: the view is not flipped, so the mode sits above the hint.
+        hint.draw(at: NSPoint(x: indicatorRect.minX + DrawingView.indicatorPaddingX,
+                              y: indicatorRect.minY + DrawingView.indicatorPaddingY))
+        mode.draw(at: NSPoint(x: indicatorRect.minX + DrawingView.indicatorPaddingX,
+                              y: indicatorRect.minY + DrawingView.indicatorPaddingY
+                                 + hint.size().height + DrawingView.indicatorLineGap))
     }
 
     // Red and solid while the overlay owns the mouse, hollow and neutral while clicks are
@@ -807,19 +813,32 @@ final class DrawingView: NSView {
             : NSColor.systemRed.withAlphaComponent(0.72)
     }
 
-    private func activeModeIndicatorRect() -> NSRect {
-        let textSize = NSAttributedString(
-            string: indicatorText,
-            attributes: [.font: NSFont.systemFont(ofSize: 11, weight: .semibold)]
-        ).size()
-        let paddingX: CGFloat = 8
-        let paddingY: CGFloat = 5
-        let margin: CGFloat = 14
+    // The badge says which mode you are in; without the second line it never says how to
+    // get out, which is the one thing a user who thinks they are stuck needs. Modifier
+    // glyphs keep it to a glance rather than a sentence to read mid-presentation.
+    private func indicatorLines() -> (mode: NSAttributedString, hint: NSAttributedString) {
+        let mode = NSAttributedString(string: indicatorText, attributes: [
+            .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.92)
+        ])
+        let hint = NSAttributedString(string: DrawingView.indicatorHintText, attributes: [
+            .font: NSFont.systemFont(ofSize: 9, weight: .regular),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.65)
+        ])
 
-        return NSRect(x: indicatorBounds.maxX - textSize.width - paddingX * 2 - margin,
-                      y: indicatorBounds.maxY - textSize.height - paddingY * 2 - margin,
-                      width: textSize.width + paddingX * 2,
-                      height: textSize.height + paddingY * 2)
+        return (mode, hint)
+    }
+
+    private func activeModeIndicatorRect() -> NSRect {
+        let (mode, hint) = indicatorLines()
+        let width = max(mode.size().width, hint.size().width) + DrawingView.indicatorPaddingX * 2
+        let height = mode.size().height + hint.size().height + DrawingView.indicatorLineGap
+            + DrawingView.indicatorPaddingY * 2
+
+        return NSRect(x: indicatorBounds.maxX - width - DrawingView.indicatorMargin,
+                      y: indicatorBounds.maxY - height - DrawingView.indicatorMargin,
+                      width: width,
+                      height: height)
     }
 
     private func updateIndicatorHover(at point: NSPoint) {
