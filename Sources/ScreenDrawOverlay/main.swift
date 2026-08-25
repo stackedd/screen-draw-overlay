@@ -294,8 +294,11 @@ final class OverlayPanel: NSPanel {
 }
 
 final class DrawingView: NSView {
+    private static let strokeLineWidth: CGFloat = 4
+
     private var paths: [NSBezierPath] = []
     private var currentPath: NSBezierPath?
+    private var lastStrokePoint: NSPoint?
     private var indicatorBounds: NSRect
     private let showsIndicator: Bool
     private var indicatorRect: NSRect = .zero
@@ -338,21 +341,29 @@ final class DrawingView: NSView {
         updateIndicatorHover(at: point)
 
         let path = NSBezierPath()
-        path.lineWidth = 4
+        path.lineWidth = DrawingView.strokeLineWidth
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
         path.move(to: point)
 
         currentPath = path
-        needsDisplay = true
+        lastStrokePoint = point
+        invalidateSegment(from: point, to: point)
     }
 
     override func mouseDragged(with event: NSEvent) {
         guard let currentPath else { return }
         let point = convert(event.locationInWindow, from: nil)
         updateIndicatorHover(at: point)
+
+        let previousPoint = lastStrokePoint ?? point
         currentPath.line(to: point)
-        needsDisplay = true
+        lastStrokePoint = point
+
+        // Only the new segment changed. Invalidating the whole view here meant every
+        // mouse move re-stroked every path drawn so far, so the cost of a drag grew
+        // with the number of strokes already on screen.
+        invalidateSegment(from: previousPoint, to: point)
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -360,9 +371,12 @@ final class DrawingView: NSView {
 
         if let currentPath {
             paths.append(currentPath)
+            // The pixels do not change here, the path just moves from currentPath into
+            // paths. Repainting its own bounds once per stroke is cheap insurance.
+            setNeedsDisplay(strokeBounds(of: currentPath))
         }
         currentPath = nil
-        needsDisplay = true
+        lastStrokePoint = nil
     }
 
     override func mouseMoved(with event: NSEvent) {
@@ -387,17 +401,40 @@ final class DrawingView: NSView {
         super.draw(dirtyRect)
 
         NSColor.systemRed.setStroke()
-        for path in paths {
+
+        // Skip strokes that are nowhere near the region being repainted. With
+        // incremental invalidation this is what keeps a drag cheap on a long session.
+        for path in paths where strokeBounds(of: path).intersects(dirtyRect) {
             path.stroke()
         }
-        currentPath?.stroke()
-        drawActiveModeIndicator()
+
+        if let currentPath, strokeBounds(of: currentPath).intersects(dirtyRect) {
+            currentPath.stroke()
+        }
+
+        drawActiveModeIndicator(in: dirtyRect)
     }
 
     func clear() {
         paths.removeAll()
         currentPath = nil
+        lastStrokePoint = nil
         needsDisplay = true
+    }
+
+    // NSBezierPath.bounds covers the path geometry only, so grow it by the line width to
+    // include the stroke itself, its round caps and antialiasing.
+    private func strokeBounds(of path: NSBezierPath) -> NSRect {
+        path.bounds.insetBy(dx: -DrawingView.strokeLineWidth, dy: -DrawingView.strokeLineWidth)
+    }
+
+    private func invalidateSegment(from start: NSPoint, to end: NSPoint) {
+        let segment = NSRect(x: min(start.x, end.x),
+                             y: min(start.y, end.y),
+                             width: abs(end.x - start.x),
+                             height: abs(end.y - start.y))
+        setNeedsDisplay(segment.insetBy(dx: -DrawingView.strokeLineWidth,
+                                        dy: -DrawingView.strokeLineWidth))
     }
 
     private func undoLastStroke() {
@@ -409,13 +446,13 @@ final class DrawingView: NSView {
         needsDisplay = true
     }
 
-    private func drawActiveModeIndicator() {
+    private func drawActiveModeIndicator(in dirtyRect: NSRect) {
         guard showsIndicator else {
             return
         }
 
         indicatorRect = activeModeIndicatorRect()
-        guard !isMouseOverIndicator else {
+        guard !isMouseOverIndicator, dirtyRect.intersects(indicatorRect) else {
             return
         }
 
@@ -460,7 +497,10 @@ final class DrawingView: NSView {
         isMouseOverIndicator = currentIndicatorRect.contains(point)
 
         if isMouseOverIndicator != wasMouseOverIndicator {
-            needsDisplay = true
+            // Showing or hiding the badge only touches the badge's own rect; anything
+            // drawn underneath it is repainted by draw(_:) for the same rect.
+            setNeedsDisplay(currentIndicatorRect.insetBy(dx: -DrawingView.strokeLineWidth,
+                                                         dy: -DrawingView.strokeLineWidth))
         }
     }
 }
