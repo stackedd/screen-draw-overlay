@@ -18,6 +18,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         setupStatusItem()
 
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(screenParametersDidChange(_:)),
+                                               name: NSApplication.didChangeScreenParametersNotification,
+                                               object: nil)
+
         toggleHotKey = GlobalHotKey(id: 1,
                                     keyCode: UInt32(kVK_ANSI_D),
                                     modifiers: UInt32(cmdKey | optionKey | controlKey)) { [weak self] in
@@ -47,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         print("ScreenDrawOverlay: app terminating")
+        NotificationCenter.default.removeObserver(self)
         forceCloseOverlay(reason: "app terminating")
         toggleHotKey?.unregister()
         emergencyHotKey?.unregister()
@@ -93,31 +99,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // Safety-first v0.1: only draw over the main screen until the overlay is stable.
-        guard let screen = NSScreen.main else {
-            print("ScreenDrawOverlay: could not enter drawing mode because NSScreen.main is nil")
-            forceCloseOverlay(reason: "missing main screen")
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else {
+            print("ScreenDrawOverlay: could not enter drawing mode because there are no screens")
+            forceCloseOverlay(reason: "no screens available")
             return
         }
 
-        let window = OverlayPanel(screen: screen)
-        let drawingView = window.drawingView
-        window.onEscape = { [weak self] in
-            self?.forceCloseOverlay(reason: "Escape key")
-        }
-        drawingView.onEscape = { [weak self] in
-            self?.forceCloseOverlay(reason: "Escape key")
+        // One panel per display. The ● DRAW badge would be noise repeated on every
+        // screen, so only the main screen's panel draws it; index lookup guarantees
+        // exactly one panel gets it even if NSScreen.main is not in NSScreen.screens.
+        let indicatorScreen = NSScreen.main ?? screens[0]
+        let indicatorIndex = screens.firstIndex { $0.matches(indicatorScreen) } ?? 0
+
+        var windows: [OverlayPanel] = []
+        var views: [DrawingView] = []
+
+        for (index, screen) in screens.enumerated() {
+            let window = OverlayPanel(screen: screen, showsIndicator: index == indicatorIndex)
+            let drawingView = window.drawingView
+
+            // Escape on any screen tears down every overlay, not just its own panel.
+            window.onEscape = { [weak self] in
+                self?.forceCloseOverlay(reason: "Escape key")
+            }
+            drawingView.onEscape = { [weak self] in
+                self?.forceCloseOverlay(reason: "Escape key")
+            }
+
+            windows.append(window)
+            views.append(drawingView)
         }
 
-        overlayWindows = [window]
-        drawingViews = [drawingView]
+        overlayWindows = windows
+        drawingViews = views
         isDrawingMode = true
 
         print("ScreenDrawOverlay: drawing mode ON")
-        print("ScreenDrawOverlay: overlay created")
+        print("ScreenDrawOverlay: overlay created on \(windows.count) screen(s)")
 
-        // The panel is non-activating, but making it key lets Escape reach keyDown.
-        window.makeKeyAndOrderFront(nil)
+        // Only one window can be key, so the secondary panels are just ordered in front.
+        // The panels are non-activating, but making one key lets Escape reach keyDown.
+        for (index, window) in windows.enumerated() where index != indicatorIndex {
+            window.orderFrontRegardless()
+        }
+        windows[indicatorIndex].makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func screenParametersDidChange(_ notification: Notification) {
+        guard isDrawingMode || !overlayWindowSnapshot().isEmpty else {
+            return
+        }
+
+        // A display was plugged in, unplugged or rearranged. The open panels are pinned
+        // to frames that may no longer exist, so the safe move is to leave drawing mode
+        // rather than re-laying out overlays mid-stroke.
+        print("ScreenDrawOverlay: screen configuration changed while drawing")
+        forceCloseOverlay(reason: "screen configuration changed")
     }
 
     private func emergencyCloseOverlay() {
@@ -202,7 +240,7 @@ final class OverlayPanel: NSPanel {
     let drawingView: DrawingView
     var onEscape: (() -> Void)?
 
-    init(screen: NSScreen) {
+    init(screen: NSScreen, showsIndicator: Bool) {
         let screenFrame = screen.frame
         let visibleFrame = screen.visibleFrame
         let localVisibleFrame = NSRect(x: visibleFrame.minX - screenFrame.minX,
@@ -210,7 +248,8 @@ final class OverlayPanel: NSPanel {
                                        width: visibleFrame.width,
                                        height: visibleFrame.height)
         drawingView = DrawingView(frame: NSRect(origin: .zero, size: screenFrame.size),
-                                  indicatorBounds: localVisibleFrame)
+                                  indicatorBounds: localVisibleFrame,
+                                  showsIndicator: showsIndicator)
 
         // NSPanel subclasses must call a designated initializer. The panel is
         // non-activating so drawing does not fully steal focus from other apps.
@@ -258,6 +297,7 @@ final class DrawingView: NSView {
     private var paths: [NSBezierPath] = []
     private var currentPath: NSBezierPath?
     private var indicatorBounds: NSRect
+    private let showsIndicator: Bool
     private var indicatorRect: NSRect = .zero
     private var isMouseOverIndicator = false
     private var mouseTrackingArea: NSTrackingArea?
@@ -266,8 +306,9 @@ final class DrawingView: NSView {
     override var acceptsFirstResponder: Bool { true }
     override var isOpaque: Bool { false }
 
-    init(frame frameRect: NSRect, indicatorBounds: NSRect) {
+    init(frame frameRect: NSRect, indicatorBounds: NSRect, showsIndicator: Bool) {
         self.indicatorBounds = indicatorBounds
+        self.showsIndicator = showsIndicator
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
@@ -369,6 +410,10 @@ final class DrawingView: NSView {
     }
 
     private func drawActiveModeIndicator() {
+        guard showsIndicator else {
+            return
+        }
+
         indicatorRect = activeModeIndicatorRect()
         guard !isMouseOverIndicator else {
             return
@@ -406,6 +451,10 @@ final class DrawingView: NSView {
     }
 
     private func updateIndicatorHover(at point: NSPoint) {
+        guard showsIndicator else {
+            return
+        }
+
         let wasMouseOverIndicator = isMouseOverIndicator
         let currentIndicatorRect = indicatorRect == .zero ? activeModeIndicatorRect() : indicatorRect
         isMouseOverIndicator = currentIndicatorRect.contains(point)
@@ -519,6 +568,24 @@ final class GlobalHotKey {
             Unmanaged<GlobalHotKey>.fromOpaque(userData).release()
             self.userData = nil
         }
+    }
+}
+
+extension NSScreen {
+    // NSScreen instances are not guaranteed to be identical across calls, so fall back
+    // to the display ID when object identity does not match.
+    func matches(_ other: NSScreen) -> Bool {
+        if self === other {
+            return true
+        }
+
+        let key = NSDeviceDescriptionKey("NSScreenNumber")
+        guard let lhs = deviceDescription[key] as? CGDirectDisplayID,
+              let rhs = other.deviceDescription[key] as? CGDirectDisplayID else {
+            return false
+        }
+
+        return lhs == rhs
     }
 }
 
