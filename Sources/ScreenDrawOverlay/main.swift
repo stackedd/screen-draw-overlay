@@ -392,7 +392,13 @@ final class OverlayPanel: NSPanel {
         // .canJoinAllSpaces keeps the overlay with the user when they switch Spaces, and
         // .fullScreenAuxiliary lets it join another app's full screen Space instead of
         // forcing a Space switch. Both are needed to draw over a presentation.
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        //
+        // .stationary keeps the overlay out of Exposé-style sweeps: without it, clicking
+        // the wallpaper ("Click wallpaper to reveal desktop") shoves the panels aside like
+        // ordinary windows and the drawing appears to vanish. .ignoresCycle keeps the
+        // panels out of window cycling, where a full screen transparent panel is never
+        // something the user meant to pick.
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         ignoresMouseEvents = false
         acceptsMouseMovedEvents = true
         hidesOnDeactivate = false
