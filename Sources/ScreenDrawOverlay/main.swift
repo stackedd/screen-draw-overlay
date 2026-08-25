@@ -231,11 +231,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 final class OverlayPanel: NSPanel {
-    // Full screen apps (Keynote / PowerPoint presentation mode, full screen Safari) put
-    // their window above .floating, so a floating overlay was invisible in exactly the
-    // case this app exists for. The shielding level sits above them. Window level does
-    // not affect key window eligibility, so Escape still reaches keyDown.
-    private static let overlayLevel = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+    // Measured, not guessed: a Keynote slideshow puts its windows at level 9, so the old
+    // .floating (3) overlay was ordered *under* the presentation - invisible in exactly
+    // the case this app exists for. .popUpMenu (101) clears it; anything higher only
+    // buys covering more system UI. Window level does not affect key window
+    // eligibility, so Escape still reaches keyDown.
+    private static let overlayLevel = NSWindow.Level.popUpMenu
 
     let drawingView: DrawingView
     var onEscape: (() -> Void)?
