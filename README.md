@@ -33,13 +33,22 @@ The app does not launch at login by itself. Add it under System Settings → Gen
 | Shortcut | What it does |
 | --- | --- |
 | `Control + Option + Command + D` | Toggle drawing mode on and off |
+| `Control + Option + Command + E` | Switch between drawing and click-through |
 | Drag the mouse | Draw a red freehand line |
 | `C` | Clear everything, stay in drawing mode |
 | `Command + Z` | Undo the last stroke |
 | `Escape` | Clear and leave drawing mode |
 | `Control + Option + Command + Escape` | Emergency exit: force close the overlay |
 
-The last one exists for a reason. If drawing mode ever gets stuck and the overlay is swallowing your clicks, that shortcut always releases the screen, and it works even when nothing else responds. The menu bar item also has **Toggle Drawing Mode** and **Quit**, and it stays clickable while you are drawing: the overlay deliberately sits just below the menu bar, so it never traps you behind itself.
+### Drawing and click-through
+
+Drawing mode has two states. While you are **drawing**, the overlay takes the mouse: your strokes land on it and nothing reaches the app underneath. Press `Control + Option + Command + E` and it switches to **click-through**: the drawing stays exactly where it is, but clicks and scrolls go straight to the app below, so you can advance a slide, scroll a page or switch apps without losing what you drew. Press it again to keep drawing.
+
+Only leaving drawing mode clears the drawing — `Control + Option + Command + D`, `Escape`, or the emergency shortcut. Switching modes never does.
+
+You can always tell which state you are in: the corner badge reads a red `● DRAW` when the overlay owns your clicks and a dim `◌ CLICK-THROUGH` when they pass through, the pointer is a crosshair only while drawing, and the `D` in the menu bar turns red while the overlay is taking clicks.
+
+The last one exists for a reason. If drawing mode ever gets stuck and the overlay is swallowing your clicks, that shortcut always releases the screen, and it works even when nothing else responds. The menu bar item also has **Toggle Drawing Mode**, **Toggle Click-Through** and **Quit**, and it stays clickable while you are drawing: the overlay deliberately sits just below the menu bar, so it never traps you behind itself.
 
 If `Control + Option + Command + D` does nothing at launch, another app already owns that shortcut — the app tells you so with an alert. Change the key code or modifiers in `Sources/ScreenDrawOverlay/main.swift` and rebuild.
 
@@ -62,6 +71,7 @@ This is v0.1 and deliberately small. There is no toolbar, no color picker, no li
 Beyond that, things worth knowing:
 
 - While drawing mode is on, the overlay is above ordinary windows and dialogs, so another app's alert can end up underneath your drawing until you leave drawing mode. The menu bar and its status items stay above the overlay.
+- While you are drawing, apps underneath still see where the pointer is even though your clicks come to the overlay, so the Dock and other apps may show hover highlights or tooltips under your cursor. Suppressing that would need an event tap and Accessibility permission, which this app deliberately does not ask for. Click-through mode is the way to interact with them normally.
 - Keynote fades in and out of a slideshow with a window drawn above the overlay, so your drawing disappears for about a second at the start and end of a presentation. It comes back on its own.
 - Plugging in, unplugging or rearranging a display while drawing ends drawing mode and clears the drawing. That is intentional — it is better than leaving an overlay stranded on a display that no longer exists.
 - Drawings are never saved. Leaving drawing mode throws them away.

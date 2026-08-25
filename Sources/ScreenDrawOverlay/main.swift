@@ -7,8 +7,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayWindows: [OverlayPanel] = []
     private var drawingViews: [DrawingView] = []
     private var toggleHotKey: GlobalHotKey?
+    private var interactionHotKey: GlobalHotKey?
     private var emergencyHotKey: GlobalHotKey?
     private var isDrawingMode = false
+    private var isInteractionMode = false
     private var overlayScreenLayout: [String] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -30,6 +32,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.toggleDrawingMode()
         }
 
+        interactionHotKey = GlobalHotKey(id: 3,
+                                         keyCode: UInt32(kVK_ANSI_E),
+                                         modifiers: UInt32(cmdKey | optionKey | controlKey)) { [weak self] in
+            self?.toggleInteractionMode()
+        }
+
         emergencyHotKey = GlobalHotKey(id: 2,
                                        keyCode: UInt32(kVK_Escape),
                                        modifiers: UInt32(cmdKey | optionKey | controlKey)) { [weak self] in
@@ -41,6 +49,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             showAlert(title: "Hotkey registration failed",
                       message: "Control + Option + Command + D could not be registered. Another app may already be using it.")
+        }
+
+        if interactionHotKey?.register() == true {
+            print("ScreenDrawOverlay: hotkey registered - Control + Option + Command + E")
+        } else {
+            showAlert(title: "Click-through hotkey registration failed",
+                      message: "Control + Option + Command + E could not be registered. You can still switch modes from the D menu bar item.")
         }
 
         if emergencyHotKey?.register() == true {
@@ -56,13 +71,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.removeObserver(self)
         forceCloseOverlay(reason: "app terminating")
         toggleHotKey?.unregister()
+        interactionHotKey?.unregister()
         emergencyHotKey?.unregister()
     }
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem?.button?.title = "D"
-        statusItem?.button?.toolTip = "Screen Draw Overlay"
 
         let menu = NSMenu()
         let toggleItem = NSMenuItem(title: "Toggle Drawing Mode",
@@ -70,6 +84,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                     keyEquivalent: "")
         toggleItem.target = self
         menu.addItem(toggleItem)
+        let interactionItem = NSMenuItem(title: "Toggle Click-Through",
+                                         action: #selector(toggleInteractionModeFromMenu),
+                                         keyEquivalent: "")
+        interactionItem.target = self
+        menu.addItem(interactionItem)
         menu.addItem(.separator())
         let quitItem = NSMenuItem(title: "Quit",
                                   action: #selector(quit),
@@ -77,10 +96,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quitItem.target = self
         menu.addItem(quitItem)
         statusItem?.menu = menu
+
+        updateStatusItemAppearance()
     }
 
     @objc private func toggleDrawingModeFromMenu() {
         toggleDrawingMode()
+    }
+
+    @objc private func toggleInteractionModeFromMenu() {
+        toggleInteractionMode()
     }
 
     @objc private func quit() {
@@ -136,6 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         drawingViews = views
         overlayScreenLayout = AppDelegate.screenLayoutSignature()
         isDrawingMode = true
+        isInteractionMode = false
 
         print("ScreenDrawOverlay: drawing mode ON")
         print("ScreenDrawOverlay: overlay created on \(windows.count) screen(s)")
@@ -146,6 +172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.orderFrontRegardless()
         }
         windows[indicatorIndex].makeKeyAndOrderFront(nil)
+        updateStatusItemAppearance()
     }
 
     @objc private func screenParametersDidChange(_ notification: Notification) {
@@ -178,6 +205,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let displayID = (screen.deviceDescription[key] as? CGDirectDisplayID).map(String.init) ?? "unknown"
             return displayID + "@" + NSStringFromRect(screen.frame)
         }
+    }
+
+    // Drawing mode has two sub-modes. Drawing: the panels take the mouse, so strokes land
+    // on the overlay and clicks never reach the app underneath. Click-through: the panels
+    // stop taking the mouse so the user can drive the app underneath - advance a slide,
+    // switch apps - while every stroke stays on screen. Leaving drawing mode is what
+    // clears the drawing; switching modes never does.
+    private func toggleInteractionMode() {
+        let windows = overlayWindowSnapshot()
+        guard isDrawingMode, !windows.isEmpty else {
+            print("ScreenDrawOverlay: click-through toggle ignored, drawing mode is off")
+            return
+        }
+
+        isInteractionMode.toggle()
+
+        windows.forEach { window in
+            window.ignoresMouseEvents = isInteractionMode
+            window.drawingView.isInteractionMode = isInteractionMode
+        }
+
+        if isInteractionMode {
+            print("ScreenDrawOverlay: click-through mode ON (drawing kept, clicks pass through)")
+        } else {
+            // Escape, C and Command+Z are local keys, so the panel has to be key again.
+            let keyPanel = windows.first { $0.drawingView.showsIndicator } ?? windows[0]
+            keyPanel.makeKeyAndOrderFront(nil)
+            print("ScreenDrawOverlay: click-through mode OFF (drawing again)")
+        }
+
+        updateStatusItemAppearance()
+    }
+
+    private func updateStatusItemAppearance() {
+        guard let button = statusItem?.button else {
+            return
+        }
+
+        // The menu bar item doubles as the mode light: red while the overlay is taking
+        // the mouse, dimmed while it is only showing, plain when there is no overlay.
+        let color: NSColor
+        let tooltip: String
+        if !isDrawingMode {
+            color = .labelColor
+            tooltip = "Screen Draw Overlay - Control Option Command D to draw"
+        } else if isInteractionMode {
+            color = .secondaryLabelColor
+            tooltip = "Click-through: drawing is showing, clicks go to the app underneath"
+        } else {
+            color = .systemRed
+            tooltip = "Drawing: the overlay is taking your clicks"
+        }
+
+        button.attributedTitle = NSAttributedString(
+            string: "D",
+            attributes: [
+                .foregroundColor: color,
+                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+            ]
+        )
+        button.toolTip = tooltip
     }
 
     private func emergencyCloseOverlay() {
@@ -215,6 +303,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         isDrawingMode = false
+        isInteractionMode = false
+        updateStatusItemAppearance()
     }
 
     private func overlayWindowSnapshot() -> [OverlayPanel] {
@@ -333,7 +423,25 @@ final class DrawingView: NSView {
     private var currentPath: NSBezierPath?
     private var lastStrokePoint: NSPoint?
     private var indicatorBounds: NSRect
-    private let showsIndicator: Bool
+    let showsIndicator: Bool
+
+    // Set by AppDelegate when the click-through hot key is used. The view keeps drawing
+    // its strokes either way; what changes is the badge and whether it claims the cursor.
+    var isInteractionMode = false {
+        didSet {
+            guard isInteractionMode != oldValue else {
+                return
+            }
+
+            // No mouseMoved arrives while the panel ignores the mouse, so a hover that was
+            // in effect at the moment of the switch would stick and hide the badge.
+            isMouseOverIndicator = false
+            window?.invalidateCursorRects(for: self)
+            // The badge changes text, size and colour; a mode switch is rare enough to
+            // just repaint everything.
+            needsDisplay = true
+        }
+    }
     private var indicatorRect: NSRect = .zero
     private var isMouseOverIndicator = false
     private var mouseTrackingArea: NSTrackingArea?
@@ -426,6 +534,10 @@ final class DrawingView: NSView {
     // arriving from another app's window without a cursor rect invalidation in between.
     override func resetCursorRects() {
         super.resetCursorRects()
+        guard !isInteractionMode else {
+            return
+        }
+
         addCursorRect(bounds, cursor: .crosshair)
     }
 
@@ -438,6 +550,11 @@ final class DrawingView: NSView {
     }
 
     private func applyDrawingCursor() {
+        // In click-through mode the app underneath owns the pointer, so say nothing.
+        guard !isInteractionMode else {
+            return
+        }
+
         NSCursor.crosshair.set()
     }
 
@@ -514,25 +631,36 @@ final class DrawingView: NSView {
             return
         }
 
-        let text = "● DRAW"
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
             .foregroundColor: NSColor.white.withAlphaComponent(0.92)
         ]
-        let attributedText = NSAttributedString(string: text, attributes: attributes)
+        let attributedText = NSAttributedString(string: indicatorText, attributes: attributes)
         let paddingX: CGFloat = 8
         let paddingY: CGFloat = 5
 
-        NSColor.black.withAlphaComponent(0.42).setFill()
+        indicatorBackgroundColor.setFill()
         NSBezierPath(roundedRect: indicatorRect, xRadius: 5, yRadius: 5).fill()
 
         attributedText.draw(at: NSPoint(x: indicatorRect.minX + paddingX,
                                         y: indicatorRect.minY + paddingY))
     }
 
+    // Red and solid while the overlay owns the mouse, hollow and neutral while clicks are
+    // passing through: the badge answers "where do my clicks go right now?".
+    private var indicatorText: String {
+        isInteractionMode ? "◌ CLICK-THROUGH" : "● DRAW"
+    }
+
+    private var indicatorBackgroundColor: NSColor {
+        isInteractionMode
+            ? NSColor.black.withAlphaComponent(0.45)
+            : NSColor.systemRed.withAlphaComponent(0.72)
+    }
+
     private func activeModeIndicatorRect() -> NSRect {
         let textSize = NSAttributedString(
-            string: "● DRAW",
+            string: indicatorText,
             attributes: [.font: NSFont.systemFont(ofSize: 11, weight: .semibold)]
         ).size()
         let paddingX: CGFloat = 8
