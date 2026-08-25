@@ -172,6 +172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.orderFrontRegardless()
         }
         windows[indicatorIndex].makeKeyAndOrderFront(nil)
+        revealSystemCursor()
         updateStatusItemAppearance()
     }
 
@@ -232,10 +233,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Escape, C and Command+Z are local keys, so the panel has to be key again.
             let keyPanel = windows.first { $0.drawingView.showsIndicator } ?? windows[0]
             keyPanel.makeKeyAndOrderFront(nil)
+            // The app underneath owned the pointer while clicks were passing through and
+            // may have hidden it again, so take it back the same way entering does.
+            revealSystemCursor()
             print("ScreenDrawOverlay: click-through mode OFF (drawing again)")
         }
 
         updateStatusItemAppearance()
+    }
+
+    // A presenting app hides the pointer at the display level (CGDisplayHideCursor /
+    // NSCursor.hide), and no NSCursor.set() can outrank that: the pointer is not drawn at
+    // all, so drawing mode would hand the user an invisible cursor. Undo the hiding when
+    // drawing starts.
+    //
+    // The hide count can have been raised more than once, so decrement it a few times.
+    // The reverse is deliberately NOT done when leaving drawing mode. Hiding the pointer
+    // on the way out risks leaving the user with no pointer at all, which is
+    // unrecoverable in the middle of a presentation, while one extra "show" only means
+    // the presenting app's next hide takes effect a moment later - and Keynote re-hides
+    // the pointer on its own inactivity timer, so its behaviour comes back by itself.
+    private func revealSystemCursor() {
+        NSCursor.setHiddenUntilMouseMoves(false)
+
+        for _ in 0..<3 {
+            NSCursor.unhide()
+            // The cursor is system-wide; the display argument only picks which display's
+            // hide count to decrement, and the main display is where hiding is applied.
+            CGDisplayShowCursor(CGMainDisplayID())
+        }
+
+        // Whatever the pointer was before, drawing mode owns it now.
+        NSCursor.crosshair.set()
     }
 
     private func updateStatusItemAppearance() {
