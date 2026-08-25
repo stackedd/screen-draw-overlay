@@ -466,34 +466,96 @@ final class DrawingView: NSView {
 }
 
 final class GlobalHotKey {
+    // Ownership, on purpose: a GlobalHotKey is owned by whoever created it (AppDelegate
+    // keeps both hot keys alive for the lifetime of the app). The Carbon callback must
+    // never own it - register() used to pass a retained pointer as userData, which meant
+    // deinit could never run and the unregister() in it was dead code. Instead the
+    // callback looks the hot key up in `registeredHotKeys`, which holds weak references.
+    // An unregistered or deallocated hot key is simply not found, so the callback cannot
+    // reach freed memory, and unregistering/re-registering at runtime works.
+    private final class WeakHotKey {
+        weak var value: GlobalHotKey?
+
+        init(_ value: GlobalHotKey) {
+            self.value = value
+        }
+    }
+
+    private static let signature = OSType(UInt32(ascii: "SDO1"))
+
+    // One handler for every hot key instead of one per hot key. It holds no per-instance
+    // state and is installed with a nil userData pointer, so there is nothing in it that
+    // can dangle; it is installed once and left in place for the life of the process.
+    private static var sharedEventHandler: EventHandlerRef?
+    private static var registeredHotKeys: [UInt32: WeakHotKey] = [:]
+
     private let hotKeyID: EventHotKeyID
     private let keyCode: UInt32
     private let modifiers: UInt32
     private let handler: () -> Void
     private var hotKeyRef: EventHotKeyRef?
-    private var eventHandlerRef: EventHandlerRef?
-    private var userData: UnsafeMutableRawPointer?
 
     init(id: UInt32, keyCode: UInt32, modifiers: UInt32, handler: @escaping () -> Void) {
-        hotKeyID = EventHotKeyID(signature: OSType(UInt32(ascii: "SDO1")), id: id)
+        hotKeyID = EventHotKeyID(signature: GlobalHotKey.signature, id: id)
         self.keyCode = keyCode
         self.modifiers = modifiers
         self.handler = handler
     }
 
     func register() -> Bool {
-        guard hotKeyRef == nil, eventHandlerRef == nil, userData == nil else {
+        guard hotKeyRef == nil else {
+            return true
+        }
+
+        guard GlobalHotKey.installSharedEventHandlerIfNeeded() else {
+            return false
+        }
+
+        GlobalHotKey.registeredHotKeys[hotKeyID.id] = WeakHotKey(self)
+
+        let registerStatus = RegisterEventHotKey(keyCode,
+                                                 modifiers,
+                                                 hotKeyID,
+                                                 GetApplicationEventTarget(),
+                                                 0,
+                                                 &hotKeyRef)
+
+        guard registerStatus == noErr, hotKeyRef != nil else {
+            hotKeyRef = nil
+            GlobalHotKey.registeredHotKeys.removeValue(forKey: hotKeyID.id)
+            return false
+        }
+
+        return true
+    }
+
+    func unregister() {
+        // Order matters: stop Carbon from delivering events first, then drop the entry the
+        // callback would look this instance up in.
+        if let hotKeyRef {
+            UnregisterEventHotKey(hotKeyRef)
+            self.hotKeyRef = nil
+        }
+
+        if GlobalHotKey.registeredHotKeys[hotKeyID.id]?.value === self {
+            GlobalHotKey.registeredHotKeys.removeValue(forKey: hotKeyID.id)
+        }
+    }
+
+    deinit {
+        unregister()
+    }
+
+    private static func installSharedEventHandlerIfNeeded() -> Bool {
+        guard sharedEventHandler == nil else {
             return true
         }
 
         var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
                                       eventKind: UInt32(kEventHotKeyPressed))
 
-        let selfPointer = Unmanaged.passRetained(self).toOpaque()
-        userData = selfPointer
-
-        let installStatus = InstallEventHandler(GetApplicationEventTarget(), { _, event, userData in
-            guard let event, let userData else {
+        let installStatus = InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
+            guard let event else {
                 return OSStatus(eventNotHandledErr)
             }
 
@@ -506,68 +568,28 @@ final class GlobalHotKey {
                                            nil,
                                            &hotKeyID)
 
-            let hotKey = Unmanaged<GlobalHotKey>.fromOpaque(userData).takeUnretainedValue()
             guard status == noErr,
-                  hotKeyID.signature == hotKey.hotKeyID.signature,
-                  hotKeyID.id == hotKey.hotKeyID.id else {
+                  hotKeyID.signature == GlobalHotKey.signature,
+                  let hotKey = GlobalHotKey.registeredHotKeys[hotKeyID.id]?.value else {
                 return OSStatus(eventNotHandledErr)
             }
 
+            // Copy the closure out of the instance so the async block never touches the
+            // hot key object, which may be gone by the time the block runs.
             let handler = hotKey.handler
             DispatchQueue.main.async {
                 handler()
             }
 
             return noErr
-        }, 1, &eventType, selfPointer, &eventHandlerRef)
+        }, 1, &eventType, nil, &sharedEventHandler)
 
         guard installStatus == noErr else {
-            releaseUserData()
-            return false
-        }
-
-        let registerStatus = RegisterEventHotKey(keyCode,
-                                                 modifiers,
-                                                 hotKeyID,
-                                                 GetApplicationEventTarget(),
-                                                 0,
-                                                 &hotKeyRef)
-
-        if registerStatus != noErr {
-            if let eventHandlerRef {
-                RemoveEventHandler(eventHandlerRef)
-                self.eventHandlerRef = nil
-            }
-            releaseUserData()
+            sharedEventHandler = nil
             return false
         }
 
         return true
-    }
-
-    func unregister() {
-        if let hotKeyRef {
-            UnregisterEventHotKey(hotKeyRef)
-            self.hotKeyRef = nil
-        }
-
-        if let eventHandlerRef {
-            RemoveEventHandler(eventHandlerRef)
-            self.eventHandlerRef = nil
-        }
-
-        releaseUserData()
-    }
-
-    deinit {
-        unregister()
-    }
-
-    private func releaseUserData() {
-        if let userData {
-            Unmanaged<GlobalHotKey>.fromOpaque(userData).release()
-            self.userData = nil
-        }
     }
 }
 
