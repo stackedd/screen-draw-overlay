@@ -26,6 +26,12 @@ It needs no system permissions: no Accessibility, no Screen Recording. The globa
    You only do this once. After that it launches like any other app.
 5. A small scribble icon appears in the menu bar. That is the whole UI.
 
+### If you cannot find it
+
+The app has no Dock icon and no window — it lives only in the menu bar. If your menu bar is full, macOS quietly hides the items that do not fit, and this one is small enough to be among them. Hold `Command` and drag the menu bar icons to rearrange them and make room.
+
+The quickest way to check that it is running at all is to press the shortcut: `Control + Option + Command + D`. Nothing dims — the overlay is fully transparent — but a red `● DRAW` badge appears in the top-right corner and the pointer becomes a crosshair. Press it again, or `Escape`, to leave.
+
 The app does not launch at login by itself. Add it under System Settings → General → Login Items if you want that.
 
 ## Shortcuts
