@@ -254,12 +254,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 final class OverlayPanel: NSPanel {
-    // Measured, not guessed: a Keynote slideshow puts its windows at level 9, so the old
-    // .floating (3) overlay was ordered *under* the presentation - invisible in exactly
-    // the case this app exists for. .popUpMenu (101) clears it; anything higher only
-    // buys covering more system UI. Window level does not affect key window
-    // eligibility, so Escape still reaches keyDown.
-    private static let overlayLevel = NSWindow.Level.popUpMenu
+    // The one place the overlay's stacking is decided. Above presentation windows, below
+    // the menu bar, so the D menu bar item stays clickable while drawing mode is on.
+    //
+    // Measured 2026-08-26 on macOS 26.5.1 with Keynote 13.2: a running slideshow puts its
+    // windows at window level 9, the menu bar sits at 24 (.mainMenu) and status items at
+    // 25. One below the menu bar therefore clears a presentation with room to spare,
+    // while leaving the menu bar reachable. The old .floating (3) was ordered *under* the
+    // slideshow, which is the bug this replaces.
+    //
+    // Known cost of staying this low: Keynote's ~1s fade in and out of a slideshow uses a
+    // window at level 26, which briefly covers the overlay. Raising this constant (e.g.
+    // .popUpMenu) trades the menu bar away to win that back.
+    //
+    // Window level does not affect key window eligibility, so Escape still reaches keyDown.
+    private static let overlayLevel = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue - 1)
 
     let drawingView: DrawingView
     var onEscape: (() -> Void)?

@@ -39,7 +39,7 @@ The app does not launch at login by itself. Add it under System Settings → Gen
 | `Escape` | Clear and leave drawing mode |
 | `Control + Option + Command + Escape` | Emergency exit: force close the overlay |
 
-The last one exists for a reason. If drawing mode ever gets stuck and the overlay is swallowing your clicks, that shortcut always releases the screen, and it works even when nothing else responds. The menu bar item also has **Toggle Drawing Mode** and **Quit**, but note that while drawing mode is on, the overlay covers the menu bar, so use the shortcut instead.
+The last one exists for a reason. If drawing mode ever gets stuck and the overlay is swallowing your clicks, that shortcut always releases the screen, and it works even when nothing else responds. The menu bar item also has **Toggle Drawing Mode** and **Quit**, and it stays clickable while you are drawing: the overlay deliberately sits just below the menu bar, so it never traps you behind itself.
 
 If `Control + Option + Command + D` does nothing at launch, another app already owns that shortcut — the app tells you so with an alert. Change the key code or modifiers in `Sources/ScreenDrawOverlay/main.swift` and rebuild.
 
@@ -61,9 +61,9 @@ This is v0.1 and deliberately small. There is no toolbar, no color picker, no li
 
 Beyond that, things worth knowing:
 
-- The overlay draws above the menu bar while drawing mode is on, so the `D` menu bar item is not clickable until you leave drawing mode. The shortcuts are the way out.
-- For the same reason the overlay sits above alerts and dialogs from other apps while it is open.
-- Plugging in or unplugging a display while drawing ends drawing mode and clears the drawing. That is intentional — it is better than leaving an overlay stranded on a display that no longer exists.
+- While drawing mode is on, the overlay is above ordinary windows and dialogs, so another app's alert can end up underneath your drawing until you leave drawing mode. The menu bar and its status items stay above the overlay.
+- Keynote fades in and out of a slideshow with a window drawn above the overlay, so your drawing disappears for about a second at the start and end of a presentation. It comes back on its own.
+- Plugging in, unplugging or rearranging a display while drawing ends drawing mode and clears the drawing. That is intentional — it is better than leaving an overlay stranded on a display that no longer exists.
 - Drawings are never saved. Leaving drawing mode throws them away.
 
 ## License
