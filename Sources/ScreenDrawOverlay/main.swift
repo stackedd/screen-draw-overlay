@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var toggleHotKey: GlobalHotKey?
     private var emergencyHotKey: GlobalHotKey?
     private var isDrawingMode = false
+    private var overlayScreenLayout: [String] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("ScreenDrawOverlay: app launched")
@@ -133,6 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         overlayWindows = windows
         drawingViews = views
+        overlayScreenLayout = AppDelegate.screenLayoutSignature()
         isDrawingMode = true
 
         print("ScreenDrawOverlay: drawing mode ON")
@@ -151,11 +153,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // A display was plugged in, unplugged or rearranged. The open panels are pinned
-        // to frames that may no longer exist, so the safe move is to leave drawing mode
-        // rather than re-laying out overlays mid-stroke.
-        print("ScreenDrawOverlay: screen configuration changed while drawing")
-        forceCloseOverlay(reason: "screen configuration changed")
+        // This notification fires for more than displays coming and going: it also fires
+        // when the Dock hides or the menu bar auto-hides, which is exactly what happens
+        // when a presentation starts. Those change only visibleFrame and move no overlay,
+        // so reacting to them would tear the overlay down at the very moment the user
+        // starts presenting. Compare the actual display layout and ignore the rest.
+        let currentLayout = AppDelegate.screenLayoutSignature()
+        guard currentLayout != overlayScreenLayout else {
+            return
+        }
+
+        // A display really was plugged in, unplugged or rearranged. The open panels are
+        // pinned to frames that may no longer exist, so the safe move is to leave drawing
+        // mode rather than re-laying out overlays mid-stroke.
+        print("ScreenDrawOverlay: display layout changed while drawing")
+        forceCloseOverlay(reason: "display layout changed")
+    }
+
+    // Display identity plus frame: unaffected by the Dock or the menu bar showing and
+    // hiding, which only move visibleFrame.
+    private static func screenLayoutSignature() -> [String] {
+        NSScreen.screens.map { screen in
+            let key = NSDeviceDescriptionKey("NSScreenNumber")
+            let displayID = (screen.deviceDescription[key] as? CGDirectDisplayID).map(String.init) ?? "unknown"
+            return displayID + "@" + NSStringFromRect(screen.frame)
+        }
     }
 
     private func emergencyCloseOverlay() {
@@ -186,6 +208,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         overlayWindows.removeAll()
         drawingViews.removeAll()
+        overlayScreenLayout.removeAll()
 
         if isDrawingMode || !windows.isEmpty {
             print("ScreenDrawOverlay: drawing mode OFF (\(reason))")
