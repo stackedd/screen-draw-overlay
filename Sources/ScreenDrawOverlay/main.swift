@@ -193,6 +193,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 final class OverlayPanel: NSPanel {
+    // Full screen apps (Keynote / PowerPoint presentation mode, full screen Safari) put
+    // their window above .floating, so a floating overlay was invisible in exactly the
+    // case this app exists for. The shielding level sits above them. Window level does
+    // not affect key window eligibility, so Escape still reaches keyDown.
+    private static let overlayLevel = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+
     let drawingView: DrawingView
     var onEscape: (() -> Void)?
 
@@ -214,11 +220,17 @@ final class OverlayPanel: NSPanel {
                    defer: false)
         setFrame(screenFrame, display: false)
 
-        // These are the important overlay bits: no chrome, no backing fill, and a modest z-order.
+        // These are the important overlay bits: no chrome, no backing fill, and a z-order
+        // above full screen apps.
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
-        level = .floating
+        level = OverlayPanel.overlayLevel
+
+        // .canJoinAllSpaces keeps the overlay with the user when they switch Spaces, and
+        // .fullScreenAuxiliary lets it join another app's full screen Space instead of
+        // forcing a Space switch. Both are needed to draw over a presentation.
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         ignoresMouseEvents = false
         acceptsMouseMovedEvents = true
         hidesOnDeactivate = false
