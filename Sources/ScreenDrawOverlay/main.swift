@@ -362,7 +362,8 @@ final class DrawingView: NSView {
         }
 
         let trackingArea = NSTrackingArea(rect: bounds,
-                                          options: [.mouseMoved, .activeAlways, .inVisibleRect],
+                                          options: [.mouseMoved, .mouseEnteredAndExited, .cursorUpdate,
+                                                    .activeAlways, .inVisibleRect],
                                           owner: self,
                                           userInfo: nil)
         addTrackingArea(trackingArea)
@@ -413,7 +414,31 @@ final class DrawingView: NSView {
     }
 
     override func mouseMoved(with event: NSEvent) {
+        applyDrawingCursor()
         updateIndicatorHover(at: convert(event.locationInWindow, from: nil))
+    }
+
+    // The overlay has to say what the pointer looks like over it, or whoever set the
+    // cursor last keeps it - and a presenting app has usually just hidden the pointer.
+    // Crosshair is the usual "you are about to draw here" cursor. Three paths set it
+    // because any single one can be missed: the cursor rect covers a plain pointer move,
+    // cursorUpdate covers the window server asking us directly, and mouseEntered covers
+    // arriving from another app's window without a cursor rect invalidation in between.
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(bounds, cursor: .crosshair)
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        applyDrawingCursor()
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        applyDrawingCursor()
+    }
+
+    private func applyDrawingCursor() {
+        NSCursor.crosshair.set()
     }
 
     override func keyDown(with event: NSEvent) {
