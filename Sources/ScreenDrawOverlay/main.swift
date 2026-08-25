@@ -2,7 +2,7 @@ import AppKit
 import Carbon
 import Foundation
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private var overlayWindows: [OverlayPanel] = []
     private var drawingViews: [DrawingView] = []
@@ -11,6 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var emergencyHotKey: GlobalHotKey?
     private var isDrawingMode = false
     private var isInteractionMode = false
+    private var isStatusMenuOpen = false
+    private var keyReclaimAttempts: [Date] = []
     private var overlayScreenLayout: [String] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -24,6 +26,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(self,
                                                selector: #selector(screenParametersDidChange(_:)),
                                                name: NSApplication.didChangeScreenParametersNotification,
+                                               object: nil)
+
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(windowDidResignKey(_:)),
+                                               name: NSWindow.didResignKeyNotification,
                                                object: nil)
 
         toggleHotKey = GlobalHotKey(id: 1,
@@ -96,6 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
+        menu.delegate = self
         statusItem?.menu = menu
 
         updateStatusItemAppearance()
@@ -163,6 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayScreenLayout = AppDelegate.screenLayoutSignature()
         isDrawingMode = true
         isInteractionMode = false
+        keyReclaimAttempts.removeAll()
 
         print("ScreenDrawOverlay: drawing mode ON")
         print("ScreenDrawOverlay: overlay created on \(windows.count) screen(s)")
@@ -318,6 +327,88 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         button.toolTip = tooltip
+    }
+
+    // Escape only reaches keyDown while the panel is key, so the moment something else
+    // takes key focus - a click on a menu bar item, another app coming forward - Escape
+    // dies silently and the user reads that as "I am stuck". While drawing, take it back.
+    @objc private func windowDidResignKey(_ notification: Notification) {
+        guard notification.object as? OverlayPanel != nil else {
+            return
+        }
+
+        // Not in click-through: there the whole point is that focus belongs to the app
+        // underneath, and stealing it back would break the mode. The way out of that mode
+        // is the global hot keys and the menu bar item.
+        guard isDrawingMode, !isInteractionMode else {
+            return
+        }
+
+        // Let the focus change settle first, otherwise we fight the transition itself.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.reclaimKeyWindow()
+        }
+    }
+
+    private func reclaimKeyWindow() {
+        guard isDrawingMode, !isInteractionMode, !isStatusMenuOpen else {
+            return
+        }
+
+        let windows = overlayWindowSnapshot()
+        guard let panel = windows.first(where: { $0.drawingView.showsIndicator }) ?? windows.first,
+              !panel.isKeyWindow else {
+            return
+        }
+
+        // A menu or popover from any app - Control Center, another menu bar item - lives
+        // above the overlay and holds focus while it is open. Taking focus back would
+        // close it under the user's cursor.
+        guard !AppDelegate.isMenuOrPopoverOpen(), allowKeyReclaim() else {
+            return
+        }
+
+        // makeKey, not makeKeyAndOrderFront: the panel is already in front, and this is a
+        // non-activating panel, so the app itself never comes forward.
+        panel.makeKey()
+    }
+
+    // Two apps can both want key focus; without a limit the overlay and the other window
+    // would trade it back and forth forever.
+    private func allowKeyReclaim() -> Bool {
+        let now = Date()
+        keyReclaimAttempts = keyReclaimAttempts.filter { now.timeIntervalSince($0) < 3 }
+
+        guard keyReclaimAttempts.count < 5 else {
+            print("ScreenDrawOverlay: not reclaiming key focus, something else keeps taking it")
+            return false
+        }
+
+        keyReclaimAttempts.append(now)
+        return true
+    }
+
+    private static func isMenuOrPopoverOpen() -> Bool {
+        guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+
+        // Menus and popovers are drawn at the pop-up menu level, well above the overlay.
+        return windows.contains { window in
+            (window[kCGWindowLayer as String] as? Int ?? 0) >= NSWindow.Level.popUpMenu.rawValue
+        }
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        // Our own menu takes key focus while it is open; grabbing it back closes it.
+        isStatusMenuOpen = true
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        isStatusMenuOpen = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.reclaimKeyWindow()
+        }
     }
 
     private func emergencyCloseOverlay() {
