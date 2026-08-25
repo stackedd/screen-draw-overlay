@@ -76,7 +76,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        // variableLength lets the item size itself to the icon instead of a fixed square.
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         let menu = NSMenu()
         let toggleItem = NSMenuItem(title: "Toggle Drawing Mode",
@@ -274,26 +275,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // The menu bar item doubles as the mode light: red while the overlay is taking
         // the mouse, dimmed while it is only showing, plain when there is no overlay.
+        // The two modes have to be told apart at a glance, so the symbol itself changes
+        // (a pen that draws vs. a pen with a slash through it) on top of the tint.
+        let symbolName: String
         let color: NSColor
         let tooltip: String
         if !isDrawingMode {
+            symbolName = "scribble"
             color = .labelColor
             tooltip = "Screen Draw Overlay - Control Option Command D to draw"
         } else if isInteractionMode {
+            symbolName = "pencil.slash"
             color = .secondaryLabelColor
             tooltip = "Click-through: drawing is showing, clicks go to the app underneath"
         } else {
+            symbolName = "scribble"
             color = .systemRed
             tooltip = "Drawing: the overlay is taking your clicks"
         }
 
-        button.attributedTitle = NSAttributedString(
-            string: "D",
-            attributes: [
-                .foregroundColor: color,
-                .font: NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
-            ]
-        )
+        if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Screen Draw Overlay") {
+            // A template image follows the menu bar's own look; the tint is what carries
+            // the mode. An icon also takes less width than a letter, which matters on a
+            // crowded menu bar where macOS drops items that do not fit.
+            image.isTemplate = true
+            button.image = image.withSymbolConfiguration(
+                NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
+            ) ?? image
+            button.title = ""
+            button.contentTintColor = color
+        } else {
+            // No symbol on this system: fall back to the letter this app shipped with.
+            button.image = nil
+            button.contentTintColor = nil
+            button.attributedTitle = NSAttributedString(
+                string: "D",
+                attributes: [
+                    .foregroundColor: color,
+                    .font: NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+                ]
+            )
+        }
+
         button.toolTip = tooltip
     }
 

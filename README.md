@@ -24,7 +24,7 @@ It needs no system permissions: no Accessibility, no Screen Recording. The globa
      does the same thing.
 
    You only do this once. After that it launches like any other app.
-5. A `D` appears in the menu bar. That is the whole UI.
+5. A small scribble icon appears in the menu bar. That is the whole UI.
 
 The app does not launch at login by itself. Add it under System Settings → General → Login Items if you want that.
 
@@ -46,7 +46,7 @@ Drawing mode has two states. While you are **drawing**, the overlay takes the mo
 
 Only leaving drawing mode clears the drawing — `Control + Option + Command + D`, `Escape`, or the emergency shortcut. Switching modes never does.
 
-You can always tell which state you are in: the corner badge reads a red `● DRAW` when the overlay owns your clicks and a dim `◌ CLICK-THROUGH` when they pass through, the pointer is a crosshair only while drawing, and the `D` in the menu bar turns red while the overlay is taking clicks.
+You can always tell which state you are in: the corner badge reads a red `● DRAW` when the overlay owns your clicks and a dim `◌ CLICK-THROUGH` when they pass through, the pointer is a crosshair only while drawing, and the menu bar icon turns red while the overlay is taking clicks and becomes a dimmed struck-through pen in click-through.
 
 The last one exists for a reason. If drawing mode ever gets stuck and the overlay is swallowing your clicks, that shortcut always releases the screen, and it works even when nothing else responds. The menu bar item also has **Toggle Drawing Mode**, **Toggle Click-Through** and **Quit**, and it stays clickable while you are drawing: the overlay deliberately sits just below the menu bar, so it never traps you behind itself.
 
