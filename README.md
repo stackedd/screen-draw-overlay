@@ -1,38 +1,71 @@
 # ScreenDrawOverlay
 
-Minimal native macOS drawing overlay MVP using Swift, AppKit, and Carbon.
+A tiny macOS menu bar app that puts a transparent layer over your screens so you can scribble on top of whatever is running — including full screen presentations.
 
-## What it does
+<!-- Record a short demo and drop it at docs/demo.gif; this will pick it up. -->
+![ScreenDrawOverlay in action](docs/demo.gif)
 
-- Runs as a tiny menu bar app.
-- Registers `Control + Option + Command + D` as a global hotkey.
-- Registers `Control + Option + Command + Escape` as an emergency force-close hotkey.
-- Shows one transparent borderless overlay panel on the main screen while drawing mode is on.
-- Shows a tiny semi-transparent `● DRAW` indicator while drawing mode is active; it hides while the pointer is over it.
-- Lets you draw red freehand paths with the mouse.
-- Press `C` to clear drawings without leaving drawing mode.
-- Press `Command + Z` to undo the last completed stroke.
-- Clears and removes the overlay when the hotkey is pressed again.
-- `Escape` also exits drawing mode and clears the drawing.
+It needs no system permissions: no Accessibility, no Screen Recording. The global shortcut uses Carbon's `RegisterEventHotKey`, which does not ask for anything.
 
-## Run in Xcode
+## Install
 
-1. Open Xcode.
-2. Choose `File > Open...`.
-3. Open this folder:
-   `path/to/ScreenDrawOverlay`
-4. Select the `ScreenDrawOverlay` scheme.
-5. Press `Run`.
-6. Look for the `D` menu bar item.
-7. Press `Control + Option + Command + D` to toggle drawing mode.
-8. If anything misbehaves, press `Control + Option + Command + Escape` to force-close the overlay.
+1. Download `ScreenDrawOverlay.zip` from the [Releases](../../releases) page.
+2. Double-click the zip to unpack it.
+3. Drag `ScreenDrawOverlay.app` into `/Applications`.
+4. **First launch — macOS will refuse to open it.** The app is signed, but only ad-hoc
+   signed (a local signature, not a paid Developer ID) and it is not notarized, so
+   Gatekeeper will say it "cannot be opened because Apple cannot check it for malicious
+   software". This is expected, and you have to clear it once:
+   - Right-click (or Control-click) the app and choose **Open**, then **Open** again in the dialog.
+   - On macOS 15 Sequoia and later that shortcut usually no longer works. Instead try to open
+     the app once normally, then go to **System Settings → Privacy & Security**, scroll to the
+     Security section, and click **Open Anyway** next to the ScreenDrawOverlay message.
+   - If you prefer the terminal, `xattr -d com.apple.quarantine /Applications/ScreenDrawOverlay.app`
+     does the same thing.
 
-If the hotkey does not register, another app probably already owns that shortcut. Change the key code or modifiers in `Sources/ScreenDrawOverlay/main.swift`.
+   You only do this once. After that it launches like any other app.
+5. A `D` appears in the menu bar. That is the whole UI.
 
-## Packaging
+The app does not launch at login by itself. Add it under System Settings → General → Login Items if you want that.
 
-There is no packaging script yet. For now, run it from Xcode while the app is still an MVP.
+## Shortcuts
 
-## Notes
+| Shortcut | What it does |
+| --- | --- |
+| `Control + Option + Command + D` | Toggle drawing mode on and off |
+| Drag the mouse | Draw a red freehand line |
+| `C` | Clear everything, stay in drawing mode |
+| `Command + Z` | Undo the last stroke |
+| `Escape` | Clear and leave drawing mode |
+| `Control + Option + Command + Escape` | Emergency exit: force close the overlay |
 
-This is intentionally v0.1-simple. There is no toolbar, no saving, no redo, no color picker, no screenshot capture, no multi-monitor support, and no fullscreen/Spaces support.
+The last one exists for a reason. If drawing mode ever gets stuck and the overlay is swallowing your clicks, that shortcut always releases the screen, and it works even when nothing else responds. The menu bar item also has **Toggle Drawing Mode** and **Quit**, but note that while drawing mode is on, the overlay covers the menu bar, so use the shortcut instead.
+
+If `Control + Option + Command + D` does nothing at launch, another app already owns that shortcut — the app tells you so with an alert. Change the key code or modifiers in `Sources/ScreenDrawOverlay/main.swift` and rebuild.
+
+## Build from source
+
+You need the Xcode command line tools (`xcode-select --install`). There is no Xcode project; everything is SwiftPM.
+
+```bash
+./build_app.sh
+```
+
+That builds a universal (Apple Silicon + Intel) release binary, assembles `dist/ScreenDrawOverlay.app`, ad-hoc signs it and writes `dist/ScreenDrawOverlay.zip`. Open the result with `open dist/ScreenDrawOverlay.app`. An app you built yourself is not quarantined, so it opens without the Gatekeeper detour above.
+
+For a quick run without the bundle, `swift build -c release` and then `.build/release/ScreenDrawOverlay`.
+
+## Known limits
+
+This is v0.1 and deliberately small. There is no toolbar, no color picker, no line width control, no shapes or arrows, no saving or screenshot capture, no redo, and no preferences window. One red pen, one clear, one undo.
+
+Beyond that, things worth knowing:
+
+- The overlay draws above the menu bar while drawing mode is on, so the `D` menu bar item is not clickable until you leave drawing mode. The shortcuts are the way out.
+- For the same reason the overlay sits above alerts and dialogs from other apps while it is open.
+- Plugging in or unplugging a display while drawing ends drawing mode and clears the drawing. That is intentional — it is better than leaving an overlay stranded on a display that no longer exists.
+- Drawings are never saved. Leaving drawing mode throws them away.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
