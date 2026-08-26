@@ -510,9 +510,11 @@ final class DrawingView: NSView {
     private static let pointerCasingWidth: CGFloat = 3
     private static let pointerCentreGap: CGFloat = 3.5
 
-    // Always shown, in both modes: this is the way out of a screen that has stopped
-    // responding to clicks, so it is a safety line, not decoration.
-    private static let indicatorHintText = "⌃⌥⌘Esc to exit"
+    // Always shown: what the other two shortcuts do from here. Escape is not on this
+    // list because it no longer leaves drawing mode - this line is the only place a
+    // stuck-feeling user is told what does.
+    private static let drawingHintText = "⌃⌥⌘E click · ⌃⌥⌘D exit"
+    private static let interactionHintText = "⌃⌥⌘E draw · ⌃⌥⌘Esc exit"
     private static let indicatorPaddingX: CGFloat = 8
     private static let indicatorPaddingY: CGFloat = 5
     private static let indicatorLineGap: CGFloat = 2
@@ -820,7 +822,8 @@ final class DrawingView: NSView {
             .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
             .foregroundColor: NSColor.white.withAlphaComponent(0.92)
         ])
-        let hint = NSAttributedString(string: DrawingView.indicatorHintText, attributes: [
+        let hintText = isInteractionMode ? DrawingView.interactionHintText : DrawingView.drawingHintText
+        let hint = NSAttributedString(string: hintText, attributes: [
             .font: NSFont.systemFont(ofSize: 9, weight: .regular),
             .foregroundColor: NSColor.white.withAlphaComponent(0.65)
         ])
