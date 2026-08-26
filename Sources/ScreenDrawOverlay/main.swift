@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isDrawingMode = false
     private var isInteractionMode = false
     private var overlayScreenLayout: [String] = []
+    private var didHideSystemCursor = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("ScreenDrawOverlay: app launched")
@@ -70,6 +71,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         print("ScreenDrawOverlay: app terminating")
+        // Last line of defence: never leave the machine without a pointer.
+        showSystemCursor()
         NotificationCenter.default.removeObserver(self)
         forceCloseOverlay(reason: "app terminating")
         toggleHotKey?.unregister()
@@ -179,7 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.orderFrontRegardless()
         }
         windows[indicatorIndex].makeKeyAndOrderFront(nil)
-        revealSystemCursor()
+        startDrawingPointer()
         updateStatusItemAppearance()
     }
 
@@ -247,43 +250,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // something else takes it, so the keyboard - Escape included - would still be
             // swallowed here. Step out of the way so the app underneath owns input.
             NSApp.deactivate()
+            // Hand the real pointer back; the drawn one belongs to drawing mode only.
+            showSystemCursor()
             print("ScreenDrawOverlay: click-through mode ON (drawing kept, clicks pass through)")
         } else {
             // Escape, C and Command+Z are local keys, so the panel has to be key again.
             let keyPanel = windows.first { $0.drawingView.showsIndicator } ?? windows[0]
             keyPanel.makeKeyAndOrderFront(nil)
-            // The app underneath owned the pointer while clicks were passing through and
-            // may have hidden it again, so take it back the same way entering does.
-            revealSystemCursor()
+            startDrawingPointer()
             print("ScreenDrawOverlay: click-through mode OFF (drawing again)")
         }
 
         updateStatusItemAppearance()
     }
 
-    // A presenting app hides the pointer at the display level (CGDisplayHideCursor /
-    // NSCursor.hide), and no NSCursor.set() can outrank that: the pointer is not drawn at
-    // all, so drawing mode would hand the user an invisible cursor. Undo the hiding when
-    // drawing starts.
+    // The system pointer is hidden and DrawingView draws its own crosshair instead.
+    // Asking the system for a cursor does not work where it matters: a presenting app
+    // hides the pointer at display level and keeps re-hiding it, and a background app
+    // cannot win that race. A pointer we draw ourselves is simply part of the overlay.
     //
-    // The hide count can have been raised more than once, so decrement it a few times.
-    // The reverse is deliberately NOT done when leaving drawing mode. Hiding the pointer
-    // on the way out risks leaving the user with no pointer at all, which is
-    // unrecoverable in the middle of a presentation, while one extra "show" only means
-    // the presenting app's next hide takes effect a moment later - and Keynote re-hides
-    // the pointer on its own inactivity timer, so its behaviour comes back by itself.
-    private func revealSystemCursor() {
-        NSCursor.setHiddenUntilMouseMoves(false)
+    // hide/unhide is a counter, so these two are the only places that touch it and each
+    // one checks the flag first: exactly one hide is ever outstanding.
+    // Hide the real pointer and seed each view with where it currently is, so the drawn
+    // crosshair appears immediately instead of after the first mouse move.
+    private func startDrawingPointer() {
+        hideSystemCursor()
+        drawingViewSnapshot(from: overlayWindowSnapshot()).forEach { $0.syncPointerToMouseLocation() }
+    }
 
-        for _ in 0..<3 {
-            NSCursor.unhide()
-            // The cursor is system-wide; the display argument only picks which display's
-            // hide count to decrement, and the main display is where hiding is applied.
-            CGDisplayShowCursor(CGMainDisplayID())
+    private func hideSystemCursor() {
+        guard !didHideSystemCursor else {
+            return
         }
 
-        // Whatever the pointer was before, drawing mode owns it now.
-        NSCursor.crosshair.set()
+        NSCursor.hide()
+        didHideSystemCursor = true
+    }
+
+    private func showSystemCursor() {
+        guard didHideSystemCursor else {
+            return
+        }
+
+        NSCursor.unhide()
+        didHideSystemCursor = false
     }
 
     private func updateStatusItemAppearance() {
@@ -374,6 +384,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayWindows.removeAll()
         drawingViews.removeAll()
         overlayScreenLayout.removeAll()
+        showSystemCursor()
 
         if isDrawingMode || !windows.isEmpty {
             print("ScreenDrawOverlay: drawing mode OFF (\(reason))")
@@ -494,6 +505,11 @@ final class OverlayPanel: NSPanel {
 final class DrawingView: NSView {
     private static let strokeLineWidth: CGFloat = 4
 
+    // Modest: big enough to aim with, small enough not to sit on the content.
+    private static let pointerSize: CGFloat = 20
+    private static let pointerCasingWidth: CGFloat = 3
+    private static let pointerCentreGap: CGFloat = 3.5
+
     // Always shown, in both modes: this is the way out of a screen that has stopped
     // responding to clicks, so it is a safety line, not decoration.
     private static let indicatorHintText = "⌃⌥⌘Esc to exit"
@@ -505,6 +521,7 @@ final class DrawingView: NSView {
     private var paths: [NSBezierPath] = []
     private var currentPath: NSBezierPath?
     private var lastStrokePoint: NSPoint?
+    private var pointerLocation: NSPoint?
     private var indicatorBounds: NSRect
     let showsIndicator: Bool
 
@@ -572,6 +589,7 @@ final class DrawingView: NSView {
 
         currentPath = path
         lastStrokePoint = point
+        movePointer(to: point)
         invalidateSegment(from: point, to: point)
     }
 
@@ -583,6 +601,7 @@ final class DrawingView: NSView {
         let previousPoint = lastStrokePoint ?? point
         currentPath.line(to: point)
         lastStrokePoint = point
+        movePointer(to: point)
 
         // Only the new segment changed. Invalidating the whole view here meant every
         // mouse move re-stroked every path drawn so far, so the cost of a drag grew
@@ -591,7 +610,9 @@ final class DrawingView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        updateIndicatorHover(at: convert(event.locationInWindow, from: nil))
+        let point = convert(event.locationInWindow, from: nil)
+        movePointer(to: point)
+        updateIndicatorHover(at: point)
 
         if let currentPath {
             paths.append(currentPath)
@@ -604,40 +625,83 @@ final class DrawingView: NSView {
     }
 
     override func mouseMoved(with event: NSEvent) {
-        applyDrawingCursor()
-        updateIndicatorHover(at: convert(event.locationInWindow, from: nil))
-    }
-
-    // The overlay has to say what the pointer looks like over it, or whoever set the
-    // cursor last keeps it - and a presenting app has usually just hidden the pointer.
-    // Crosshair is the usual "you are about to draw here" cursor. Three paths set it
-    // because any single one can be missed: the cursor rect covers a plain pointer move,
-    // cursorUpdate covers the window server asking us directly, and mouseEntered covers
-    // arriving from another app's window without a cursor rect invalidation in between.
-    override func resetCursorRects() {
-        super.resetCursorRects()
-        guard !isInteractionMode else {
-            return
-        }
-
-        addCursorRect(bounds, cursor: .crosshair)
-    }
-
-    override func cursorUpdate(with event: NSEvent) {
-        applyDrawingCursor()
+        let point = convert(event.locationInWindow, from: nil)
+        movePointer(to: point)
+        updateIndicatorHover(at: point)
     }
 
     override func mouseEntered(with event: NSEvent) {
-        applyDrawingCursor()
+        movePointer(to: convert(event.locationInWindow, from: nil))
     }
 
-    private func applyDrawingCursor() {
-        // In click-through mode the app underneath owns the pointer, so say nothing.
-        guard !isInteractionMode else {
+    override func mouseExited(with event: NSEvent) {
+        // The pointer is on another screen's panel now; that one draws it.
+        movePointer(to: nil)
+    }
+
+    // The crosshair is drawn by this view instead of being asked for from the system,
+    // so it survives a presenting app that keeps hiding the real pointer.
+    func syncPointerToMouseLocation() {
+        guard let window else {
+            movePointer(to: nil)
             return
         }
 
-        NSCursor.crosshair.set()
+        let point = convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
+        movePointer(to: bounds.contains(point) ? point : nil)
+    }
+
+    private func movePointer(to point: NSPoint?) {
+        guard pointerLocation != point else {
+            return
+        }
+
+        // Only the pixels the pointer left and the ones it arrived at, never the view.
+        if let previous = pointerLocation {
+            setNeedsDisplay(pointerRect(at: previous))
+        }
+
+        pointerLocation = point
+
+        if let point {
+            setNeedsDisplay(pointerRect(at: point))
+        }
+    }
+
+    private func pointerRect(at point: NSPoint) -> NSRect {
+        NSRect(x: point.x - DrawingView.pointerSize / 2,
+               y: point.y - DrawingView.pointerSize / 2,
+               width: DrawingView.pointerSize,
+               height: DrawingView.pointerSize)
+            .insetBy(dx: -DrawingView.pointerCasingWidth, dy: -DrawingView.pointerCasingWidth)
+    }
+
+    private func drawPointer(in dirtyRect: NSRect) {
+        guard !isInteractionMode, let point = pointerLocation,
+              dirtyRect.intersects(pointerRect(at: point)) else {
+            return
+        }
+
+        let half = DrawingView.pointerSize / 2
+        let gap = DrawingView.pointerCentreGap
+        let crosshair = NSBezierPath()
+        crosshair.move(to: NSPoint(x: point.x - half, y: point.y))
+        crosshair.line(to: NSPoint(x: point.x - gap, y: point.y))
+        crosshair.move(to: NSPoint(x: point.x + gap, y: point.y))
+        crosshair.line(to: NSPoint(x: point.x + half, y: point.y))
+        crosshair.move(to: NSPoint(x: point.x, y: point.y - half))
+        crosshair.line(to: NSPoint(x: point.x, y: point.y - gap))
+        crosshair.move(to: NSPoint(x: point.x, y: point.y + gap))
+        crosshair.line(to: NSPoint(x: point.x, y: point.y + half))
+        crosshair.lineCapStyle = .round
+
+        // Light casing under a dark core, so it reads on a white slide and on a dark one.
+        crosshair.lineWidth = DrawingView.pointerCasingWidth
+        NSColor.white.withAlphaComponent(0.9).setStroke()
+        crosshair.stroke()
+        crosshair.lineWidth = 1
+        NSColor.black.withAlphaComponent(0.85).setStroke()
+        crosshair.stroke()
     }
 
     override func keyDown(with event: NSEvent) {
@@ -679,6 +743,7 @@ final class DrawingView: NSView {
         }
 
         drawActiveModeIndicator(in: dirtyRect)
+        drawPointer(in: dirtyRect)
     }
 
     func clear() {
