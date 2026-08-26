@@ -417,7 +417,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func overlayWindowSnapshot() -> [OverlayPanel] {
-        let appOverlayWindows = NSApp.windows.compactMap { $0 as? OverlayPanel }
+        // Still scanning NSApp.windows, because the point of this is to find a panel that
+        // is on screen but has fallen out of our own records. Closed panels linger in
+        // NSApp.windows until they are deallocated, though, and counting those as live
+        // overlays made D hide an overlay that was already gone - so the drawing was
+        // captured from an emptied panel and lost. Only what is actually on screen counts.
+        let appOverlayWindows = NSApp.windows.compactMap { $0 as? OverlayPanel }.filter { $0.isVisible }
         var seenWindowIDs = Set<ObjectIdentifier>()
 
         return (overlayWindows + appOverlayWindows).filter { window in
