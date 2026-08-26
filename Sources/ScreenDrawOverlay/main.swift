@@ -15,7 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isDrawingMode = false
     private var isInteractionMode = false
     private var overlayScreenLayout: [String] = []
-    private var storedStrokes: [String: [NSBezierPath]] = [:]
+    private var storedStrokes: [String: [Stroke]] = [:]
+    private let tools = ToolSettings()
     private var storedStrokesLayout: [String] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -36,6 +37,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
 
         setupStatusItem()
+
+        // A tool picked on one screen applies everywhere, and the badge that shows it
+        // lives on one panel only, so every panel is told to repaint it.
+        tools.onChange = { [weak self] in
+            self?.drawingViews.forEach { $0.toolSettingsChanged() }
+        }
 
         NotificationCenter.default.addObserver(self,
                                                selector: #selector(screenParametersDidChange(_:)),
@@ -229,7 +236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var views: [DrawingView] = []
 
         for (index, screen) in screens.enumerated() {
-            let window = OverlayPanel(screen: screen, showsIndicator: index == indicatorIndex)
+            let window = OverlayPanel(screen: screen, showsIndicator: index == indicatorIndex, tools: tools)
             let drawingView = window.drawingView
 
             if let kept = storedStrokes[window.screenKey] {
@@ -516,7 +523,7 @@ final class OverlayPanel: NSPanel {
 
     let screenKey: String
 
-    init(screen: NSScreen, showsIndicator: Bool) {
+    init(screen: NSScreen, showsIndicator: Bool, tools: ToolSettings) {
         screenKey = screen.displayIdentifier
         let screenFrame = screen.frame
         let visibleFrame = screen.visibleFrame
@@ -526,7 +533,8 @@ final class OverlayPanel: NSPanel {
                                        height: visibleFrame.height)
         drawingView = DrawingView(frame: NSRect(origin: .zero, size: screenFrame.size),
                                   indicatorBounds: localVisibleFrame,
-                                  showsIndicator: showsIndicator)
+                                  showsIndicator: showsIndicator,
+                                  tools: tools)
 
         // NSPanel subclasses must call a designated initializer. The panel is
         // non-activating so drawing does not fully steal focus from other apps.
@@ -584,8 +592,99 @@ final class OverlayPanel: NSPanel {
     }
 }
 
+// What a stroke is drawn with. Highlighter is the same geometry with a wider, softer,
+// see-through pass, which is what makes it read as a marker over content.
+enum StrokeStyle {
+    case pen
+    case highlighter
+
+    var widthMultiplier: CGFloat {
+        self == .highlighter ? 4 : 1
+    }
+
+    var alpha: CGFloat {
+        self == .highlighter ? 0.35 : 1
+    }
+
+    var lineCapStyle: NSBezierPath.LineCapStyle {
+        self == .highlighter ? .square : .round
+    }
+
+    var label: String {
+        self == .highlighter ? "MARKER" : "PEN"
+    }
+}
+
+// One finished (or in-progress) mark on the overlay.
+//
+// The points are kept alongside the path on purpose: an eraser has to answer "is this
+// stroke near the pointer?", and NSBezierPath can only answer that for its filled area,
+// not for the line itself. Keeping the polyline makes that a distance test.
+struct Stroke {
+    var points: [NSPoint]
+    let path: NSBezierPath
+    let color: NSColor
+    let width: CGFloat
+    let style: StrokeStyle
+
+    var renderColor: NSColor {
+        color.withAlphaComponent(style.alpha)
+    }
+}
+
+// The current pen, shared by every screen's panel: picking a colour on one display has to
+// apply on all of them, and the badge that shows it lives on only one.
+final class ToolSettings {
+    static let colors: [NSColor] = [.systemRed, .systemOrange, .systemYellow,
+                                    .systemGreen, .systemBlue, .white]
+    static let widths: [CGFloat] = [2, 3, 4, 6, 9, 14]
+
+    private(set) var colorIndex = 0
+    private(set) var widthIndex = 2
+    private(set) var style: StrokeStyle = .pen
+
+    // Set by AppDelegate so every panel repaints its badge when the tool changes.
+    var onChange: (() -> Void)?
+
+    var color: NSColor {
+        ToolSettings.colors[colorIndex]
+    }
+
+    // The width a stroke is actually drawn with, multiplier included.
+    var renderWidth: CGFloat {
+        ToolSettings.widths[widthIndex] * style.widthMultiplier
+    }
+
+    func selectColor(_ index: Int) {
+        guard ToolSettings.colors.indices.contains(index), index != colorIndex else {
+            return
+        }
+
+        colorIndex = index
+        onChange?()
+    }
+
+    func stepWidth(by delta: Int) {
+        let next = min(max(widthIndex + delta, 0), ToolSettings.widths.count - 1)
+        guard next != widthIndex else {
+            return
+        }
+
+        widthIndex = next
+        onChange?()
+    }
+
+    func select(style newStyle: StrokeStyle) {
+        guard newStyle != style else {
+            return
+        }
+
+        style = newStyle
+        onChange?()
+    }
+}
+
 final class DrawingView: NSView {
-    private static let strokeLineWidth: CGFloat = 4
 
     // A cursor made of nothing. The pointer over the panel has to disappear so only the
     // drawn crosshair is visible, and this is the one way to do that which needs no
@@ -614,10 +713,12 @@ final class DrawingView: NSView {
     private static let indicatorPaddingY: CGFloat = 5
     private static let indicatorLineGap: CGFloat = 2
     private static let indicatorMargin: CGFloat = 14
+    private static let indicatorRepaintMargin: CGFloat = 4
 
-    private var paths: [NSBezierPath] = []
-    private var currentPath: NSBezierPath?
+    private var strokes: [Stroke] = []
+    private var currentStroke: Stroke?
     private var lastStrokePoint: NSPoint?
+    let tools: ToolSettings
     private var pointerLocation: NSPoint?
     private var indicatorBounds: NSRect
     let showsIndicator: Bool
@@ -655,9 +756,10 @@ final class DrawingView: NSView {
     override var acceptsFirstResponder: Bool { true }
     override var isOpaque: Bool { false }
 
-    init(frame frameRect: NSRect, indicatorBounds: NSRect, showsIndicator: Bool) {
+    init(frame frameRect: NSRect, indicatorBounds: NSRect, showsIndicator: Bool, tools: ToolSettings) {
         self.indicatorBounds = indicatorBounds
         self.showsIndicator = showsIndicator
+        self.tools = tools
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
@@ -687,32 +789,35 @@ final class DrawingView: NSView {
         let point = convert(event.locationInWindow, from: nil)
         updateIndicatorHover(at: point)
 
+        let width = tools.renderWidth
         let path = NSBezierPath()
-        path.lineWidth = DrawingView.strokeLineWidth
-        path.lineCapStyle = .round
+        path.lineWidth = width
+        path.lineCapStyle = tools.style.lineCapStyle
         path.lineJoinStyle = .round
         path.move(to: point)
 
-        currentPath = path
+        currentStroke = Stroke(points: [point], path: path, color: tools.color,
+                               width: width, style: tools.style)
         lastStrokePoint = point
         movePointer(to: point)
-        invalidateSegment(from: point, to: point)
+        invalidateSegment(from: point, to: point, width: width)
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let currentPath else { return }
+        guard currentStroke != nil else { return }
         let point = convert(event.locationInWindow, from: nil)
         updateIndicatorHover(at: point)
 
         let previousPoint = lastStrokePoint ?? point
-        currentPath.line(to: point)
+        currentStroke?.path.line(to: point)
+        currentStroke?.points.append(point)
         lastStrokePoint = point
         movePointer(to: point)
 
         // Only the new segment changed. Invalidating the whole view here meant every
         // mouse move re-stroked every path drawn so far, so the cost of a drag grew
         // with the number of strokes already on screen.
-        invalidateSegment(from: previousPoint, to: point)
+        invalidateSegment(from: previousPoint, to: point, width: currentStroke?.width ?? tools.renderWidth)
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -720,13 +825,13 @@ final class DrawingView: NSView {
         movePointer(to: point)
         updateIndicatorHover(at: point)
 
-        if let currentPath {
-            paths.append(currentPath)
-            // The pixels do not change here, the path just moves from currentPath into
-            // paths. Repainting its own bounds once per stroke is cheap insurance.
-            setNeedsDisplay(strokeBounds(of: currentPath))
+        if let currentStroke {
+            strokes.append(currentStroke)
+            // The pixels do not change here, the stroke just moves from currentStroke
+            // into strokes. Repainting its own bounds once is cheap insurance.
+            setNeedsDisplay(strokeBounds(of: currentStroke))
         }
-        currentPath = nil
+        currentStroke = nil
         lastStrokePoint = nil
     }
 
@@ -863,6 +968,8 @@ final class DrawingView: NSView {
             clear()
         } else if event.keyCode == UInt16(kVK_ANSI_Z), shortcutFlags == .command {
             undoLastStroke()
+        } else if shortcutFlags == [] {
+            handleToolKey(event.keyCode)
         }
 
         // Everything else is swallowed rather than passed on. Drawing mode owns the
@@ -870,6 +977,25 @@ final class DrawingView: NSView {
         // responder chain and end in a system beep, so typing while drawing made the
         // machine beep on every letter. Click-through is where the keyboard belongs to
         // someone else.
+    }
+
+    // Drawing mode owns the keyboard, so the tool keys are plain letters and digits - no
+    // modifiers to hold while the other hand is drawing. Mnemonics where they exist: P
+    // pen, H highlighter.
+    private func handleToolKey(_ keyCode: UInt16) {
+        switch Int(keyCode) {
+        case kVK_ANSI_1: tools.selectColor(0)
+        case kVK_ANSI_2: tools.selectColor(1)
+        case kVK_ANSI_3: tools.selectColor(2)
+        case kVK_ANSI_4: tools.selectColor(3)
+        case kVK_ANSI_5: tools.selectColor(4)
+        case kVK_ANSI_6: tools.selectColor(5)
+        case kVK_ANSI_LeftBracket: tools.stepWidth(by: -1)
+        case kVK_ANSI_RightBracket: tools.stepWidth(by: 1)
+        case kVK_ANSI_P: tools.select(style: .pen)
+        case kVK_ANSI_H: tools.select(style: .highlighter)
+        default: break
+        }
     }
 
     // Escape can also arrive as a cancel action rather than a plain keyDown; swallow it
@@ -880,24 +1006,24 @@ final class DrawingView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        NSColor.systemRed.setStroke()
-
         // Skip strokes that are nowhere near the region being repainted. With
         // incremental invalidation this is what keeps a drag cheap on a long session.
-        for path in paths where strokeBounds(of: path).intersects(dirtyRect) {
-            path.stroke()
+        for stroke in strokes where strokeBounds(of: stroke).intersects(dirtyRect) {
+            stroke.renderColor.setStroke()
+            stroke.path.stroke()
         }
 
-        if let currentPath, strokeBounds(of: currentPath).intersects(dirtyRect) {
-            currentPath.stroke()
+        if let currentStroke, strokeBounds(of: currentStroke).intersects(dirtyRect) {
+            currentStroke.renderColor.setStroke()
+            currentStroke.path.stroke()
         }
 
         drawActiveModeIndicator(in: dirtyRect)
         drawPointer(in: dirtyRect)
     }
 
-    func capturedStrokes() -> [NSBezierPath] {
-        paths
+    func capturedStrokes() -> [Stroke] {
+        strokes
     }
 
     // A stroke the user has not lifted the mouse off yet is still a stroke. Whenever the
@@ -906,52 +1032,67 @@ final class DrawingView: NSView {
     // round trip through click-through it sat there unfinished until the next mouseDown
     // silently replaced it.
     func finishStrokeInProgress() {
-        guard let currentPath else {
+        guard let currentStroke else {
             return
         }
 
-        paths.append(currentPath)
-        self.currentPath = nil
+        strokes.append(currentStroke)
+        self.currentStroke = nil
         lastStrokePoint = nil
-        setNeedsDisplay(strokeBounds(of: currentPath))
+        setNeedsDisplay(strokeBounds(of: currentStroke))
     }
 
-    func restore(strokes: [NSBezierPath]) {
-        paths = strokes
-        currentPath = nil
+    func restore(strokes restored: [Stroke]) {
+        strokes = restored
+        currentStroke = nil
         lastStrokePoint = nil
         needsDisplay = true
     }
 
     func clear() {
-        paths.removeAll()
-        currentPath = nil
+        strokes.removeAll()
+        currentStroke = nil
         lastStrokePoint = nil
         needsDisplay = true
     }
 
-    // NSBezierPath.bounds covers the path geometry only, so grow it by the line width to
-    // include the stroke itself, its round caps and antialiasing.
-    private func strokeBounds(of path: NSBezierPath) -> NSRect {
-        path.bounds.insetBy(dx: -DrawingView.strokeLineWidth, dy: -DrawingView.strokeLineWidth)
+    // The badge carries the tool name, its colour and its width, so a tool change has to
+    // repaint it - on every screen, not just the one the key was pressed on.
+    //
+    // The text changes length with the tool ("PEN 4" against "MARKER 24") and the badge is
+    // anchored to the corner, so it grows leftwards: repainting only where it used to be
+    // leaves the wider version half drawn. Old rect and new rect, both.
+    func toolSettingsChanged() {
+        guard showsIndicator else {
+            return
+        }
+
+        let updated = activeModeIndicatorRect()
+        let region = indicatorRect == .zero ? updated : indicatorRect.union(updated)
+        setNeedsDisplay(region.insetBy(dx: -DrawingView.indicatorRepaintMargin,
+                                       dy: -DrawingView.indicatorRepaintMargin))
     }
 
-    private func invalidateSegment(from start: NSPoint, to end: NSPoint) {
+    // NSBezierPath.bounds covers the path geometry only, so grow it by that stroke's own
+    // line width to include the drawn line, its caps and antialiasing.
+    private func strokeBounds(of stroke: Stroke) -> NSRect {
+        stroke.path.bounds.insetBy(dx: -stroke.width, dy: -stroke.width)
+    }
+
+    private func invalidateSegment(from start: NSPoint, to end: NSPoint, width: CGFloat) {
         let segment = NSRect(x: min(start.x, end.x),
                              y: min(start.y, end.y),
                              width: abs(end.x - start.x),
                              height: abs(end.y - start.y))
-        setNeedsDisplay(segment.insetBy(dx: -DrawingView.strokeLineWidth,
-                                        dy: -DrawingView.strokeLineWidth))
+        setNeedsDisplay(segment.insetBy(dx: -width, dy: -width))
     }
 
     private func undoLastStroke() {
-        guard !paths.isEmpty else {
+        guard let removed = strokes.popLast() else {
             return
         }
 
-        paths.removeLast()
-        needsDisplay = true
+        setNeedsDisplay(strokeBounds(of: removed))
     }
 
     private func drawActiveModeIndicator(in dirtyRect: NSRect) {
@@ -980,7 +1121,9 @@ final class DrawingView: NSView {
     // Red and solid while the overlay owns the mouse, hollow and neutral while clicks are
     // passing through: the badge answers "where do my clicks go right now?".
     private var indicatorText: String {
-        isInteractionMode ? "◌ CLICK-THROUGH" : "● DRAW"
+        isInteractionMode
+            ? "◌ CLICK-THROUGH"
+            : "● \(tools.style.label) \(Int(tools.renderWidth))"
     }
 
     private var indicatorBackgroundColor: NSColor {
@@ -993,10 +1136,16 @@ final class DrawingView: NSView {
     // get out, which is the one thing a user who thinks they are stuck needs. Modifier
     // glyphs keep it to a glance rather than a sentence to read mid-presentation.
     private func indicatorLines() -> (mode: NSAttributedString, hint: NSAttributedString) {
-        let mode = NSAttributedString(string: indicatorText, attributes: [
+        let mode = NSMutableAttributedString(string: indicatorText, attributes: [
             .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
             .foregroundColor: NSColor.white.withAlphaComponent(0.92)
         ])
+
+        // The leading dot is the colour swatch: the only place the active colour is shown,
+        // which is what keeps this keyboard-driven tool honest without a palette on screen.
+        if !isInteractionMode, mode.length > 0 {
+            mode.addAttribute(.foregroundColor, value: tools.color, range: NSRange(location: 0, length: 1))
+        }
         let hintText = isInteractionMode ? DrawingView.interactionHintText : DrawingView.drawingHintText
         let hint = NSAttributedString(string: hintText, attributes: [
             .font: NSFont.systemFont(ofSize: 9, weight: .regular),
@@ -1030,8 +1179,8 @@ final class DrawingView: NSView {
         if isMouseOverIndicator != wasMouseOverIndicator {
             // Showing or hiding the badge only touches the badge's own rect; anything
             // drawn underneath it is repainted by draw(_:) for the same rect.
-            setNeedsDisplay(currentIndicatorRect.insetBy(dx: -DrawingView.strokeLineWidth,
-                                                         dy: -DrawingView.strokeLineWidth))
+            setNeedsDisplay(currentIndicatorRect.insetBy(dx: -DrawingView.indicatorRepaintMargin,
+                                                         dy: -DrawingView.indicatorRepaintMargin))
         }
     }
 }
