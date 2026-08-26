@@ -291,46 +291,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // The menu bar item doubles as the mode light: red while the overlay is taking
         // the mouse, dimmed while it is only showing, plain when there is no overlay.
-        // The two modes have to be told apart at a glance, so the symbol itself changes
-        // (a pen that draws vs. a pen with a slash through it) on top of the tint.
+        // The mode is carried by the symbol, never by a colour. Setting contentTintColor
+        // on a template image switches off the appearance-driven rendering that makes a
+        // menu bar icon light on a dark menu bar: measured, a tinted icon rendered at
+        // luminance 0.000 - black on black - while an untinted one rendered at 0.791.
         let symbolName: String
-        let color: NSColor
         let tooltip: String
         if !isDrawingMode {
             symbolName = "scribble"
-            color = .labelColor
             tooltip = "Screen Draw Overlay - Control Option Command D to draw"
         } else if isInteractionMode {
             symbolName = "pencil.slash"
-            color = .secondaryLabelColor
             tooltip = "Click-through: drawing is showing, clicks go to the app underneath"
         } else {
-            symbolName = "scribble"
-            color = .systemRed
+            symbolName = "pencil.tip.crop.circle.fill"
             tooltip = "Drawing: the overlay is taking your clicks"
         }
 
+        button.contentTintColor = nil
+
         if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Screen Draw Overlay") {
-            // A template image follows the menu bar's own look; the tint is what carries
-            // the mode. An icon also takes less width than a letter, which matters on a
-            // crowded menu bar where macOS drops items that do not fit.
+            // A template image follows the menu bar's own look in both themes. An icon
+            // also takes less width than a letter, which matters on a crowded menu bar
+            // where macOS drops the items that do not fit.
             image.isTemplate = true
             button.image = image.withSymbolConfiguration(
                 NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
             ) ?? image
             button.title = ""
-            button.contentTintColor = color
         } else {
-            // No symbol on this system: fall back to the letter this app shipped with.
+            // No symbol on this system: fall back to the letter this app shipped with,
+            // plainly, so AppKit styles it for the current appearance.
             button.image = nil
-            button.contentTintColor = nil
-            button.attributedTitle = NSAttributedString(
-                string: "D",
-                attributes: [
-                    .foregroundColor: color,
-                    .font: NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
-                ]
-            )
+            button.title = "D"
         }
 
         button.toolTip = tooltip
