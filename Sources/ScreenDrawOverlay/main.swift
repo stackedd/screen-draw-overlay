@@ -667,6 +667,35 @@ enum DrawingTool {
         self != .eraser && self != .laser
     }
 
+    // Stable across releases, unlike a case's position, so a stored preference survives
+    // the tool list growing.
+    var persistedName: String {
+        switch self {
+        case .pen: return "pen"
+        case .highlighter: return "highlighter"
+        case .line: return "line"
+        case .arrow: return "arrow"
+        case .rectangle: return "rectangle"
+        case .ellipse: return "ellipse"
+        case .eraser: return "eraser"
+        case .laser: return "laser"
+        }
+    }
+
+    init?(persistedName name: String) {
+        switch name {
+        case "pen": self = .pen
+        case "highlighter": self = .highlighter
+        case "line": self = .line
+        case "arrow": self = .arrow
+        case "rectangle": self = .rectangle
+        case "ellipse": self = .ellipse
+        case "eraser": self = .eraser
+        case "laser": self = .laser
+        default: return nil
+        }
+    }
+
     var label: String {
         switch self {
         case .pen: return "PEN"
@@ -758,11 +787,53 @@ final class ToolSettings {
                                     .systemGreen, .systemBlue, .white]
     static let widths: [CGFloat] = [2, 3, 4, 6, 9, 14]
 
+    // Remembered between launches. Someone who always marks up in a thick yellow
+    // highlighter should not have to say so every morning.
+    private enum Key {
+        static let colorIndex = "toolColorIndex"
+        static let widthIndex = "toolWidthIndex"
+        static let tool = "toolName"
+        static let temporaryInk = "toolTemporaryInk"
+    }
+
     private(set) var colorIndex = 0
     private(set) var widthIndex = 2
     private(set) var tool: DrawingTool = .pen
     private(set) var drawsTemporaryInk = false
-    private var toolBeforeLaser: DrawingTool = .pen
+    private var lastDrawingTool: DrawingTool = .pen
+
+    init() {
+        let defaults = UserDefaults.standard
+        if let stored = defaults.object(forKey: Key.colorIndex) as? Int,
+           ToolSettings.colors.indices.contains(stored) {
+            colorIndex = stored
+        }
+
+        if let stored = defaults.object(forKey: Key.widthIndex) as? Int,
+           ToolSettings.widths.indices.contains(stored) {
+            widthIndex = stored
+        }
+
+        // The eraser and the laser are things you pick up for a moment, not a pen to
+        // start the day with, so they are never what comes back.
+        if let name = defaults.string(forKey: Key.tool),
+           let stored = DrawingTool(persistedName: name), stored.marksTheCanvas {
+            tool = stored
+            lastDrawingTool = stored
+        }
+
+        drawsTemporaryInk = defaults.bool(forKey: Key.temporaryInk)
+    }
+
+    private func persist() {
+        let defaults = UserDefaults.standard
+        defaults.set(colorIndex, forKey: Key.colorIndex)
+        defaults.set(widthIndex, forKey: Key.widthIndex)
+        // The eraser and the laser are momentary; what comes back next launch is the last
+        // thing that actually drew.
+        defaults.set(lastDrawingTool.persistedName, forKey: Key.tool)
+        defaults.set(drawsTemporaryInk, forKey: Key.temporaryInk)
+    }
 
     var style: StrokeStyle {
         tool.style
@@ -786,6 +857,7 @@ final class ToolSettings {
         }
 
         colorIndex = index
+        persist()
         onChange?()
     }
 
@@ -796,6 +868,7 @@ final class ToolSettings {
         }
 
         widthIndex = next
+        persist()
         onChange?()
     }
 
@@ -805,22 +878,22 @@ final class ToolSettings {
         }
 
         tool = newTool
+        if newTool.marksTheCanvas {
+            lastDrawingTool = newTool
+        }
+        persist()
         onChange?()
     }
 
     // Space is a switch, not a one-way trip: it drops the laser and hands back whatever
     // was in hand before.
     func toggleLaser() {
-        if tool == .laser {
-            select(tool: toolBeforeLaser)
-        } else {
-            toolBeforeLaser = tool
-            select(tool: .laser)
-        }
+        select(tool: tool == .laser ? lastDrawingTool : .laser)
     }
 
     func toggleTemporaryInk() {
         drawsTemporaryInk.toggle()
+        persist()
         onChange?()
     }
 

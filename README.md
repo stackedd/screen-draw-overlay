@@ -34,6 +34,8 @@ The app has no Dock icon and no window — it lives only in the menu bar. If you
 
 The quickest way to check that it is running at all is to press the shortcut: `Control + Option + Command + D`. Nothing dims — the overlay is fully transparent — but a red `● DRAW` badge appears in the top-right corner and the pointer becomes a crosshair. Press it again to hide it.
 
+Your colour, width and tool are remembered between launches, so a highlighter-in-yellow habit only has to be set once. The eraser and the laser are not: they are things you pick up for a moment, so what comes back is the last tool that actually drew.
+
 The app does not launch at login by itself. Add it under System Settings → General → Login Items if you want that.
 
 ## Shortcuts
