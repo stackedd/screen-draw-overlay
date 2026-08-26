@@ -9,6 +9,8 @@ It needs no system permissions: no Accessibility, no Screen Recording. The globa
 
 ## Install
 
+Requires macOS 11 Big Sur or later, on Apple Silicon or Intel.
+
 1. Download `ScreenDrawOverlay.zip` from the [Releases](../../releases) page.
 2. Double-click the zip to unpack it.
 3. Drag `ScreenDrawOverlay.app` into `/Applications`.
@@ -65,7 +67,7 @@ If `Control + Option + Command + D` does nothing at launch, another app already 
 
 ## Build from source
 
-You need the Xcode command line tools (`xcode-select --install`). There is no Xcode project; everything is SwiftPM.
+You need the Xcode command line tools (`xcode-select --install`). There is no Xcode project; everything is SwiftPM. The package targets macOS 11, which is as low as a universal binary can go — Apple Silicon has no macOS before Big Sur.
 
 ```bash
 ./build_app.sh

@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "ScreenDrawOverlay",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v11)
     ],
     products: [
         .executable(name: "ScreenDrawOverlay", targets: ["ScreenDrawOverlay"])
