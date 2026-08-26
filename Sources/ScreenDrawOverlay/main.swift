@@ -20,6 +20,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("ScreenDrawOverlay: app launched")
 
+        // Two copies at once is a trap, not a feature: macOS lets both register the same
+        // global hot keys, so one press opens two overlays stacked on each other and
+        // whichever one the user cannot see is the one still taking their clicks.
+        // Launching again - by double clicking, or by a login item on top of a copy that
+        // is already up - quietly leaves the running one alone.
+        guard !AppDelegate.anotherInstanceIsRunning() else {
+            print("ScreenDrawOverlay: another copy is already running, quitting this one")
+            NSApp.terminate(nil)
+            return
+        }
+
         // Keep the app out of the Dock. The small menu bar item is enough for v0.1.
         NSApp.setActivationPolicy(.accessory)
 
@@ -77,6 +88,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleHotKey?.unregister()
         interactionHotKey?.unregister()
         emergencyHotKey?.unregister()
+    }
+
+    private static func anotherInstanceIsRunning() -> Bool {
+        // Running unbundled (swift run, or a test harness) means there is no identity to
+        // compare, so the check stands down rather than guessing.
+        guard let bundleID = Bundle.main.bundleIdentifier else {
+            return false
+        }
+
+        let ownProcessID = ProcessInfo.processInfo.processIdentifier
+        return NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).contains { app in
+            app.processIdentifier != ownProcessID && !app.isTerminated
+        }
     }
 
     private func setupStatusItem() {
