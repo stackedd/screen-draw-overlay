@@ -527,6 +527,21 @@ final class OverlayPanel: NSPanel {
     // view's own keys - C to clear, Command+Z to undo - reach it.
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    // Key equivalents are dispatched before keyDown, so without this a Command shortcut
+    // pressed while drawing would still reach this app's menu - Command+Q would quit the
+    // app in the middle of a stroke - or be handed to the app underneath. Drawing mode
+    // interacts with nothing, so they stop here. Command+Z is the one exception, since
+    // undo is part of the tool; the global hot keys are unaffected because Carbon
+    // delivers those outside this path.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let shortcutFlags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        if shortcutFlags == .command, event.charactersIgnoringModifiers?.lowercased() == "z" {
+            drawingView.keyDown(with: event)
+        }
+
+        return true
+    }
 }
 
 final class DrawingView: NSView {
@@ -804,9 +819,13 @@ final class DrawingView: NSView {
             clear()
         } else if event.keyCode == UInt16(kVK_ANSI_Z), shortcutFlags == .command {
             undoLastStroke()
-        } else {
-            super.keyDown(with: event)
         }
+
+        // Everything else is swallowed rather than passed on. Drawing mode owns the
+        // keyboard the same way it owns the mouse: an unhandled key would travel up the
+        // responder chain and end in a system beep, so typing while drawing made the
+        // machine beep on every letter. Click-through is where the keyboard belongs to
+        // someone else.
     }
 
     // Escape can also arrive as a cancel action rather than a plain keyDown; swallow it
