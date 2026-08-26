@@ -453,21 +453,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 final class OverlayPanel: NSPanel {
-    // The one place the overlay's stacking is decided. Above presentation windows, below
-    // the menu bar, so the D menu bar item stays clickable while drawing mode is on.
+    // The one place the overlay's stacking is decided. Drawing mode owns the screen:
+    // above the menu bar, above status items, above anything a click could land on.
     //
-    // Measured 2026-08-26 on macOS 26.5.1 with Keynote 13.2: a running slideshow puts its
-    // windows at window level 9, the menu bar sits at 24 (.mainMenu) and status items at
-    // 25. One below the menu bar therefore clears a presentation with room to spare,
-    // while leaving the menu bar reachable. The old .floating (3) was ordered *under* the
-    // slideshow, which is the bug this replaces.
+    // This used to sit one below the menu bar (23) so the menu bar item stayed clickable
+    // while drawing. That turned out to be worse in use: the menu bar and its extras kept
+    // the pointer and the clicks whenever they were under the cursor, so the real arrow
+    // flickered back into view at the top of the screen and menus could be opened by
+    // accident in the middle of a stroke. Drawing mode is supposed to interact with
+    // nothing; click-through is where interaction happens.
     //
-    // Known cost of staying this low: Keynote's ~1s fade in and out of a slideshow uses a
-    // window at level 26, which briefly covers the overlay. Raising this constant (e.g.
-    // .popUpMenu) trades the menu bar away to win that back.
+    // Measured 2026-08-26 on macOS 26.5.1: menu bar 24, status items 25, another
+    // full-width strip at 26, a Keynote 13.2 slideshow at 9 with its fade at 26.
+    // .popUpMenu (101) clears all of them.
     //
-    // Window level does not affect key window eligibility, so Escape still reaches keyDown.
-    private static let overlayLevel = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue - 1)
+    // Being above the menu bar is only safe because nothing on screen is needed to get
+    // out: ⌃⌥⌘D hides (keeping the drawing), ⌃⌥⌘E hands control back, and ⌃⌥⌘Esc quits
+    // the app outright. All three are global hot keys that do not depend on the overlay.
+    private static let overlayLevel = NSWindow.Level.popUpMenu
 
     let drawingView: DrawingView
 
