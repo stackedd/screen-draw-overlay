@@ -38,14 +38,33 @@ The app does not launch at login by itself. Add it under System Settings → Gen
 
 ## Shortcuts
 
+These three work anywhere, whatever app you are in:
+
 | Shortcut | What it does |
 | --- | --- |
-| `Control + Option + Command + D` | Start drawing · back to drawing from click-through · hide the overlay, keeping what you drew |
+| `Control + Option + Command + D` | Tap: start drawing · back to drawing from click-through · hide the overlay, keeping what you drew. **Hold: draw only while you hold it**, and it puts itself away when you let go |
 | `Control + Option + Command + E` | Switch between drawing and click-through |
 | `Control + Option + Command + Escape` | Panic key: quits the app outright, from any state |
-| Drag the mouse | Draw a red freehand line |
-| `C` | Erase everything, stay in drawing mode |
-| `Command + Z` | Undo the last stroke |
+
+While you are drawing, the keyboard belongs to the tool. No modifiers to hold — your other hand is on the mouse:
+
+| Key | Tool |
+| --- | --- |
+| `P` | Pen |
+| `H` | Highlighter |
+| `L` | Straight line |
+| `A` | Arrow |
+| `R` | Rectangle |
+| `O` | Oval |
+| `E` | Eraser — rubs out whole strokes, one at a time |
+
+| Key | What it does |
+| --- | --- |
+| `1`–`6` | Colour: red, orange, yellow, green, blue, white |
+| `[` `]` | Thinner / thicker |
+| `Shift` while drawing a shape | Snap a line or arrow to 45°, make a rectangle square or an oval round |
+| `Command + Z` / `Shift + Command + Z` | Undo / redo — including undoing a Clear |
+| `Delete` or `C` | Clear everything (undoable) |
 
 ### Drawing and click-through
 
@@ -53,11 +72,13 @@ There are three states — off, drawing and click-through — and two shortcuts 
 
 While you are **drawing**, the overlay takes the mouse and the keyboard: your strokes land on it and nothing reaches the app underneath. Press `Control + Option + Command + E` and it switches to **click-through**: the drawing stays exactly where it is, but clicks, scrolls and keystrokes go straight to the app below, so you can advance a slide, scroll a page or switch apps without losing what you drew. `Control + Option + Command + E` again goes back to drawing, and so does `Control + Option + Command + D` — from click-through, `D` means "back to drawing", not "throw it away".
 
+**Holding beats toggling.** Tapping `Control + Option + Command + D` leaves the overlay up until you tap it again, which is what you want when you are marking up a slide for a minute. Holding it down is for the other case: press, scribble one arrow, let go, and the screen is yours again — nothing to remember to switch off. That is what makes it safe to leave running all day.
+
 **Hiding is not erasing.** `Control + Option + Command + D` while you are drawing puts the overlay away but keeps your strokes; the next `Control + Option + Command + D` brings them back where they were. Hitting the shortcut by accident costs you nothing. The only thing that erases a drawing is `C`.
 
-**While drawing, the keyboard belongs to the tool.** `C` clears, `Command + Z` undoes, and everything else — including `Escape` — is swallowed and does nothing. If you need to type, or need `Escape` to reach the app underneath (leaving a slideshow, for instance), switch to click-through with `Control + Option + Command + E` first.
+**While drawing, the keyboard belongs to the tool.** The keys above do their thing and everything else — including `Escape` — is swallowed and does nothing. If you need to type, or need `Escape` to reach the app underneath (leaving a slideshow, for instance), switch to click-through with `Control + Option + Command + E` first.
 
-You can always tell which state you are in: the corner badge reads a red `● DRAW` when the overlay owns your clicks and a dim `◌ CLICK-THROUGH` when they pass through, and its second line names the two shortcuts that apply right now (`⌃⌥⌘E click · ⌃⌥⌘D hide` while drawing). The crosshair pointer is drawn only while drawing, and the menu bar icon turns red while the overlay is taking clicks and becomes a dimmed struck-through pen in click-through.
+You can always tell which state you are in, and which tool you are holding: the corner badge reads `● PEN 4` — the tool, its width, and a dot in the current colour — or a dim `◌ CLICK-THROUGH` when your clicks pass through. Its second line names the two shortcuts that apply right now (`⌃⌥⌘E click · ⌃⌥⌘D hide` while drawing). There is no palette on screen on purpose: a tool that occupies screen space is not one you leave running. The crosshair pointer is drawn only while drawing, and the menu bar icon turns red while the overlay is taking clicks and becomes a dimmed struck-through pen in click-through.
 
 `Control + Option + Command + Escape` is the panic key, and it is blunt on purpose: **it quits the app**, exactly like Quit in the menu. If the overlay is ever swallowing your clicks and nothing else responds, ending the process is the one recovery that cannot fail — the app releases the screen and closes its panels on the way out. Your drawing goes with it, so use `Control + Option + Command + D` for ordinary "get this out of my way". Start it again from `/Applications` afterwards.
 
@@ -79,7 +100,7 @@ For a quick run without the bundle, `swift build -c release` and then `.build/re
 
 ## Known limits
 
-This is v0.1 and deliberately small. There is no toolbar, no color picker, no line width control, no shapes or arrows, no saving or screenshot capture, no redo, and no preferences window. One red pen, one clear, one undo.
+Deliberately small. There is no toolbar or palette, no text tool, no saving or screenshot capture, and no preferences window.
 
 Beyond that, things worth knowing:
 

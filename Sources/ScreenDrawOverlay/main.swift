@@ -15,6 +15,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isDrawingMode = false
     private var isInteractionMode = false
     private var overlayScreenLayout: [String] = []
+    private static let holdToDrawThreshold: TimeInterval = 0.4
+
+    private var drawingHotKeyPressedAt: Date?
     private var storedStrokes: [String: [Stroke]] = [:]
     private let tools = ToolSettings()
     private var storedStrokesLayout: [String] = []
@@ -51,9 +54,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         toggleHotKey = GlobalHotKey(id: 1,
                                     keyCode: UInt32(kVK_ANSI_D),
-                                    modifiers: UInt32(cmdKey | optionKey | controlKey)) { [weak self] in
-            self?.toggleDrawingMode()
-        }
+                                    modifiers: UInt32(cmdKey | optionKey | controlKey),
+                                    handler: { [weak self] in
+            self?.drawingHotKeyPressed()
+        }, releaseHandler: { [weak self] in
+            self?.drawingHotKeyReleased()
+        })
 
         interactionHotKey = GlobalHotKey(id: 3,
                                          keyCode: UInt32(kVK_ANSI_E),
@@ -168,6 +174,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    // Tap or hold, on the same shortcut. A tap toggles, as it always has. Holding it turns
+    // the overlay into something you reach for the way you reach for a laser pointer:
+    // press, scribble, let go, and the screen is yours again - no mode to remember to
+    // leave. That is the difference between a tool you switch on and a tool you can leave
+    // running in the background all day.
+    //
+    // Momentary only applies when the press is what opened the overlay. Holding the key
+    // while already drawing would otherwise have to undo the tap action mid-hold, which
+    // reads as the shortcut fighting the user.
+    private func drawingHotKeyPressed() {
+        let wasClosed = !isDrawingMode && overlayWindowSnapshot().isEmpty
+        toggleDrawingMode()
+        drawingHotKeyPressedAt = wasClosed ? Date() : nil
+    }
+
+    private func drawingHotKeyReleased() {
+        guard let pressedAt = drawingHotKeyPressedAt else {
+            return
+        }
+
+        drawingHotKeyPressedAt = nil
+
+        // A tap is a toggle and leaves the overlay up; only a deliberate hold puts it away.
+        guard Date().timeIntervalSince(pressedAt) >= AppDelegate.holdToDrawThreshold else {
+            return
+        }
+
+        // If the user stepped into click-through during the hold they meant to stay, so
+        // the release leaves that alone.
+        guard isDrawingMode, !isInteractionMode else {
+            return
+        }
+
+        hideOverlay(reason: "drawing hot key released")
     }
 
     // Three states - off, drawing, click-through - and D always means "get me back to
@@ -1486,13 +1528,19 @@ final class GlobalHotKey {
     private let keyCode: UInt32
     private let modifiers: UInt32
     private let handler: () -> Void
+    private let releaseHandler: (() -> Void)?
     private var hotKeyRef: EventHotKeyRef?
 
-    init(id: UInt32, keyCode: UInt32, modifiers: UInt32, handler: @escaping () -> Void) {
+    init(id: UInt32,
+         keyCode: UInt32,
+         modifiers: UInt32,
+         handler: @escaping () -> Void,
+         releaseHandler: (() -> Void)? = nil) {
         hotKeyID = EventHotKeyID(signature: GlobalHotKey.signature, id: id)
         self.keyCode = keyCode
         self.modifiers = modifiers
         self.handler = handler
+        self.releaseHandler = releaseHandler
     }
 
     func register() -> Bool {
@@ -1544,8 +1592,12 @@ final class GlobalHotKey {
             return true
         }
 
-        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
-                                      eventKind: UInt32(kEventHotKeyPressed))
+        // Both halves of the keypress. The release half is what lets a hot key be held
+        // rather than toggled - press and hold to draw, let go to put it away.
+        var eventTypes = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))
+        ]
 
         let installStatus = InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
             guard let event else {
@@ -1569,13 +1621,17 @@ final class GlobalHotKey {
 
             // Copy the closure out of the instance so the async block never touches the
             // hot key object, which may be gone by the time the block runs.
-            let handler = hotKey.handler
+            let isRelease = GetEventKind(event) == UInt32(kEventHotKeyReleased)
+            guard let handler = isRelease ? hotKey.releaseHandler : hotKey.handler else {
+                return OSStatus(eventNotHandledErr)
+            }
+
             DispatchQueue.main.async {
                 handler()
             }
 
             return noErr
-        }, 1, &eventType, nil, &sharedEventHandler)
+        }, eventTypes.count, &eventTypes, nil, &sharedEventHandler)
 
         guard installStatus == noErr else {
             sharedEventHandler = nil
