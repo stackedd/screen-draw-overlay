@@ -154,14 +154,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let window = OverlayPanel(screen: screen, showsIndicator: index == indicatorIndex)
             let drawingView = window.drawingView
 
-            // Escape on any screen tears down every overlay, not just its own panel.
-            window.onEscape = { [weak self] in
-                self?.forceCloseOverlay(reason: "Escape key")
-            }
-            drawingView.onEscape = { [weak self] in
-                self?.forceCloseOverlay(reason: "Escape key")
-            }
-
             windows.append(window)
             views.append(drawingView)
         }
@@ -238,6 +230,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         if isInteractionMode {
+            // Handing the mouse over is not enough: the panel stays the key window until
+            // something else takes it, so the keyboard - Escape included - would still be
+            // swallowed here. Step out of the way so the app underneath owns input.
+            NSApp.deactivate()
             print("ScreenDrawOverlay: click-through mode ON (drawing kept, clicks pass through)")
         } else {
             // Escape, C and Command+Z are local keys, so the panel has to be key again.
@@ -426,12 +422,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         views.forEach { drawingView in
-            drawingView.onEscape = nil
             drawingView.clear()
         }
 
         windows.forEach { window in
-            window.onEscape = nil
             window.orderOut(nil)
             window.close()
             print("ScreenDrawOverlay: overlay destroyed")
@@ -504,7 +498,6 @@ final class OverlayPanel: NSPanel {
     private static let overlayLevel = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue - 1)
 
     let drawingView: DrawingView
-    var onEscape: (() -> Void)?
 
     init(screen: NSScreen, showsIndicator: Bool) {
         let screenFrame = screen.frame
@@ -552,17 +545,10 @@ final class OverlayPanel: NSPanel {
         makeFirstResponder(drawingView)
     }
 
-    // Borderless panels do not normally become key windows. We opt in only so Escape works.
+    // Borderless panels do not normally become key windows. We opt in so the drawing
+    // view's own keys - C to clear, Command+Z to undo - reach it.
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
-
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == UInt16(kVK_Escape) {
-            onEscape?()
-        } else {
-            super.keyDown(with: event)
-        }
-    }
 }
 
 final class DrawingView: NSView {
@@ -602,7 +588,6 @@ final class DrawingView: NSView {
     private var indicatorRect: NSRect = .zero
     private var isMouseOverIndicator = false
     private var mouseTrackingArea: NSTrackingArea?
-    var onEscape: (() -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
     override var isOpaque: Bool { false }
@@ -719,7 +704,11 @@ final class DrawingView: NSView {
         let shortcutFlags = event.modifierFlags.intersection([.command, .shift, .option, .control])
 
         if event.keyCode == UInt16(kVK_Escape) {
-            onEscape?()
+            // Swallowed on purpose. Escape used to leave drawing mode, but that only
+            // worked while the panel happened to be key - a state the user cannot see -
+            // and it threw the drawing away just as someone pressed Escape to get out of
+            // a presentation. Not calling super also keeps AppKit from beeping.
+            return
         } else if event.keyCode == UInt16(kVK_ANSI_C), shortcutFlags == [] || shortcutFlags == .shift {
             clear()
         } else if event.keyCode == UInt16(kVK_ANSI_Z), shortcutFlags == .command {
@@ -727,6 +716,11 @@ final class DrawingView: NSView {
         } else {
             super.keyDown(with: event)
         }
+    }
+
+    // Escape can also arrive as a cancel action rather than a plain keyDown; swallow it
+    // there too, silently, for the same reason.
+    override func cancelOperation(_ sender: Any?) {
     }
 
     override func draw(_ dirtyRect: NSRect) {
