@@ -176,6 +176,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         storedStrokes.removeAll()
         windows.forEach { window in
+            // Hiding can land mid-drag; that half-drawn line is still the user's.
+            window.drawingView.finishStrokeInProgress()
             let strokes = window.drawingView.capturedStrokes()
             guard !strokes.isEmpty else {
                 return
@@ -619,6 +621,10 @@ final class DrawingView: NSView {
                 return
             }
 
+            // The mouse is about to stop reaching this view (or start again), so a stroke
+            // still under the button has to be committed before the tool changes hands.
+            finishStrokeInProgress()
+
             // No mouseMoved arrives while the panel ignores the mouse, so a hover that was
             // in effect at the moment of the switch would stick and hide the badge.
             isMouseOverIndicator = false
@@ -883,6 +889,22 @@ final class DrawingView: NSView {
 
     func capturedStrokes() -> [NSBezierPath] {
         paths
+    }
+
+    // A stroke the user has not lifted the mouse off yet is still a stroke. Whenever the
+    // tool is taken away mid-drag - hiding the overlay, or stepping into click-through -
+    // it has to be committed, or it is dropped on the floor: hiding lost it, and after a
+    // round trip through click-through it sat there unfinished until the next mouseDown
+    // silently replaced it.
+    func finishStrokeInProgress() {
+        guard let currentPath else {
+            return
+        }
+
+        paths.append(currentPath)
+        self.currentPath = nil
+        lastStrokePoint = nil
+        setNeedsDisplay(strokeBounds(of: currentPath))
     }
 
     func restore(strokes: [NSBezierPath]) {
