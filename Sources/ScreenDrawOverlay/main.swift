@@ -14,7 +14,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isDrawingMode = false
     private var isInteractionMode = false
     private var overlayScreenLayout: [String] = []
-    private var didHideSystemCursor = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("ScreenDrawOverlay: app launched")
@@ -71,8 +70,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         print("ScreenDrawOverlay: app terminating")
-        // Last line of defence: never leave the machine without a pointer.
-        showSystemCursor()
         NotificationCenter.default.removeObserver(self)
         forceCloseOverlay(reason: "app terminating")
         toggleHotKey?.unregister()
@@ -251,7 +248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // swallowed here. Step out of the way so the app underneath owns input.
             NSApp.deactivate()
             // Hand the real pointer back; the drawn one belongs to drawing mode only.
-            showSystemCursor()
+            windows.forEach { $0.drawingView.releaseDrawingCursor() }
             print("ScreenDrawOverlay: click-through mode ON (drawing kept, clicks pass through)")
         } else {
             // Escape, C and Command+Z are local keys, so the panel has to be key again.
@@ -264,36 +261,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateStatusItemAppearance()
     }
 
-    // The system pointer is hidden and DrawingView draws its own crosshair instead.
-    // Asking the system for a cursor does not work where it matters: a presenting app
-    // hides the pointer at display level and keeps re-hiding it, and a background app
-    // cannot win that race. A pointer we draw ourselves is simply part of the overlay.
-    //
-    // hide/unhide is a counter, so these two are the only places that touch it and each
-    // one checks the flag first: exactly one hide is ever outstanding.
-    // Hide the real pointer and seed each view with where it currently is, so the drawn
-    // crosshair appears immediately instead of after the first mouse move.
+    // The real pointer is replaced by a fully transparent cursor over the panel, and the
+    // view draws its own crosshair instead. NSCursor.hide() was the obvious approach and
+    // the wrong one: hiding is per application and only applies while that application is
+    // active, so a background .accessory app hides nothing and the user ends up with two
+    // pointers. A transparent cursor rect works because the window server asks whoever
+    // owns the window under the pointer, which is us.
     private func startDrawingPointer() {
-        hideSystemCursor()
-        drawingViewSnapshot(from: overlayWindowSnapshot()).forEach { $0.syncPointerToMouseLocation() }
-    }
-
-    private func hideSystemCursor() {
-        guard !didHideSystemCursor else {
-            return
+        drawingViewSnapshot(from: overlayWindowSnapshot()).forEach { drawingView in
+            drawingView.refreshCursorRects()
+            drawingView.applyDrawingCursor()
+            drawingView.syncPointerToMouseLocation()
         }
-
-        NSCursor.hide()
-        didHideSystemCursor = true
-    }
-
-    private func showSystemCursor() {
-        guard didHideSystemCursor else {
-            return
-        }
-
-        NSCursor.unhide()
-        didHideSystemCursor = false
     }
 
     private func updateStatusItemAppearance() {
@@ -381,10 +360,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             print("ScreenDrawOverlay: overlay destroyed")
         }
 
+        // The panels carried the transparent cursor; with them gone, make sure this app
+        // is not still asking for an invisible pointer.
+        NSCursor.arrow.set()
+
         overlayWindows.removeAll()
         drawingViews.removeAll()
         overlayScreenLayout.removeAll()
-        showSystemCursor()
 
         if isDrawingMode || !windows.isEmpty {
             print("ScreenDrawOverlay: drawing mode OFF (\(reason))")
@@ -505,6 +487,19 @@ final class OverlayPanel: NSPanel {
 final class DrawingView: NSView {
     private static let strokeLineWidth: CGFloat = 4
 
+    // A cursor made of nothing. The pointer over the panel has to disappear so only the
+    // drawn crosshair is visible, and this is the one way to do that which needs no
+    // permission and does not depend on the app being frontmost.
+    private static let transparentCursor: NSCursor = {
+        let image = NSImage(size: NSSize(width: 16, height: 16))
+        image.lockFocus()
+        NSColor.clear.setFill()
+        NSRect(origin: .zero, size: image.size).fill(using: .copy)
+        image.unlockFocus()
+
+        return NSCursor(image: image, hotSpot: NSPoint(x: 8, y: 8))
+    }()
+
     // Modest: big enough to aim with, small enough not to sit on the content.
     private static let pointerSize: CGFloat = 20
     private static let pointerCasingWidth: CGFloat = 3
@@ -538,7 +533,12 @@ final class DrawingView: NSView {
             // No mouseMoved arrives while the panel ignores the mouse, so a hover that was
             // in effect at the moment of the switch would stick and hide the badge.
             isMouseOverIndicator = false
-            window?.invalidateCursorRects(for: self)
+            if isInteractionMode {
+                releaseDrawingCursor()
+            } else {
+                refreshCursorRects()
+                applyDrawingCursor()
+            }
             // The badge changes text, size and colour; a mode switch is rare enough to
             // just repaint everything.
             needsDisplay = true
@@ -633,7 +633,47 @@ final class DrawingView: NSView {
     }
 
     override func mouseEntered(with event: NSEvent) {
+        applyDrawingCursor()
         movePointer(to: convert(event.locationInWindow, from: nil))
+    }
+
+    // Three ways to claim the cursor, because any one of them can be missed: the cursor
+    // rect for a plain pointer move, cursorUpdate for when the window server asks us
+    // directly, and mouseEntered for arriving from another app's window.
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        guard !isInteractionMode else {
+            return
+        }
+
+        addCursorRect(bounds, cursor: DrawingView.transparentCursor)
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        applyDrawingCursor()
+    }
+
+    // Safe to call from an event callback: it only sets the cursor. Rebuilding cursor
+    // rects from inside cursorUpdate re-enters AppKit's tracking machinery and throws,
+    // so that lives in refreshCursorRects, which only mode changes call.
+    func applyDrawingCursor() {
+        guard !isInteractionMode else {
+            return
+        }
+
+        DrawingView.transparentCursor.set()
+    }
+
+    func releaseDrawingCursor() {
+        // Click-through: the app underneath owns the pointer again. Dropping our cursor
+        // rects is what hands it over; setting the arrow just avoids a moment with no
+        // pointer at all before the next mouse move.
+        refreshCursorRects()
+        NSCursor.arrow.set()
+    }
+
+    func refreshCursorRects() {
+        window?.invalidateCursorRects(for: self)
     }
 
     override func mouseExited(with event: NSEvent) {
