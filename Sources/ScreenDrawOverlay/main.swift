@@ -584,11 +584,51 @@ final class OverlayPanel: NSPanel {
     // delivers those outside this path.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         let shortcutFlags = event.modifierFlags.intersection([.command, .shift, .option, .control])
-        if shortcutFlags == .command, event.charactersIgnoringModifiers?.lowercased() == "z" {
+
+        // Undo and redo are the tool's own, so they are handed to the view rather than
+        // swallowed. Redo carries Shift as well as Command, which an equality check on
+        // Command alone silently dropped - the shortcut looked implemented and did
+        // nothing.
+        let isUndoOrRedo = event.charactersIgnoringModifiers?.lowercased() == "z"
+            && (shortcutFlags == .command || shortcutFlags == [.command, .shift])
+        if isUndoOrRedo {
             drawingView.keyDown(with: event)
         }
 
         return true
+    }
+}
+
+// What the pointer does while the button is down. Freehand tools trail the mouse; shape
+// tools are defined by where the drag started and where it is now; the eraser removes
+// instead of adding.
+enum DrawingTool {
+    case pen
+    case highlighter
+    case line
+    case arrow
+    case rectangle
+    case ellipse
+    case eraser
+
+    var style: StrokeStyle {
+        self == .highlighter ? .highlighter : .pen
+    }
+
+    var isShape: Bool {
+        self == .line || self == .arrow || self == .rectangle || self == .ellipse
+    }
+
+    var label: String {
+        switch self {
+        case .pen: return "PEN"
+        case .highlighter: return "MARKER"
+        case .line: return "LINE"
+        case .arrow: return "ARROW"
+        case .rectangle: return "RECT"
+        case .ellipse: return "OVAL"
+        case .eraser: return "ERASER"
+        }
     }
 }
 
@@ -641,7 +681,11 @@ final class ToolSettings {
 
     private(set) var colorIndex = 0
     private(set) var widthIndex = 2
-    private(set) var style: StrokeStyle = .pen
+    private(set) var tool: DrawingTool = .pen
+
+    var style: StrokeStyle {
+        tool.style
+    }
 
     // Set by AppDelegate so every panel repaints its badge when the tool changes.
     var onChange: (() -> Void)?
@@ -674,13 +718,19 @@ final class ToolSettings {
         onChange?()
     }
 
-    func select(style newStyle: StrokeStyle) {
-        guard newStyle != style else {
+    func select(tool newTool: DrawingTool) {
+        guard newTool != tool else {
             return
         }
 
-        style = newStyle
+        tool = newTool
         onChange?()
+    }
+
+    // How close the pointer has to be to a stroke to rub it out. Tied to the pen width so
+    // a fat pen gets a fat eraser, with a floor that keeps it usable at 2pt.
+    var eraserRadius: CGFloat {
+        max(12, ToolSettings.widths[widthIndex])
     }
 }
 
@@ -715,9 +765,24 @@ final class DrawingView: NSView {
     private static let indicatorMargin: CGFloat = 14
     private static let indicatorRepaintMargin: CGFloat = 4
 
+    // Undo has to put back what the eraser and Clear take away, not just the last thing
+    // drawn, so edits are recorded rather than inferred from the stroke list.
+    private struct Removal {
+        let index: Int
+        let stroke: Stroke
+    }
+
+    private enum Edit {
+        case added(Stroke)
+        case removed([Removal])
+    }
+
     private var strokes: [Stroke] = []
     private var currentStroke: Stroke?
+    private var shapeAnchor: NSPoint?
     private var lastStrokePoint: NSPoint?
+    private var undoStack: [Edit] = []
+    private var redoStack: [Edit] = []
     let tools: ToolSettings
     private var pointerLocation: NSPoint?
     private var indicatorBounds: NSRect
@@ -788,6 +853,12 @@ final class DrawingView: NSView {
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         updateIndicatorHover(at: point)
+        movePointer(to: point)
+
+        guard tools.tool != .eraser else {
+            erase(at: point)
+            return
+        }
 
         let width = tools.renderWidth
         let path = NSBezierPath()
@@ -798,21 +869,42 @@ final class DrawingView: NSView {
 
         currentStroke = Stroke(points: [point], path: path, color: tools.color,
                                width: width, style: tools.style)
+        shapeAnchor = tools.tool.isShape ? point : nil
         lastStrokePoint = point
-        movePointer(to: point)
         invalidateSegment(from: point, to: point, width: width)
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard currentStroke != nil else { return }
         let point = convert(event.locationInWindow, from: nil)
         updateIndicatorHover(at: point)
+        movePointer(to: point)
+
+        guard tools.tool != .eraser else {
+            erase(at: point)
+            return
+        }
+
+        guard currentStroke != nil else { return }
+
+        // A shape is defined by two points, so it is rebuilt on every move rather than
+        // extended. Repainting covers where it was and where it now is.
+        if let anchor = shapeAnchor, let existing = currentStroke {
+            let end = constrainedShapeEnd(from: anchor, to: point, shiftHeld: event.modifierFlags.contains(.shift))
+            let previousBounds = strokeBounds(of: existing)
+            let rebuilt = shapePath(from: anchor, to: end, width: existing.width)
+            currentStroke = Stroke(points: [anchor, end], path: rebuilt, color: existing.color,
+                                   width: existing.width, style: existing.style)
+            lastStrokePoint = end
+            if let updated = currentStroke {
+                setNeedsDisplay(previousBounds.union(strokeBounds(of: updated)))
+            }
+            return
+        }
 
         let previousPoint = lastStrokePoint ?? point
         currentStroke?.path.line(to: point)
         currentStroke?.points.append(point)
         lastStrokePoint = point
-        movePointer(to: point)
 
         // Only the new segment changed. Invalidating the whole view here meant every
         // mouse move re-stroked every path drawn so far, so the cost of a drag grew
@@ -824,9 +916,11 @@ final class DrawingView: NSView {
         let point = convert(event.locationInWindow, from: nil)
         movePointer(to: point)
         updateIndicatorHover(at: point)
+        shapeAnchor = nil
 
         if let currentStroke {
             strokes.append(currentStroke)
+            recordEdit(.added(currentStroke))
             // The pixels do not change here, the stroke just moves from currentStroke
             // into strokes. Repainting its own bounds once is cheap insurance.
             setNeedsDisplay(strokeBounds(of: currentStroke))
@@ -967,7 +1061,12 @@ final class DrawingView: NSView {
         } else if event.keyCode == UInt16(kVK_ANSI_C), shortcutFlags == [] || shortcutFlags == .shift {
             clear()
         } else if event.keyCode == UInt16(kVK_ANSI_Z), shortcutFlags == .command {
-            undoLastStroke()
+            undoLastEdit()
+        } else if event.keyCode == UInt16(kVK_ANSI_Z), shortcutFlags == [.command, .shift] {
+            redoLastEdit()
+        } else if event.keyCode == UInt16(kVK_Delete) || event.keyCode == UInt16(kVK_ForwardDelete),
+                  shortcutFlags == [] {
+            clear()
         } else if shortcutFlags == [] {
             handleToolKey(event.keyCode)
         }
@@ -980,8 +1079,8 @@ final class DrawingView: NSView {
     }
 
     // Drawing mode owns the keyboard, so the tool keys are plain letters and digits - no
-    // modifiers to hold while the other hand is drawing. Mnemonics where they exist: P
-    // pen, H highlighter.
+    // modifiers to hold while the other hand is drawing. Mnemonic throughout: P pen,
+    // H highlighter, L line, A arrow, R rectangle, O oval, E eraser.
     private func handleToolKey(_ keyCode: UInt16) {
         switch Int(keyCode) {
         case kVK_ANSI_1: tools.selectColor(0)
@@ -992,8 +1091,13 @@ final class DrawingView: NSView {
         case kVK_ANSI_6: tools.selectColor(5)
         case kVK_ANSI_LeftBracket: tools.stepWidth(by: -1)
         case kVK_ANSI_RightBracket: tools.stepWidth(by: 1)
-        case kVK_ANSI_P: tools.select(style: .pen)
-        case kVK_ANSI_H: tools.select(style: .highlighter)
+        case kVK_ANSI_P: tools.select(tool: .pen)
+        case kVK_ANSI_H: tools.select(tool: .highlighter)
+        case kVK_ANSI_L: tools.select(tool: .line)
+        case kVK_ANSI_A: tools.select(tool: .arrow)
+        case kVK_ANSI_R: tools.select(tool: .rectangle)
+        case kVK_ANSI_O: tools.select(tool: .ellipse)
+        case kVK_ANSI_E: tools.select(tool: .eraser)
         default: break
         }
     }
@@ -1037,7 +1141,9 @@ final class DrawingView: NSView {
         }
 
         strokes.append(currentStroke)
+        recordEdit(.added(currentStroke))
         self.currentStroke = nil
+        shapeAnchor = nil
         lastStrokePoint = nil
         setNeedsDisplay(strokeBounds(of: currentStroke))
     }
@@ -1049,9 +1155,17 @@ final class DrawingView: NSView {
         needsDisplay = true
     }
 
+    // Clearing is an edit like any other, so an accidental Delete can be taken back.
     func clear() {
+        finishStrokeInProgress()
+
+        if !strokes.isEmpty {
+            recordEdit(.removed(strokes.enumerated().map { Removal(index: $0.offset, stroke: $0.element) }))
+        }
+
         strokes.removeAll()
         currentStroke = nil
+        shapeAnchor = nil
         lastStrokePoint = nil
         needsDisplay = true
     }
@@ -1073,6 +1187,167 @@ final class DrawingView: NSView {
                                        dy: -DrawingView.indicatorRepaintMargin))
     }
 
+    // Shapes are two-point figures. Holding Shift snaps a line or arrow to the nearest 45
+    // degrees and makes a rectangle square or an ellipse round, which is what every other
+    // drawing tool does and what fingers expect.
+    private func constrainedShapeEnd(from anchor: NSPoint, to point: NSPoint, shiftHeld: Bool) -> NSPoint {
+        guard shiftHeld else {
+            return point
+        }
+
+        let dx = point.x - anchor.x
+        let dy = point.y - anchor.y
+
+        if tools.tool == .rectangle || tools.tool == .ellipse {
+            let side = max(abs(dx), abs(dy))
+            return NSPoint(x: anchor.x + (dx < 0 ? -side : side), y: anchor.y + (dy < 0 ? -side : side))
+        }
+
+        let angle = atan2(dy, dx)
+        let step = CGFloat.pi / 4
+        let snapped = (angle / step).rounded() * step
+        let length = hypot(dx, dy)
+        return NSPoint(x: anchor.x + cos(snapped) * length, y: anchor.y + sin(snapped) * length)
+    }
+
+    private func shapePath(from anchor: NSPoint, to end: NSPoint, width: CGFloat) -> NSBezierPath {
+        let path = NSBezierPath()
+        path.lineWidth = width
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+
+        switch tools.tool {
+        case .rectangle:
+            path.appendRect(NSRect(x: min(anchor.x, end.x), y: min(anchor.y, end.y),
+                                   width: abs(end.x - anchor.x), height: abs(end.y - anchor.y)))
+        case .ellipse:
+            path.appendOval(in: NSRect(x: min(anchor.x, end.x), y: min(anchor.y, end.y),
+                                       width: abs(end.x - anchor.x), height: abs(end.y - anchor.y)))
+        case .arrow:
+            path.move(to: anchor)
+            path.line(to: end)
+            // Head scaled to the line width so a thick arrow does not end in a pin prick.
+            let headLength = max(12, width * 3.5)
+            let angle = atan2(end.y - anchor.y, end.x - anchor.x)
+            let spread = CGFloat.pi / 7
+            for side in [angle + .pi - spread, angle + .pi + spread] {
+                path.move(to: end)
+                path.line(to: NSPoint(x: end.x + cos(side) * headLength, y: end.y + sin(side) * headLength))
+            }
+        default:
+            path.move(to: anchor)
+            path.line(to: end)
+        }
+
+        return path
+    }
+
+    // The eraser rubs out whole strokes: partial erasing would mean splitting paths, and
+    // on an annotation overlay "take that line away" is what people actually want.
+    private func erase(at point: NSPoint) {
+        let radius = tools.eraserRadius
+        var removed: [Removal] = []
+
+        for index in strokes.indices.reversed() {
+            let stroke = strokes[index]
+            guard strokeBounds(of: stroke).insetBy(dx: -radius, dy: -radius).contains(point) else {
+                continue
+            }
+
+            guard distance(from: point, to: stroke) <= radius + stroke.width / 2 else {
+                continue
+            }
+
+            removed.append(Removal(index: index, stroke: stroke))
+            setNeedsDisplay(strokeBounds(of: stroke))
+            strokes.remove(at: index)
+        }
+
+        guard !removed.isEmpty else {
+            return
+        }
+
+        recordEdit(.removed(removed.sorted { $0.index < $1.index }))
+    }
+
+    // Distance from the pointer to the stroke's polyline. This is why Stroke keeps its
+    // points: NSBezierPath can only test its filled area, not the line itself.
+    private func distance(from point: NSPoint, to stroke: Stroke) -> CGFloat {
+        guard let first = stroke.points.first else {
+            return .greatestFiniteMagnitude
+        }
+
+        guard stroke.points.count > 1 else {
+            return hypot(point.x - first.x, point.y - first.y)
+        }
+
+        var best = CGFloat.greatestFiniteMagnitude
+        for index in 1..<stroke.points.count {
+            best = min(best, distance(from: point, toSegmentFrom: stroke.points[index - 1], to: stroke.points[index]))
+        }
+
+        return best
+    }
+
+    private func distance(from point: NSPoint, toSegmentFrom start: NSPoint, to end: NSPoint) -> CGFloat {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let lengthSquared = dx * dx + dy * dy
+
+        guard lengthSquared > 0 else {
+            return hypot(point.x - start.x, point.y - start.y)
+        }
+
+        let t = max(0, min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
+        return hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy))
+    }
+
+    private func recordEdit(_ edit: Edit) {
+        undoStack.append(edit)
+        // A new edit is a new branch: whatever was undone is no longer ahead of us.
+        redoStack.removeAll()
+    }
+
+    private func undoLastEdit() {
+        guard let edit = undoStack.popLast() else {
+            return
+        }
+
+        switch edit {
+        case .added(let stroke):
+            if !strokes.isEmpty {
+                strokes.removeLast()
+            }
+            setNeedsDisplay(strokeBounds(of: stroke))
+        case .removed(let removals):
+            for removal in removals {
+                strokes.insert(removal.stroke, at: min(removal.index, strokes.count))
+                setNeedsDisplay(strokeBounds(of: removal.stroke))
+            }
+        }
+
+        redoStack.append(edit)
+    }
+
+    private func redoLastEdit() {
+        guard let edit = redoStack.popLast() else {
+            return
+        }
+
+        switch edit {
+        case .added(let stroke):
+            strokes.append(stroke)
+            setNeedsDisplay(strokeBounds(of: stroke))
+        case .removed(let removals):
+            for removal in removals.reversed() where removal.index < strokes.count {
+                setNeedsDisplay(strokeBounds(of: strokes[removal.index]))
+                strokes.remove(at: removal.index)
+            }
+        }
+
+        undoStack.append(edit)
+    }
+
     // NSBezierPath.bounds covers the path geometry only, so grow it by that stroke's own
     // line width to include the drawn line, its caps and antialiasing.
     private func strokeBounds(of stroke: Stroke) -> NSRect {
@@ -1087,13 +1362,7 @@ final class DrawingView: NSView {
         setNeedsDisplay(segment.insetBy(dx: -width, dy: -width))
     }
 
-    private func undoLastStroke() {
-        guard let removed = strokes.popLast() else {
-            return
-        }
 
-        setNeedsDisplay(strokeBounds(of: removed))
-    }
 
     private func drawActiveModeIndicator(in dirtyRect: NSRect) {
         guard showsIndicator else {
@@ -1121,9 +1390,13 @@ final class DrawingView: NSView {
     // Red and solid while the overlay owns the mouse, hollow and neutral while clicks are
     // passing through: the badge answers "where do my clicks go right now?".
     private var indicatorText: String {
-        isInteractionMode
-            ? "◌ CLICK-THROUGH"
-            : "● \(tools.style.label) \(Int(tools.renderWidth))"
+        guard !isInteractionMode else {
+            return "◌ CLICK-THROUGH"
+        }
+
+        return tools.tool == .eraser
+            ? "● ERASER"
+            : "● \(tools.tool.label) \(Int(tools.renderWidth))"
     }
 
     private var indicatorBackgroundColor: NSColor {
