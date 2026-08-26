@@ -14,6 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isDrawingMode = false
     private var isInteractionMode = false
     private var overlayScreenLayout: [String] = []
+    private var storedStrokes: [String: [NSBezierPath]] = [:]
+    private var storedStrokesLayout: [String] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("ScreenDrawOverlay: app launched")
@@ -43,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         emergencyHotKey = GlobalHotKey(id: 2,
                                        keyCode: UInt32(kVK_Escape),
                                        modifiers: UInt32(cmdKey | optionKey | controlKey)) { [weak self] in
-            self?.emergencyCloseOverlay()
+            self?.emergencyQuit()
         }
 
         if toggleHotKey?.register() == true {
@@ -64,7 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             print("ScreenDrawOverlay: hotkey registered - Control + Option + Command + Escape")
         } else {
             showAlert(title: "Emergency hotkey registration failed",
-                      message: "Control + Option + Command + Escape could not be registered. If drawing mode gets stuck, stop the app from Xcode.")
+                      message: "Control + Option + Command + Escape could not be registered. If the overlay ever gets stuck, quit the app from its menu bar item instead.")
         }
     }
 
@@ -122,17 +124,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // Three states - off, drawing, click-through - and D always means "get me back to
-    // drawing, or put the overlay away". From click-through it returns to drawing rather
-    // than closing, so the shortcut never throws a drawing away that the user was only
-    // stepping aside from.
+    // drawing, or put the overlay away". Putting it away is a hide, not a delete: the
+    // strokes are kept and come back on the next D, so a mistyped shortcut costs nothing.
+    // C is the only thing that erases a drawing.
     private func toggleDrawingMode() {
         if isDrawingMode, isInteractionMode {
             setInteractionMode(false)
         } else if isDrawingMode || !overlayWindowSnapshot().isEmpty {
-            forceCloseOverlay(reason: "toggle-off hotkey")
+            hideOverlay(reason: "toggle-off hotkey")
         } else {
             enterDrawingMode()
         }
+    }
+
+    private func hideOverlay(reason: String) {
+        keepStrokesForNextTime()
+        forceCloseOverlay(reason: reason)
+    }
+
+    // Strokes live inside the panels, which are destroyed on close, so they are lifted
+    // out first and filed under the display they were drawn on.
+    private func keepStrokesForNextTime() {
+        let windows = overlayWindowSnapshot()
+        guard !windows.isEmpty else {
+            return
+        }
+
+        storedStrokes.removeAll()
+        windows.forEach { window in
+            let strokes = window.drawingView.capturedStrokes()
+            guard !strokes.isEmpty else {
+                return
+            }
+
+            storedStrokes[window.screenKey] = strokes
+        }
+        storedStrokesLayout = AppDelegate.screenLayoutSignature()
+
+        let total = storedStrokes.values.reduce(0) { $0 + $1.count }
+        print("ScreenDrawOverlay: kept \(total) stroke(s) for the next time drawing mode opens")
     }
 
     private func enterDrawingMode() {
@@ -160,6 +190,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let window = OverlayPanel(screen: screen, showsIndicator: index == indicatorIndex)
             let drawingView = window.drawingView
 
+            if let kept = storedStrokes[window.screenKey] {
+                drawingView.restore(strokes: kept)
+            }
+
             windows.append(window)
             views.append(drawingView)
         }
@@ -184,6 +218,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func screenParametersDidChange(_ notification: Notification) {
+        let layout = AppDelegate.screenLayoutSignature()
+
+        // Kept strokes belong to the displays they were drawn on. If those changed,
+        // restoring them would put someone's annotation on the wrong screen at the wrong
+        // scale, so they are dropped rather than guessed at.
+        if !storedStrokes.isEmpty, layout != storedStrokesLayout {
+            print("ScreenDrawOverlay: display layout changed, dropping kept strokes")
+            storedStrokes.removeAll()
+            storedStrokesLayout.removeAll()
+            updateStatusItemAppearance()
+        }
+
         guard isDrawingMode || !overlayWindowSnapshot().isEmpty else {
             return
         }
@@ -193,8 +239,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // when a presentation starts. Those change only visibleFrame and move no overlay,
         // so reacting to them would tear the overlay down at the very moment the user
         // starts presenting. Compare the actual display layout and ignore the rest.
-        let currentLayout = AppDelegate.screenLayoutSignature()
-        guard currentLayout != overlayScreenLayout else {
+        guard layout != overlayScreenLayout else {
             return
         }
 
@@ -208,11 +253,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Display identity plus frame: unaffected by the Dock or the menu bar showing and
     // hiding, which only move visibleFrame.
     private static func screenLayoutSignature() -> [String] {
-        NSScreen.screens.map { screen in
-            let key = NSDeviceDescriptionKey("NSScreenNumber")
-            let displayID = (screen.deviceDescription[key] as? CGDirectDisplayID).map(String.init) ?? "unknown"
-            return displayID + "@" + NSStringFromRect(screen.frame)
-        }
+        NSScreen.screens.map { $0.displayIdentifier + "@" + NSStringFromRect($0.frame) }
     }
 
     // Drawing mode has two sub-modes. Drawing: the panels take the mouse, so strokes land
@@ -280,8 +321,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // overlay away, E only means anything once there is something on screen.
         // Click-Through is a state, so it reads as a checkable item rather than a second
         // command that would say the same thing as the first one.
-        drawingMenuItem?.title = !isDrawingMode ? "Start Drawing"
-            : (isInteractionMode ? "Back to Drawing" : "Stop Drawing")
+        drawingMenuItem?.title = !isDrawingMode
+            ? (storedStrokes.isEmpty ? "Start Drawing" : "Show Drawing")
+            : (isInteractionMode ? "Back to Drawing" : "Hide Overlay")
         interactionMenuItem?.state = isInteractionMode ? .on : .off
         interactionMenuItem?.isEnabled = isDrawingMode
 
@@ -329,9 +371,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.toolTip = tooltip
     }
 
-    private func emergencyCloseOverlay() {
-        print("ScreenDrawOverlay: emergency close")
-        forceCloseOverlay(reason: "emergency hotkey")
+    // The panic key. Anything short of ending the process can in principle still leave
+    // the user stuck, so this quits outright, the same as Quit in the menu.
+    // applicationWillTerminate releases the overlay's mouse events and closes the panels
+    // on the way out.
+    private func emergencyQuit() {
+        print("ScreenDrawOverlay: emergency quit")
+        NSApp.terminate(nil)
     }
 
     private func forceCloseOverlay(reason: String) {
@@ -425,7 +471,10 @@ final class OverlayPanel: NSPanel {
 
     let drawingView: DrawingView
 
+    let screenKey: String
+
     init(screen: NSScreen, showsIndicator: Bool) {
+        screenKey = screen.displayIdentifier
         let screenFrame = screen.frame
         let visibleFrame = screen.visibleFrame
         let localVisibleFrame = NSRect(x: visibleFrame.minX - screenFrame.minX,
@@ -501,8 +550,8 @@ final class DrawingView: NSView {
     // Always shown: what the other two shortcuts do from here. Escape is not on this
     // list because it no longer leaves drawing mode - this line is the only place a
     // stuck-feeling user is told what does.
-    private static let drawingHintText = "⌃⌥⌘E click · ⌃⌥⌘D exit"
-    private static let interactionHintText = "⌃⌥⌘E draw · ⌃⌥⌘Esc exit"
+    private static let drawingHintText = "⌃⌥⌘E click · ⌃⌥⌘D hide"
+    private static let interactionHintText = "⌃⌥⌘E draw · ⌃⌥⌘Esc quit"
     private static let indicatorPaddingX: CGFloat = 8
     private static let indicatorPaddingY: CGFloat = 5
     private static let indicatorLineGap: CGFloat = 2
@@ -781,6 +830,17 @@ final class DrawingView: NSView {
         drawPointer(in: dirtyRect)
     }
 
+    func capturedStrokes() -> [NSBezierPath] {
+        paths
+    }
+
+    func restore(strokes: [NSBezierPath]) {
+        paths = strokes
+        currentPath = nil
+        lastStrokePoint = nil
+        needsDisplay = true
+    }
+
     func clear() {
         paths.removeAll()
         currentPath = nil
@@ -1025,6 +1085,16 @@ final class GlobalHotKey {
 extension NSScreen {
     // NSScreen instances are not guaranteed to be identical across calls, so fall back
     // to the display ID when object identity does not match.
+    // Stable per display, so a drawing can be put back on the screen it was drawn on.
+    var displayIdentifier: String {
+        let key = NSDeviceDescriptionKey("NSScreenNumber")
+        guard let displayID = deviceDescription[key] as? CGDirectDisplayID else {
+            return "unknown"
+        }
+
+        return String(displayID)
+    }
+
     func matches(_ other: NSScreen) -> Bool {
         if self === other {
             return true
