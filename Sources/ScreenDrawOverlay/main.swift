@@ -4,6 +4,8 @@ import Foundation
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
+    private var drawingMenuItem: NSMenuItem?
+    private var interactionMenuItem: NSMenuItem?
     private var overlayWindows: [OverlayPanel] = []
     private var drawingViews: [DrawingView] = []
     private var toggleHotKey: GlobalHotKey?
@@ -80,16 +82,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         let menu = NSMenu()
-        let toggleItem = NSMenuItem(title: "Toggle Drawing Mode",
+        // The titles and the enabled state are driven by the current mode, so AppKit must
+        // not second-guess them.
+        menu.autoenablesItems = false
+        let toggleItem = NSMenuItem(title: "Start Drawing",
                                     action: #selector(toggleDrawingModeFromMenu),
                                     keyEquivalent: "")
         toggleItem.target = self
         menu.addItem(toggleItem)
-        let interactionItem = NSMenuItem(title: "Toggle Click-Through",
+        drawingMenuItem = toggleItem
+
+        let interactionItem = NSMenuItem(title: "Click-Through",
                                          action: #selector(toggleInteractionModeFromMenu),
                                          keyEquivalent: "")
         interactionItem.target = self
         menu.addItem(interactionItem)
+        interactionMenuItem = interactionItem
         menu.addItem(.separator())
         let quitItem = NSMenuItem(title: "Quit",
                                   action: #selector(quit),
@@ -113,8 +121,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.terminate(nil)
     }
 
+    // Three states - off, drawing, click-through - and D always means "get me back to
+    // drawing, or put the overlay away". From click-through it returns to drawing rather
+    // than closing, so the shortcut never throws a drawing away that the user was only
+    // stepping aside from.
     private func toggleDrawingMode() {
-        if isDrawingMode || !overlayWindowSnapshot().isEmpty {
+        if isDrawingMode, isInteractionMode {
+            setInteractionMode(false)
+        } else if isDrawingMode || !overlayWindowSnapshot().isEmpty {
             forceCloseOverlay(reason: "toggle-off hotkey")
         } else {
             enterDrawingMode()
@@ -207,13 +221,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // switch apps - while every stroke stays on screen. Leaving drawing mode is what
     // clears the drawing; switching modes never does.
     private func toggleInteractionMode() {
-        let windows = overlayWindowSnapshot()
-        guard isDrawingMode, !windows.isEmpty else {
+        guard isDrawingMode, !overlayWindowSnapshot().isEmpty else {
             print("ScreenDrawOverlay: click-through toggle ignored, drawing mode is off")
             return
         }
 
-        isInteractionMode.toggle()
+        setInteractionMode(!isInteractionMode)
+    }
+
+    private func setInteractionMode(_ enabled: Bool) {
+        let windows = overlayWindowSnapshot()
+        guard isDrawingMode, !windows.isEmpty, enabled != isInteractionMode else {
+            return
+        }
+
+        isInteractionMode = enabled
 
         windows.forEach { window in
             window.ignoresMouseEvents = isInteractionMode
@@ -265,6 +287,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateStatusItemAppearance() {
+        // The menu says the same thing the hot keys do: D returns to drawing or puts the
+        // overlay away, E only means anything once there is something on screen.
+        // Click-Through is a state, so it reads as a checkable item rather than a second
+        // command that would say the same thing as the first one.
+        drawingMenuItem?.title = !isDrawingMode ? "Start Drawing"
+            : (isInteractionMode ? "Back to Drawing" : "Stop Drawing")
+        interactionMenuItem?.state = isInteractionMode ? .on : .off
+        interactionMenuItem?.isEnabled = isDrawingMode
+
         guard let button = statusItem?.button else {
             return
         }
