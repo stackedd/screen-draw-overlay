@@ -63,7 +63,7 @@ You can always tell which state you are in: the corner badge reads a red `● DR
 
 The menu bar item carries **Start / Show / Hide / Back to Drawing**, a **Click-Through** checkbox, and **Quit** — but note that while you are drawing, the overlay covers the whole screen including the menu bar, so the item is not clickable until you hide the overlay or switch to click-through. That is deliberate: drawing mode is meant to interact with nothing. The shortcuts are how you get out of it.
 
-If `Control + Option + Command + D` does nothing at launch, another app already owns that shortcut — the app tells you so with an alert. Change the key code or modifiers in `Sources/ScreenDrawOverlay/main.swift` and rebuild.
+If `Control + Option + Command + D` does nothing, another app is probably using the same shortcut. macOS lets several apps register one shortcut without complaining, so the conflict is usually silent — the app can only warn you when the system refuses the registration outright, and it does that in the menu ("Shortcut unavailable"), never with a dialog. Either way the menu bar item still works, and you can change the key code or modifiers in `Sources/ScreenDrawOverlay/main.swift` and rebuild.
 
 ## Build from source
 

@@ -5,6 +5,7 @@ import Foundation
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var drawingMenuItem: NSMenuItem?
+    private var hotKeyWarningItem: NSMenuItem?
     private var interactionMenuItem: NSMenuItem?
     private var overlayWindows: [OverlayPanel] = []
     private var drawingViews: [DrawingView] = []
@@ -59,25 +60,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.emergencyQuit()
         }
 
+        // A modal alert is the wrong tool for a background app: runModal blocks the main
+        // thread, and an accessory app's dialog can sit behind everything, so a failure
+        // at login would look like a hang. Failures go to the menu bar item instead,
+        // which is also the way to work without the shortcut.
+        var unavailable: [String] = []
         if toggleHotKey?.register() == true {
             print("ScreenDrawOverlay: hotkey registered - Control + Option + Command + D")
         } else {
-            showAlert(title: "Hotkey registration failed",
-                      message: "Control + Option + Command + D could not be registered. Another app may already be using it.")
+            unavailable.append("\u{2303}\u{2325}\u{2318}D")
         }
 
         if interactionHotKey?.register() == true {
             print("ScreenDrawOverlay: hotkey registered - Control + Option + Command + E")
         } else {
-            showAlert(title: "Click-through hotkey registration failed",
-                      message: "Control + Option + Command + E could not be registered. You can still switch modes from the D menu bar item.")
+            unavailable.append("\u{2303}\u{2325}\u{2318}E")
         }
 
         if emergencyHotKey?.register() == true {
             print("ScreenDrawOverlay: hotkey registered - Control + Option + Command + Escape")
         } else {
-            showAlert(title: "Emergency hotkey registration failed",
-                      message: "Control + Option + Command + Escape could not be registered. If the overlay ever gets stuck, quit the app from its menu bar item instead.")
+            unavailable.append("\u{2303}\u{2325}\u{2318}\u{238B}")
+        }
+
+        if !unavailable.isEmpty {
+            print("ScreenDrawOverlay: hotkeys unavailable: \(unavailable.joined(separator: ", "))")
+            hotKeyWarningItem?.title = "Shortcut unavailable: " + unavailable.joined(separator: " ")
+            hotKeyWarningItem?.isHidden = false
         }
     }
 
@@ -111,6 +120,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The titles and the enabled state are driven by the current mode, so AppKit must
         // not second-guess them.
         menu.autoenablesItems = false
+        // Hidden unless a shortcut could not be registered; this is where the app says so.
+        let warningItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        warningItem.isEnabled = false
+        warningItem.isHidden = true
+        menu.addItem(warningItem)
+        hotKeyWarningItem = warningItem
+
         let toggleItem = NSMenuItem(title: "Start Drawing",
                                     action: #selector(toggleDrawingModeFromMenu),
                                     keyEquivalent: "")
@@ -474,13 +490,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func showAlert(title: String, message: String) {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.alertStyle = .warning
-        alert.runModal()
-    }
 }
 
 final class OverlayPanel: NSPanel {
