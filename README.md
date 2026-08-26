@@ -57,10 +57,12 @@ While you are drawing, the keyboard belongs to the tool. No modifiers to hold �
 | `R` | Rectangle |
 | `O` | Oval |
 | `E` | Eraser — rubs out whole strokes, one at a time |
+| `Space` | Laser pointer — a glowing dot that leaves no ink. Press again for the tool you had |
 
 | Key | What it does |
 | --- | --- |
 | `1`–`6` | Colour: red, orange, yellow, green, blue, white |
+| `T` | Temporary ink — strokes fade away after about three seconds, the way a presenter's pen does |
 | `[` `]` | Thinner / thicker |
 | `Shift` while drawing a shape | Snap a line or arrow to 45°, make a rectangle square or an oval round |
 | `Command + Z` / `Shift + Command + Z` | Undo / redo — including undoing a Clear |
@@ -109,6 +111,7 @@ Beyond that, things worth knowing:
 
 - Plugging in, unplugging or rearranging a display while drawing ends drawing mode and discards the drawing, kept strokes included. That is intentional — it is better than leaving an overlay stranded on a display that no longer exists, or restoring an annotation onto the wrong screen.
 - `Escape` does nothing while you are drawing. It used to leave drawing mode, but that only worked when the overlay happened to hold keyboard focus, and it threw the drawing away exactly when someone pressed `Escape` to get out of a slideshow. Use click-through if you need `Escape` to reach the app underneath.
+- Temporary ink (`T`) is not kept when you hide the overlay: it was drawn to disappear, so it is not brought back mid-fade. Ordinary ink is kept as always.
 - Drawings are never written to disk. They survive hiding and showing the overlay for as long as the app is running, and nothing else: quitting — including with `Control + Option + Command + Escape` — loses them, and so does plugging in or rearranging a display, because a drawing made for one screen layout does not belong on another.
 
 ## License
