@@ -23,7 +23,7 @@ tried and rejected on the way; [../CLAUDE.md](../CLAUDE.md) is the short operati
 | `Canvas.swift` | The drawing itself: strokes, the eraser, undo/redo, fading. Knows nothing about windows — it returns the rectangles that changed. |
 | `Stroke.swift` | What a mark is made of, and what each tool does with two points. |
 | `ToolSettings.swift` | The pen in hand: colour, width, tool. Shared across screens, remembered between launches. |
-| `ModeBadge.swift` | The badge in the corner — the app's entire on-screen interface. It hands over a picture; the view carries it on a layer. |
+| `ModeBadge.swift` | The badge in the corner — the app's entire on-screen interface. It hands over a picture, snapped to whole pixels; the view carries it on a layer. |
 | `PointerCursor.swift` | The cursor drawing mode hands the window server: the system arrow with a ring around its tip. |
 | `GlobalHotKey.swift` | The three shortcuts, on Carbon, and the ownership rules that keep the callback safe. |
 | `NSScreen+Display.swift` | Identifying a display across time. |

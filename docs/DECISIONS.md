@@ -397,3 +397,29 @@ because the crosshair was paint and paint meant repainting the whole overlay.
 repaints themselves, one per mouse event. Two directions, in order: coalesce the repaints to
 the display's refresh rate (worth only what the event rate exceeds it — unmeasured), and the
 quadratic in-progress stroke, which is now the largest thing in the painting half.
+
+## 22. The badge is snapped to whole pixels, and the plate is dark
+
+Two things were wrong with it, one of them freshly introduced.
+
+**Blurry.** Moving the badge onto a layer (entry 20) meant its picture became a bitmap of a
+whole number of pixels shown inside a frame that was a fraction of one: the text measured
+87.34pt wide, so 175 pixels of picture were resampled onto 174.68 pixels of screen, at a
+fractional origin as well. Ten point text resampled by a third of a pixel is exactly as
+blurry as it sounds, and small blurry text reads as a badly made thing. The frame is now
+snapped out to whole device pixels and its origin snapped down to one.
+
+**Cramped.** 11pt over 9pt with 8x5 padding, unchanged since the first version. It is the
+app's entire on-screen interface and it looked like a debug overlay. Now 13pt semibold over
+10pt medium, 11x8 padding, an 8pt corner, and the colour swatch is a drawn circle in its own
+column rather than a "●" typed into the string and recoloured — the glyph was at the mercy
+of the font and looked like a typo at that size.
+
+**The plate is dark, and the mode is a red stripe down its left edge.** A red plate was
+tried first and it cost the badge the thing it exists for: the swatch is the only place the
+pen's colour appears anywhere on screen, the first pen is red, and on a red plate the swatch
+vanished into the plate. Dark plate, red stripe: every colour reads, and the stripe still
+says clicks are being captured. Click-through drops the stripe, because nothing is.
+
+Both were found by rendering the badge offscreen to a PNG and looking at it, which is worth
+doing again before changing it — the suites will not catch blurry.

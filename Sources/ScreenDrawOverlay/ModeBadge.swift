@@ -10,6 +10,11 @@
 //
 // It draws nothing while the pointer is over it, so the corner it occupies stays drawable.
 //
+// The plate is dark and the mode is carried by the red stripe down its left edge, not by the
+// plate's own colour. A red plate was tried and it cost the thing the badge is actually for:
+// the colour swatch is the only place the pen's colour is shown, and the first pen is red,
+// so on a red plate the swatch disappeared into it.
+//
 // Like the pointer, it is handed over as a picture on a layer rather than painted into the
 // view. It changes when the tool, the colour or the mode does - which is rare - and a repaint
 // of the overlay costs the same whatever its dirty rect, so a badge painted in draw(_:) was
@@ -22,10 +27,20 @@ final class ModeBadge {
     private static let drawingHint = "⌃⌥⌘E click · ⌃⌥⌘D hide"
     private static let interactionHint = "⌃⌥⌘E draw · ⌃⌥⌘Esc quit"
 
-    private static let paddingX: CGFloat = 8
-    private static let paddingY: CGFloat = 5
-    private static let lineGap: CGFloat = 2
-    private static let margin: CGFloat = 14
+    private static let paddingX: CGFloat = 11
+    private static let paddingY: CGFloat = 8
+    private static let lineGap: CGFloat = 3
+    private static let margin: CGFloat = 16
+    private static let cornerRadius: CGFloat = 8
+
+    // The colour swatch, in its own column to the left of both lines. Drawn rather than
+    // typed: a coloured "●" glyph is at the mercy of the font and came out looking like a
+    // typo at this size.
+    private static let swatchDiameter: CGFloat = 10
+    private static let swatchGap: CGFloat = 8
+
+    // The mode stripe down the left edge.
+    private static let stripeWidth: CGFloat = 4
 
     private let tools: ToolSettings
 
@@ -68,12 +83,20 @@ final class ModeBadge {
     // The badge as a picture, and where it goes. The two come back together because they
     // change together: the badge is anchored to the corner and grows leftwards as the tool
     // name gets longer, so a new name moves its origin as well as its size.
+    //
+    // Everything is snapped to whole device pixels. A layer whose frame is a fraction of a
+    // pixel wide gets its picture resampled onto the screen, and 10pt text resampled by a
+    // third of a pixel is exactly as blurry as it sounds.
     func render(scale: CGFloat) -> (image: CGImage?, frame: NSRect) {
         let (mode, hint) = lines()
-        let width = max(mode.size().width, hint.size().width) + ModeBadge.paddingX * 2
-        let height = mode.size().height + hint.size().height + ModeBadge.lineGap + ModeBadge.paddingY * 2
-        frame = NSRect(x: bounds.maxX - width - ModeBadge.margin,
-                       y: bounds.maxY - height - ModeBadge.margin,
+        let textWidth = max(mode.size().width, hint.size().width)
+        let column = ModeBadge.swatchDiameter + ModeBadge.swatchGap
+        let width = ModeBadge.snappedUp(ModeBadge.paddingX * 2 + column + textWidth, scale: scale)
+        let height = ModeBadge.snappedUp(mode.size().height + hint.size().height
+                                             + ModeBadge.lineGap + ModeBadge.paddingY * 2,
+                                         scale: scale)
+        frame = NSRect(x: ModeBadge.snappedDown(bounds.maxX - width - ModeBadge.margin, scale: scale),
+                       y: ModeBadge.snappedDown(bounds.maxY - height - ModeBadge.margin, scale: scale),
                        width: width,
                        height: height)
 
@@ -91,57 +114,107 @@ final class ModeBadge {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = context
 
+        let box = NSRect(x: 0, y: 0, width: width, height: height)
+        let plate = NSBezierPath(roundedRect: box, xRadius: ModeBadge.cornerRadius,
+                                 yRadius: ModeBadge.cornerRadius)
         backgroundColor.setFill()
-        NSBezierPath(roundedRect: NSRect(x: 0, y: 0, width: width, height: height),
-                     xRadius: 5, yRadius: 5).fill()
+        plate.fill()
+        // A hairline lip. Without it the plate has no edge against a light background and
+        // reads as a flat sticker rather than something sitting on top of the screen.
+        let lip = NSBezierPath(roundedRect: box.insetBy(dx: 0.5, dy: 0.5),
+                               xRadius: ModeBadge.cornerRadius - 0.5,
+                               yRadius: ModeBadge.cornerRadius - 0.5)
+        lip.lineWidth = 1
+        NSColor.white.withAlphaComponent(0.22).setStroke()
+        lip.stroke()
+
+        // The one loud thing on the badge, and the only warning that clicks are not reaching
+        // whatever is underneath. Clipped to the plate so it follows the rounded corner.
+        if !isInteractionMode {
+            NSGraphicsContext.saveGraphicsState()
+            plate.addClip()
+            NSColor.systemRed.setFill()
+            NSRect(x: 0, y: 0, width: ModeBadge.stripeWidth, height: height).fill()
+            NSGraphicsContext.restoreGraphicsState()
+        }
 
         // Bottom line first: the context is not flipped, so the mode sits above the hint.
-        hint.draw(at: NSPoint(x: ModeBadge.paddingX, y: ModeBadge.paddingY))
-        mode.draw(at: NSPoint(x: ModeBadge.paddingX,
-                              y: ModeBadge.paddingY + hint.size().height + ModeBadge.lineGap))
+        let textX = ModeBadge.paddingX + ModeBadge.swatchDiameter + ModeBadge.swatchGap
+        hint.draw(at: NSPoint(x: textX, y: ModeBadge.paddingY))
+        let modeY = ModeBadge.paddingY + hint.size().height + ModeBadge.lineGap
+        mode.draw(at: NSPoint(x: textX, y: modeY))
+
+        drawSwatch(centredOn: modeY + mode.size().height / 2)
 
         NSGraphicsContext.restoreGraphicsState()
 
         return (rep.cgImage, frame)
     }
 
-    // Red and solid while the overlay owns the mouse, hollow and neutral while clicks are
-    // passing through: the badge answers "where do my clicks go right now?".
+    // Filled in the pen's colour while drawing; hollow while clicks are passing through,
+    // because in that mode there is no colour in hand.
+    private func drawSwatch(centredOn y: CGFloat) {
+        let diameter = ModeBadge.swatchDiameter
+        let circle = NSBezierPath(ovalIn: NSRect(x: ModeBadge.paddingX, y: y - diameter / 2,
+                                                 width: diameter, height: diameter))
+        guard !isInteractionMode else {
+            circle.lineWidth = 1.5
+            NSColor.white.withAlphaComponent(0.75).setStroke()
+            circle.stroke()
+            return
+        }
+
+        tools.color.setFill()
+        circle.fill()
+        // A firm white ring, not a hint of one: the plate is red and so is the first pen,
+        // and a swatch that vanishes into the plate is worse than no swatch.
+        circle.lineWidth = 2
+        NSColor.white.withAlphaComponent(0.95).setStroke()
+        circle.stroke()
+    }
+
+    // Whole device pixels, in points. A badge that is 87.34pt wide on a 2x display asks the
+    // window server to resample 175 pixels of picture onto 174.68 pixels of screen.
+    private static func snappedUp(_ value: CGFloat, scale: CGFloat) -> CGFloat {
+        (value * scale).rounded(.up) / scale
+    }
+
+    private static func snappedDown(_ value: CGFloat, scale: CGFloat) -> CGFloat {
+        (value * scale).rounded(.down) / scale
+    }
+
+    // The badge answers "where do my clicks go right now?". Darker while clicks are passing
+    // through, with the red stripe gone: nothing is being captured.
     private var text: String {
         guard !isInteractionMode else {
-            return "◌ CLICK-THROUGH"
+            return "CLICK-THROUGH"
         }
 
         if tools.tool == .eraser || tools.tool == .laser {
-            return "● \(tools.tool.label)"
+            return tools.tool.label
         }
 
         let temporary = tools.drawsTemporaryInk ? "TEMP " : ""
-        return "● \(temporary)\(tools.tool.label) \(Int(tools.renderWidth))"
+        return "\(temporary)\(tools.tool.label) \(Int(tools.renderWidth))"
     }
 
     private var backgroundColor: NSColor {
         isInteractionMode
-            ? NSColor.black.withAlphaComponent(0.45)
-            : NSColor.systemRed.withAlphaComponent(0.72)
+            ? NSColor.black.withAlphaComponent(0.62)
+            : NSColor.black.withAlphaComponent(0.72)
     }
 
     private func lines() -> (mode: NSAttributedString, hint: NSAttributedString) {
-        let mode = NSMutableAttributedString(string: text, attributes: [
-            .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.92)
+        let mode = NSAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+            .foregroundColor: NSColor.white,
+            .kern: 0.3
         ])
-
-        // The leading dot is the colour swatch: the only place the active colour is shown,
-        // which is what keeps this keyboard-driven tool honest without a palette on screen.
-        if !isInteractionMode, mode.length > 0 {
-            mode.addAttribute(.foregroundColor, value: tools.color, range: NSRange(location: 0, length: 1))
-        }
 
         let hint = NSAttributedString(string: isInteractionMode ? ModeBadge.interactionHint : ModeBadge.drawingHint,
                                       attributes: [
-            .font: NSFont.systemFont(ofSize: 9, weight: .regular),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.65)
+            .font: NSFont.systemFont(ofSize: 10, weight: .medium),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.78)
         ])
 
         return (mode, hint)
