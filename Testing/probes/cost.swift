@@ -24,14 +24,13 @@ import Foundation
 // A layer-backed view is believed to get the union. If the two columns are far apart, that
 // belief is worth money.
 
+// The ink is painted through a layer of its own now, so this is where a repaint is asked
+// for and where the suite watches for one that covers everything.
 final class Rec: DrawingView {
     var invalidations: [NSRect] = []
     var fullInvalidations = 0
-    override func setNeedsDisplay(_ r: NSRect) { invalidations.append(r); super.setNeedsDisplay(r) }
-    override var needsDisplay: Bool {
-        get { super.needsDisplay }
-        set { if newValue { fullInvalidations += 1; invalidations.append(bounds) }; super.needsDisplay = newValue }
-    }
+    override func invalidateInk(_ r: NSRect) { invalidations.append(r) }
+    override func invalidateAllInk() { fullInvalidations += 1; invalidations.append(bounds) }
 }
 
 let scale = Int(ProcessInfo.processInfo.environment["SCALE"] ?? "2") ?? 2
@@ -88,7 +87,7 @@ final class Bench {
             NSGraphicsContext.current = ctx
             ctx.cgContext.clip(to: dirty)
             ctx.cgContext.clear(dirty)
-            view.draw(dirty)
+            view.drawInk(in: dirty)
             NSGraphicsContext.restoreGraphicsState()
             paints += 1
             paintedArea += Double(dirty.width) * Double(dirty.height)

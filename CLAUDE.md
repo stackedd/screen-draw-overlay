@@ -19,7 +19,8 @@ CoreGraphics, ServiceManagement (open at login). Universal binary, macOS 11+.
       AppDelegate.swift       modes, overlay lifetime, kept drawings, hot keys
       MenuBarItem.swift       menu bar icon, menu, Open at Login
       OverlayPanel.swift      the transparent window, one per screen
-      DrawingView.swift       the view: events in, paint out
+      DrawingView.swift       the view: events in, three layers out
+      InkPainter.swift        the ink layer's delegate
       Canvas.swift            the drawing: strokes, eraser, undo/redo, fading
       Stroke.swift            what a mark is made of; what each tool draws
       ToolSettings.swift      the pen in hand, shared and remembered
@@ -34,7 +35,8 @@ CoreGraphics, ServiceManagement (open at login). Universal binary, macOS 11+.
     docs/DECISIONS.md         why things are the way they are, and what was rejected
 
 The dependency runs one way: `AppDelegate` → `DrawingView` → `Canvas`. What is drawn belongs
-in `Canvas`; how it appears belongs in the view.
+in `Canvas`; how it appears belongs in the view. Nothing is painted through `NSView.draw(_:)`
+— ink, badge and pointer each have a `CALayer`, which is worth 4.3x on every repaint.
 
 ## Commands
 
@@ -80,8 +82,8 @@ easy to repeat.
    `isVisible` — closed panels linger, and counting them once made `⌃⌥⌘D` destroy a drawing.
 4. **Never make `⌃⌥⌘Esc` anything less than quitting the process.** It is the panic key;
    the guarantee is that it always works.
-5. **Never repaint the whole view on a mouse move.** Invalidate the rect you changed.
-   Whole-view repaints cost 26x more, and the suite fails on `fullViewInvalidations > 0`.
+5. **Never repaint the whole drawing on a mouse move.** Invalidate the rect you changed.
+   Repainting everything cost 26x more, and the suite fails on `fullInkInvalidations > 0`.
    Better still, do not repaint at all: **the pointer and the badge are layers**. Painting
    either into `draw(_:)` puts a repaint back on every mouse move — 15.2% of a core against
    1.5% — and the badge measures its own text before it can decide to do nothing.
@@ -110,8 +112,18 @@ actually goes"). Three numbers govern everything:
 - Actually painting a drag costs **0.3–0.5%**. Optimising the painting is bidding for half a
   point out of twenty-three.
 
-So the route is: get everything that is not ink (the pointer, the badge) out of the repaint
-path and onto its own layer, then move the ink itself off `NSView.draw(_:)`, and only then
-look at painting — where the one real finding is that an unbroken stroke is redrawn in full
-on every mouse move, which is quadratic. WindowServer is not involved in any of this; it
-does not move when the overlay repaints.
+That route has now been walked: pointer, badge and ink each moved onto a layer. Measured end
+to end on a real panel at 60 events a second — moving the pointer over 200 strokes went from
+**22.5% to 1.6%**, drawing over them from **20.4% to 5.4%**, and idle stayed at 0.5%.
+
+**What is still open**, in order:
+
+1. The **quadratic in-progress stroke** — the stroke under the mouse is re-stroked in full on
+   every move, so the last tenth of a 5000-point line costs 13x its first tenth. Now the
+   largest thing left in the painting half.
+2. **Coalescing repaints to the display refresh.** Worth exactly what the real event rate
+   exceeds the refresh rate, which has not been measured yet. Measure that first.
+3. Cheap and correct either way: caching `Stroke.repaintBounds`, and thinning points that
+   land less than about 1.5pt from the last one.
+
+WindowServer is not involved in any of this; it does not move when the overlay repaints.

@@ -34,7 +34,7 @@ if [ "$suite" = "all" ] || [ "$suite" = "rendering" ]; then
         SCALE=$scale "$TESTING_DIR/rendering/.build/release/PIX" | sed 's/^/    /'
     done
     echo
-    echo "    fullViewInvalidations must be 0: a drag that repaints the whole view is the"
+    echo "    fullInkInvalidations must be 0: a drag that repaints the whole drawing is the"
     echo "    bug this suite exists to catch. The differing bytes are antialiasing along"
     echo "    clip boundaries, not missed paint - expanding every dirty rect makes them"
     echo "    worse, not better (docs/DECISIONS.md). What matters is that the numbers do"

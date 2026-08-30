@@ -1,14 +1,13 @@
 import AppKit
 import Carbon
 
+// The ink is painted through a layer of its own now, so this is where a repaint is asked
+// for and where the suite watches for one that covers everything.
 final class Rec: DrawingView {
     var invalidations: [NSRect] = []
     var fullInvalidations = 0
-    override func setNeedsDisplay(_ r: NSRect) { invalidations.append(r); super.setNeedsDisplay(r) }
-    override var needsDisplay: Bool {
-        get { super.needsDisplay }
-        set { if newValue { fullInvalidations += 1; invalidations.append(bounds) }; super.needsDisplay = newValue }
-    }
+    override func invalidateInk(_ r: NSRect) { invalidations.append(r) }
+    override func invalidateAllInk() { fullInvalidations += 1; invalidations.append(bounds) }
 }
 
 let scale = Int(ProcessInfo.processInfo.environment["SCALE"] ?? "1") ?? 1
@@ -32,7 +31,7 @@ func render(_ rep: NSBitmapImageRep, _ dirty: NSRect) {
     guard let ctx = NSGraphicsContext(bitmapImageRep: rep) else { return }
     NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = ctx
     ctx.cgContext.clip(to: dirty); ctx.cgContext.clear(dirty)
-    view.draw(dirty)
+    view.drawInk(in: dirty)
     NSGraphicsContext.restoreGraphicsState()
 }
 let incremental = bitmap()
@@ -79,4 +78,4 @@ let bytes = full.bytesPerRow * full.pixelsHigh
 let a = incremental.bitmapData!, b = full.bitmapData!
 var diff = 0, maxDelta = 0
 for i in 0..<bytes where a[i] != b[i] { diff += 1; maxDelta = max(maxDelta, abs(Int(a[i]) - Int(b[i]))) }
-print("strokes=\(view.capturedStrokes().count) scale=\(scale)x fullViewInvalidations=\(view.fullInvalidations - fullBefore) differingBytes=\(diff)/\(bytes) maxDelta=\(maxDelta)")
+print("strokes=\(view.capturedStrokes().count) scale=\(scale)x fullInkInvalidations=\(view.fullInvalidations - fullBefore) differingBytes=\(diff)/\(bytes) maxDelta=\(maxDelta)")

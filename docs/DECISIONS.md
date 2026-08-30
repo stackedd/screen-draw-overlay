@@ -354,3 +354,37 @@ Its old repaint machinery went with it — `repaintRegionAfterToolChange`, the r
 and the "old rect union new rect" rule that existed because a badge growing leftwards out of
 the corner would otherwise be left half drawn. A layer that is given a new picture and a new
 frame has no such problem. The whole-view repaint on a mode switch went too.
+
+## 21. The ink is painted through a layer, not through `NSView.draw(_:)`
+
+The measurement in entry 19 said the same repaint of the same full screen transparent layer
+costs **15.2% of a core through AppKit's view display machinery and 3.5% through a
+`CALayer`** — 4.3x, for identical output. Nothing about what is painted changes; the
+difference is the path the repaint is asked through.
+
+So `DrawingView` now owns three layers, bottom to top — ink, badge, pointer — and paints
+nothing through `draw(_:)` at all. The `draw(_:)` override is gone. The painting code did not
+change: the ink layer's delegate makes an unflipped `NSGraphicsContext` current and calls the
+same body, so `NSBezierPath` and `NSColor` work exactly as before.
+
+**The delegate cannot be the view.** An `NSView` is already the delegate of its own backing
+layer and AppKit's implementations of those methods assume that is the layer being asked
+about. `InkPainter` exists for that reason and no other.
+
+**Measured end to end** (`Testing/probes/onscreen.swift`, a real panel at 60 events a
+second), with the pointer and badge layers of entry 20:
+
+| | before | after |
+| --- | --- | --- |
+| moving the pointer over 200 strokes, drawing nothing | 22.5% | **1.6%** |
+| drawing one long unbroken stroke | 21.9% | **4.2%** |
+| drawing over a canvas of 200 strokes | 20.4% | **5.4%** |
+| overlay up, idle | 0.5% | 0.5% |
+
+The old shape of the thing is in that table: **moving the mouse cost as much as drawing**,
+because the crosshair was paint and paint meant repainting the whole overlay.
+
+**What is left.** Painting a drag is now about 0.2% of a core, so the remaining 4–5% is the
+repaints themselves, one per mouse event. Two directions, in order: coalesce the repaints to
+the display's refresh rate (worth only what the event rate exceeds it — unmeasured), and the
+quadratic in-progress stroke, which is now the largest thing in the painting half.

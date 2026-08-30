@@ -18,7 +18,8 @@ tried and rejected on the way; [../CLAUDE.md](../CLAUDE.md) is the short operati
 | `AppDelegate.swift` | The mode model, the lifetime of the overlay panels, kept drawings, and the hot keys. The coordinator. |
 | `MenuBarItem.swift` | The menu bar presence: icon, menu, Open at Login, and the "shortcut unavailable" line. |
 | `OverlayPanel.swift` | The transparent window, one per screen: its level, its collection behaviour, and the fact that it swallows key equivalents. |
-| `DrawingView.swift` | The view: events in, paint out, plus the timer that drives the fade. |
+| `DrawingView.swift` | The view: events in, paint out, plus the timer that drives the fade. It owns three layers - ink, badge, pointer - and paints nothing through `draw(_:)`. |
+| `InkPainter.swift` | The ink layer's delegate, which is why the ink is not painted through the view. |
 | `Canvas.swift` | The drawing itself: strokes, the eraser, undo/redo, fading. Knows nothing about windows — it returns the rectangles that changed. |
 | `Stroke.swift` | What a mark is made of, and what each tool does with two points. |
 | `ToolSettings.swift` | The pen in hand: colour, width, tool. Shared across screens, remembered between launches. |
@@ -134,6 +135,23 @@ next to the numbers above:
 
 Put together: of the 23.2% a drag costs, painting is roughly half a point and the repaints
 are the rest.
+
+**End to end, before and after** (`Testing/probes/onscreen.swift`: a real `OverlayPanel` on a
+real screen, driven at 60 events a second, this process's own CPU). Ink, badge and pointer
+each moved onto a `CALayer`; nothing about what is painted changed.
+
+| what the user is doing | strokes on screen | before | after |
+| --- | --- | --- | --- |
+| nothing, the overlay is just up | 200 | 0.5% | 0.5% |
+| moving the pointer, drawing nothing | 0 | 22.1% | **1.5%** |
+| moving the pointer, drawing nothing | 200 | 22.5% | **1.6%** |
+| drawing one long unbroken stroke | 0 | 21.9% | **4.2%** |
+| drawing over a canvas that already has ink | 200 | 20.4% | **5.4%** |
+
+The first row is the invariant holding: an overlay that is up and not being used costs
+nothing either way. The second and third are the ones worth staring at — **moving the mouse
+without drawing anything used to cost as much as drawing** (22.1% against 21.9%), because
+the crosshair was paint and paint meant a repaint of the whole overlay.
 
 **`needsToDraw(_:)` is not a lever here.** It looked like a free win — AppKit hands
 `draw(_:)` the bounding box of every invalid rectangle, so a pointer that invalidates where

@@ -3,16 +3,20 @@
 //
 // Three things to know before editing:
 //
-//   1. Repainting is incremental. A drag invalidates only the rectangle the new segment
-//      covers, and draw(_:) skips strokes that do not meet dirtyRect. Repainting the whole
-//      view per mouse move cost 26x more; the measurements are in docs/ARCHITECTURE.md.
-//      Anything added here should invalidate its own rect, never the view.
-//   2. The pointer is drawn, not requested. The system cursor over the panel is made
+//   1. Nothing is painted through NSView.draw(_:). The ink has a CALayer of its own and
+//      the badge and the pointer have theirs, because the same repaint of the same full
+//      screen transparent layer costs 15.2% of a core asked for through AppKit's view
+//      display machinery and 3.5% asked for through a layer (docs/ARCHITECTURE.md).
+//   2. Repainting is incremental. A drag invalidates only the rectangle the new segment
+//      covers, and the ink is painted skipping strokes that do not meet the dirty rect.
+//      Repainting everything per mouse move cost 26x more. Anything added here should
+//      invalidate its own rect, never the whole layer.
+//   3. The pointer is drawn, not requested. The system cursor over the panel is made
 //      transparent and the crosshair below is ours, because a presenting app hides the
 //      real pointer and a background app cannot win that fight. It lives on a layer of its
 //      own, so following the mouse is a layer move and never a repaint - measured at 1.5%
 //      of a core against 15.2% for asking the view to repaint instead.
-//   3. The badge in the corner is the only interface. There is no palette on screen on
+//   4. The badge in the corner is the only interface. There is no palette on screen on
 //      purpose, so it has to say which tool, which colour and how to get out. It is a layer
 //      too, for the same reason as the pointer: it changed rarely and was being laid out on
 //      every repaint.
@@ -46,8 +50,12 @@ final class DrawingView: NSView {
     // full screen transparent overlay costs the same whatever its dirty rect, so painting a
     // 26pt crosshair cost as much as painting everything; moving a layer costs a tenth of
     // that and repaints nothing at all (docs/ARCHITECTURE.md).
-    private let pointerLayer = CALayer()
+    // Everything the user sees is on one of these three, bottom to top. None of them is
+    // the view's own backing layer, which now paints nothing at all.
+    private let inkLayer = CALayer()
     private let badgeLayer = CALayer()
+    private let pointerLayer = CALayer()
+    private let inkPainter = InkPainter()
 
     // Set by AppDelegate when the click-through hot key is used. The view keeps drawing
     // its strokes either way; what changes is the badge and whether it claims the cursor.
@@ -100,6 +108,9 @@ final class DrawingView: NSView {
         pointerLayer.isHidden = true
         badgeLayer.actions = ["contents": NSNull(), "hidden": NSNull(),
                               "position": NSNull(), "bounds": NSNull()]
+        inkPainter.view = self
+        inkLayer.delegate = inkPainter
+        inkLayer.frame = NSRect(origin: .zero, size: frameRect.size)
         attachLayers()
         refreshPointerImage()
         refreshBadge()
@@ -120,24 +131,42 @@ final class DrawingView: NSView {
         attachLayers()
         refreshPointerImage()
         refreshBadge()
+        inkLayer.contentsScale = backingScale
     }
 
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
         refreshPointerImage()
         refreshBadge()
+        // A layer keeps its pixels through a scale change, so they have to be redrawn or
+        // the drawing stays at the old display's resolution.
+        inkLayer.contentsScale = backingScale
+        inkLayer.setNeedsDisplay()
     }
 
-    // The badge first, so the pointer stays on top of it - the same order they used to be
-    // painted in.
+    // Ink, then badge, then pointer: the order they used to be painted in.
     private func attachLayers() {
         guard let layer else {
             return
         }
 
-        for sublayer in [badgeLayer, pointerLayer] where sublayer.superlayer !== layer {
+        for sublayer in [inkLayer, badgeLayer, pointerLayer] where sublayer.superlayer !== layer {
             layer.addSublayer(sublayer)
         }
+    }
+
+    // The panels are the size of their screen and do not resize in normal use, but a layer
+    // does not follow its view's bounds on its own and a stale ink layer would clip the
+    // drawing.
+    override func layout() {
+        super.layout()
+
+        guard inkLayer.frame != bounds else {
+            return
+        }
+
+        inkLayer.frame = bounds
+        inkLayer.setNeedsDisplay()
     }
 
     private var backingScale: CGFloat {
@@ -196,7 +225,7 @@ final class DrawingView: NSView {
             return
         }
 
-        setNeedsDisplay(canvas.beginStroke(at: point, with: tools))
+        invalidateInk(canvas.beginStroke(at: point, with: tools))
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -212,7 +241,7 @@ final class DrawingView: NSView {
         if let dirty = canvas.extendStroke(to: point,
                                            shiftHeld: event.modifierFlags.contains(.shift),
                                            with: tools) {
-            setNeedsDisplay(dirty)
+            invalidateInk(dirty)
         }
     }
 
@@ -332,9 +361,9 @@ final class DrawingView: NSView {
         } else if event.keyCode == UInt16(kVK_ANSI_C), shortcutFlags == [] || shortcutFlags == .shift {
             clear()
         } else if event.keyCode == UInt16(kVK_ANSI_Z), shortcutFlags == .command {
-            canvas.undo().forEach(setNeedsDisplay)
+            canvas.undo().forEach(invalidateInk)
         } else if event.keyCode == UInt16(kVK_ANSI_Z), shortcutFlags == [.command, .shift] {
-            canvas.redo().forEach(setNeedsDisplay)
+            canvas.redo().forEach(invalidateInk)
         } else if event.keyCode == UInt16(kVK_Delete) || event.keyCode == UInt16(kVK_ForwardDelete),
                   shortcutFlags == [] {
             clear()
@@ -380,9 +409,19 @@ final class DrawingView: NSView {
     override func cancelOperation(_ sender: Any?) {
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
+    // The two ways the ink is asked to repaint. Everything that changes what is on the
+    // canvas goes through one of them, and the rendering suite watches them: a drag that
+    // invalidates everything is the bug that suite exists to catch.
+    private func invalidateInk(_ rect: NSRect) {
+        inkLayer.setNeedsDisplay(rect)
+    }
 
+    private func invalidateAllInk() {
+        inkLayer.setNeedsDisplay()
+    }
+
+    // Called by the ink layer's delegate, with a graphics context already current.
+    func drawInk(in dirtyRect: NSRect) {
         // Skip strokes that are nowhere near the region being repainted. With
         // incremental invalidation this is what keeps a drag cheap on a long session.
         let now = Date()
@@ -414,18 +453,18 @@ final class DrawingView: NSView {
         }
 
         startFadingIfNeeded()
-        setNeedsDisplay(dirty)
+        invalidateInk(dirty)
     }
 
     func restore(strokes restored: [Stroke]) {
         canvas.restore(restored)
-        needsDisplay = true
+        invalidateAllInk()
     }
 
     func clear() {
         canvas.clear()
         stopFading()
-        needsDisplay = true
+        invalidateAllInk()
     }
 
     // The badge carries the tool name, its colour and its width, and the pointer is a
@@ -437,7 +476,7 @@ final class DrawingView: NSView {
     }
 
     private func erase(at point: NSPoint) {
-        canvas.erase(at: point, radius: tools.eraserRadius).forEach(setNeedsDisplay)
+        canvas.erase(at: point, radius: tools.eraserRadius).forEach(invalidateInk)
     }
 
     // The only timer in the app, and it exists only while temporary ink is on screen:
@@ -459,7 +498,7 @@ final class DrawingView: NSView {
         let (dirty, stillFading) = canvas.advanceFade()
 
         if let dirty {
-            setNeedsDisplay(dirty)
+            invalidateInk(dirty)
         }
 
         guard !stillFading else {

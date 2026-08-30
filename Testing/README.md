@@ -32,9 +32,25 @@ It measures **painting only**. Updating the window's backing store and compositi
 happen in no process this probe can see, and they are most of the bill - see
 `docs/ARCHITECTURE.md`. Read a cost number as "how much of the small half moved".
 
-## Experiments
+## On a real screen
 
-`experiments/repaint_paths.swift` is the measurement that cannot be made offscreen: what one
+Two measurements need a window on screen, so neither is in `run.sh`.
+
+`probes/onscreen.swift` is the end-to-end one: a real `OverlayPanel`, driven at 60 events a
+second, reporting this process's own CPU for each thing a user might be doing. It is built
+the same way as the other probes and run by hand:
+
+    python3 Testing/make_onscreen_probe.py && \
+      swift build --package-path .build/testing/onscreen -c release && \
+      .build/testing/onscreen/.build/release/LIVE
+
+To get a before as well as an after, run it against an older commit in a worktree - it only
+uses API that has been there all along:
+
+    git worktree add /tmp/before <commit>
+    cp Testing/probes/onscreen.swift Testing/make_onscreen_probe.py /tmp/before/Testing/
+
+`experiments/repaint_paths.swift` is the other one: what one
 repaint of a full screen transparent overlay costs, split between this process and
 WindowServer, across the ways of asking for one. It needs a real window on a real screen, so
 it is run by hand rather than by `run.sh`:
