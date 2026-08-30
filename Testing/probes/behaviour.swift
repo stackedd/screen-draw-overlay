@@ -84,6 +84,39 @@
         press(kVK_ANSI_Z, "z", [.command, .shift])
         check("redo clears again", "\(live)", "0")
 
+        // Hiding the overlay used to throw the history away with the panels, so the drawing
+        // came back and could no longer be taken back.
+        stroke(y: 540)
+        stroke(y: 560)
+        toggleDrawingMode()
+        toggleDrawingMode()
+        press(kVK_ANSI_Z, "z", .command)
+        check("undo still works after hide and show", "\(live)", "1")
+
+        // A temporary stroke that fades leaves nothing behind - including its entry in the
+        // history. It used to stay, and the next undo applied it to whatever happened to be
+        // last, which took back a line the user had just drawn and offered a faded one back
+        // in its place.
+        press(kVK_ANSI_C, "c")
+        stroke(y: 560)
+        stroke(y: 580)
+        press(kVK_ANSI_T, "t")
+        stroke(y: 600)
+        press(kVK_ANSI_T, "t")
+        if let view = drawingViewSnapshot(from: overlayWindowSnapshot()).first {
+            let expired = Date().addingTimeInterval(-Stroke.fadeDuration - 1)
+            view.canvas.strokes = view.canvas.strokes.map { stroke in
+                guard stroke.createdAt != nil else { return stroke }
+                return Stroke(id: stroke.id, points: stroke.points, path: stroke.path,
+                              color: stroke.color, width: stroke.width, style: stroke.style,
+                              createdAt: expired)
+            }
+            view.advanceFade()
+        }
+        press(kVK_ANSI_Z, "z", .command)
+        press(kVK_ANSI_Z, "z", [.command, .shift])
+        check("undo steps over temporary ink that has faded", "\(live)", "2")
+
         // The pointer is the system arrow with a ring around its tip. Three points have
         // to be the same one - the hot spot, the middle of the ring and where the ink
         // lands - or the stroke appears offset from the arrow the user is aiming with.

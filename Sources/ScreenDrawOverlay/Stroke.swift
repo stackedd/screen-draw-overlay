@@ -171,6 +171,12 @@ struct Stroke {
     static let fadeDuration: TimeInterval = 3
     static let fadeHold = 0.55
 
+    // Identity, because the history has to name a stroke rather than point at a position.
+    // Undo used to take back "the last one added", which is the same thing right up until
+    // temporary ink fades out from under an entry still sitting in the stack - and then it
+    // silently takes back somebody else's line.
+    let id: UUID
+
     var points: [NSPoint]
     let path: NSBezierPath
     let color: NSColor
@@ -233,6 +239,20 @@ struct Stroke {
 
         let t = max(0, min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
         return hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy))
+    }
+
+    // Spelled out rather than synthesised, because a memberwise initialiser leaves out a
+    // `let` that already has a value - which would make the identity impossible to carry
+    // when a stroke is rebuilt.
+    init(id: UUID = UUID(), points: [NSPoint], path: NSBezierPath, color: NSColor,
+         width: CGFloat, style: StrokeStyle, createdAt: Date?) {
+        self.id = id
+        self.points = points
+        self.path = path
+        self.color = color
+        self.width = width
+        self.style = style
+        self.createdAt = createdAt
     }
 
     var hasFaded: Bool {

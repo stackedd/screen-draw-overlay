@@ -27,15 +27,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var toggleHotKey: GlobalHotKey?
     private var interactionHotKey: GlobalHotKey?
     private var emergencyHotKey: GlobalHotKey?
+    private var undoHotKey: GlobalHotKey?
+    private var redoHotKey: GlobalHotKey?
     private var isDrawingMode = false
     private var isInteractionMode = false
     private var overlayScreenLayout: [String] = []
     private static let holdToDrawThreshold: TimeInterval = 0.4
 
     private var drawingHotKeyPressedAt: Date?
-    private var storedStrokes: [String: [Stroke]] = [:]
+    private var keptDrawings: [String: Canvas.Kept] = [:]
     private let tools = ToolSettings()
-    private var storedStrokesLayout: [String] = []
+    private var keptDrawingsLayout: [String] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("ScreenDrawOverlay: app launched")
@@ -86,6 +88,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.toggleInteractionMode()
         }
 
+        // Undo is global because Command+Z is not. The panels are non-activating, so they
+        // only get the keyboard while this app is the active one - and after the user has
+        // clicked anything at all in another app, they are not. Command+Z inside the
+        // overlay was then a silent no-op, in a state nothing on screen distinguishes from
+        // the working one.
+        undoHotKey = GlobalHotKey(id: 4,
+                                  keyCode: UInt32(kVK_ANSI_Z),
+                                  modifiers: UInt32(cmdKey | optionKey | controlKey)) { [weak self] in
+            self?.undoOnScreenUnderPointer(redo: false)
+        }
+
+        // Redo comes with it. An undo that always works paired with a redo that only
+        // sometimes does is a trap: one press too many and the way back depends on a
+        // focus state the user cannot see.
+        redoHotKey = GlobalHotKey(id: 5,
+                                  keyCode: UInt32(kVK_ANSI_Z),
+                                  modifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey)) { [weak self] in
+            self?.undoOnScreenUnderPointer(redo: true)
+        }
+
         emergencyHotKey = GlobalHotKey(id: 2,
                                        keyCode: UInt32(kVK_Escape),
                                        modifiers: UInt32(cmdKey | optionKey | controlKey)) { [weak self] in
@@ -115,6 +137,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             unavailable.append("\u{2303}\u{2325}\u{2318}\u{238B}")
         }
 
+        if undoHotKey?.register() == true {
+            print("ScreenDrawOverlay: hotkey registered - Control + Option + Command + Z")
+        } else {
+            unavailable.append("\u{2303}\u{2325}\u{2318}Z")
+        }
+
+        if redoHotKey?.register() == true {
+            print("ScreenDrawOverlay: hotkey registered - Shift + Control + Option + Command + Z")
+        } else {
+            unavailable.append("\u{21E7}\u{2303}\u{2325}\u{2318}Z")
+        }
+
         if !unavailable.isEmpty {
             print("ScreenDrawOverlay: hotkeys unavailable: \(unavailable.joined(separator: ", "))")
             menuBar?.reportUnavailableShortcuts(unavailable)
@@ -128,6 +162,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleHotKey?.unregister()
         interactionHotKey?.unregister()
         emergencyHotKey?.unregister()
+        undoHotKey?.unregister()
+        redoHotKey?.unregister()
     }
 
     private static func anotherInstanceIsRunning() -> Bool {
@@ -151,6 +187,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     //
     // Momentary only applies when the press is what opened the overlay. Holding the key
     // while already drawing would otherwise have to undo the tap action mid-hold, which
+    // One canvas per display, so "take that back" has to mean the one the user is looking
+    // at. The pointer says which that is; if it is off every panel - another display, or
+    // no panel there - the screen carrying the badge is the fallback.
+    private func undoOnScreenUnderPointer(redo: Bool) {
+        let windows = overlayWindowSnapshot()
+        guard isDrawingMode, !windows.isEmpty else {
+            return
+        }
+
+        let location = NSEvent.mouseLocation
+        let window = windows.first { $0.frame.contains(location) }
+            ?? windows.first { $0.drawingView.showsIndicator }
+            ?? windows[0]
+
+        if redo {
+            window.drawingView.redo()
+        } else {
+            window.drawingView.undo()
+        }
+    }
+
     private func drawingHotKeyPressed() {
         let wasClosed = !isDrawingMode && overlayWindowSnapshot().isEmpty
         toggleDrawingMode()
@@ -198,27 +255,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // Strokes live inside the panels, which are destroyed on close, so they are lifted
-    // out first and filed under the display they were drawn on.
+    // out first and filed under the display they were drawn on - with the undo history
+    // that goes with them, because hiding the overlay is not meant to cost you the last
+    // five minutes of taking things back.
     private func keepStrokesForNextTime() {
         let windows = overlayWindowSnapshot()
         guard !windows.isEmpty else {
             return
         }
 
-        storedStrokes.removeAll()
+        keptDrawings.removeAll()
         windows.forEach { window in
             // Hiding can land mid-drag; that half-drawn line is still the user's.
             window.drawingView.finishStrokeInProgress()
-            let strokes = window.drawingView.capturedStrokes()
-            guard !strokes.isEmpty else {
+            let kept = window.drawingView.capturedDrawing()
+            guard kept.strokeCount > 0 else {
                 return
             }
 
-            storedStrokes[window.screenKey] = strokes
+            keptDrawings[window.screenKey] = kept
         }
-        storedStrokesLayout = AppDelegate.screenLayoutSignature()
+        keptDrawingsLayout = AppDelegate.screenLayoutSignature()
 
-        let total = storedStrokes.values.reduce(0) { $0 + $1.count }
+        let total = keptDrawings.values.reduce(0) { $0 + $1.strokeCount }
         print("ScreenDrawOverlay: kept \(total) stroke(s) for the next time drawing mode opens")
     }
 
@@ -247,8 +306,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let window = OverlayPanel(screen: screen, showsIndicator: index == indicatorIndex, tools: tools)
             let drawingView = window.drawingView
 
-            if let kept = storedStrokes[window.screenKey] {
-                drawingView.restore(strokes: kept)
+            if let kept = keptDrawings[window.screenKey] {
+                drawingView.restore(kept)
             }
 
             windows.append(window)
@@ -280,10 +339,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Kept strokes belong to the displays they were drawn on. If those changed,
         // restoring them would put someone's annotation on the wrong screen at the wrong
         // scale, so they are dropped rather than guessed at.
-        if !storedStrokes.isEmpty, layout != storedStrokesLayout {
+        if !keptDrawings.isEmpty, layout != keptDrawingsLayout {
             print("ScreenDrawOverlay: display layout changed, dropping kept strokes")
-            storedStrokes.removeAll()
-            storedStrokesLayout.removeAll()
+            keptDrawings.removeAll()
+            keptDrawingsLayout.removeAll()
             refreshMenuBar()
         }
 
@@ -372,7 +431,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshMenuBar() {
         menuBar?.update(isDrawing: isDrawingMode,
                         isClickThrough: isInteractionMode,
-                        hasKeptStrokes: !storedStrokes.isEmpty)
+                        hasKeptStrokes: !keptDrawings.isEmpty)
     }
 
     // The panic key. Anything short of ending the process can in principle still leave the

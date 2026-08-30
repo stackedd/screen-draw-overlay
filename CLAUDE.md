@@ -4,8 +4,10 @@ A macOS menu bar app that puts a transparent overlay over every screen and lets 
 it — over a presentation, a document, anything. No window of its own, no Dock icon, and
 **no system permissions of any kind**.
 
-Three global shortcuts are the whole interface: `⌃⌥⌘D` draw (tap to toggle, hold for
-momentary), `⌃⌥⌘E` click-through, `⌃⌥⌘Esc` quit.
+Three global shortcuts run it — `⌃⌥⌘D` draw (tap to toggle, hold for momentary), `⌃⌥⌘E`
+click-through, `⌃⌥⌘Esc` quit — plus `⌃⌥⌘Z` / `⇧⌃⌥⌘Z` to take a mistake back, which are
+global for the same reason: a non-activating panel only gets the keyboard while this app is
+the active one, so `⌘Z` alone was a no-op whenever the user had clicked anything else.
 
 ## Stack
 
@@ -42,7 +44,7 @@ pointer is a cursor the window server draws for us.
 ## Commands
 
     swift build -c release        # must be warning-free
-    ./Testing/run.sh              # every suite; behaviour must be 20/20
+    ./Testing/run.sh              # every suite; behaviour must be 22/22
     ./build_app.sh                # universal, ad-hoc signed bundle in dist/
     open dist/ScreenDrawOverlay.app
 
@@ -96,8 +98,10 @@ easy to repeat.
    tested property. The fade timer starts with temporary ink and stops with it.
 9. **Never make drawing mode interact with anything** — no key should escape it, no click
    should reach what is underneath. Interaction is what click-through is for.
-10. **Never let hiding erase.** `⌃⌥⌘D` keeps the strokes; `C` is the only thing that erases,
-    and even that is undoable.
+10. **Never let hiding erase.** `⌃⌥⌘D` keeps the strokes **and the undo history**; `C` is
+    the only thing that erases, and even that is undoable.
+11. **Never let an edit point at a position.** Undo names strokes by `id`. `removeLast()`
+    took back the wrong line whenever temporary ink faded out from under the history.
 
 ## Current focus
 

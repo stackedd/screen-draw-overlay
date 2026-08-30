@@ -92,10 +92,12 @@ more decisive than it.
 - `⌃⌥⌘Esc` **quits the process**. Anything short of ending it can in principle still leave
   someone stuck; `applicationWillTerminate` releases the mouse and closes the panels on the
   way out.
+- `⌃⌥⌘Z` **takes the last thing back**, `⇧⌃⌥⌘Z` puts it forward again (entry 23).
 - `C` (or Delete) is the only thing that erases — and it is undoable.
 
 Kept drawings are tied to the display layout they were made on and dropped when it changes,
-rather than restored onto the wrong screen at the wrong scale.
+rather than restored onto the wrong screen at the wrong scale. What is kept includes the undo
+history (entry 23).
 
 ## 5. Holding the shortcut draws momentarily
 
@@ -284,12 +286,14 @@ that line away" is what people mean.
 
 Undo records edits (a stroke added, or strokes removed with the indices they came from)
 rather than inferring them from the stroke list, which is what lets it put back what the
-eraser and Clear took away, at the right depth.
+eraser and Clear took away, at the right depth. Each stroke carries a `UUID`, so an edit
+names a stroke rather than pointing at a position — see entry 23 for what that fixed.
 
 ## 17. Temporary ink is not kept across a hide
 
 It was drawn to vanish. Bringing it back mid-fade on the next show would be a surprise, and
-its disappearance is not an edit, so undo has nothing to say about it either.
+its disappearance is not an edit, so undo has nothing to say about it either — which means
+the entry that put it there goes when it does (entry 23).
 
 ## 18. macOS 11 is the floor
 
@@ -423,3 +427,41 @@ says clicks are being captured. Click-through drops the stripe, because nothing 
 
 Both were found by rendering the badge offscreen to a PNG and looking at it, which is worth
 doing again before changing it — the suites will not catch blurry.
+
+## 23. Undo works from anywhere, names strokes, and survives a hide
+
+Three faults, reported as one. All of them made undo do nothing, or the wrong thing, in a
+state nothing on screen distinguishes from the working one.
+
+**`⌘Z` only worked while the panel had the keyboard.** The panels are `.nonactivatingPanel`
+on purpose — drawing over a presentation must not pull focus out from under the presenter —
+and the price is that they only get key events while this app is the active one. Click
+anything at all in another app and `⌘Z` inside the overlay is a silent no-op.
+
+**Chosen:** a fourth global shortcut, `⌃⌥⌘Z`, on Carbon like the other three, so it works
+whatever has focus. `⇧⌃⌥⌘Z` redoes, and comes with it rather than after it: an undo that
+always works next to a redo that only sometimes does is a trap, because one press too many
+leaves the way back depending on a focus state the user cannot see. `⌘Z` still works when the
+panel is key. **Rejected:** making drawing mode activate the app. It would fix the shortcut
+and break the reason the panels are non-activating.
+
+With one canvas per display, the shortcut applies to the screen the pointer is on, falling
+back to the screen carrying the badge.
+
+**Undo took back the wrong stroke.** `Edit.added` was applied with `strokes.removeLast()` —
+the same thing as the stroke that was added, right up until it is not. Temporary ink is
+recorded like anything else but removed when it fades, without an edit, so a faded stroke
+could leave its entry behind; the next undo then took back somebody else's line and offered
+the expired one back on redo. Now every `Stroke` carries a `UUID` and an edit names one:
+undo removes *that* stroke, steps over an entry whose stroke is no longer there, and
+`advanceFade` drops the entries naming ink it has just taken away.
+
+**Hiding the overlay threw the history away.** `restore` cleared both stacks, on the reasoning
+that undoing into a drawing you did not make is worse than not undoing at all. True in
+general, and wrong here: this is the same drawing, in the same session, going back on the same
+screen. What the rule produced was `⌃⌥⌘D` twice and no way to take back the last five minutes.
+The history now travels with the ink, minus the entries naming temporary strokes, which do
+not travel.
+
+Both of the last two are regression checks in the behaviour suite, and both were run against
+the old code first to confirm they fail: 2 where 1 is wanted, and 1 where 2 is wanted.

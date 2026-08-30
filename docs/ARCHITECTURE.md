@@ -45,9 +45,11 @@ Three states, and every transition is deliberate:
 `⌃⌥⌘D` toggles off/drawing and brings click-through back to drawing — it never throws a
 drawing away. Held down rather than tapped, it is momentary: draw while held, gone on
 release. `⌃⌥⌘E` flips drawing and click-through. `⌃⌥⌘Esc` quits the process outright.
+`⌃⌥⌘Z` and `⇧⌃⌥⌘Z` undo and redo, and are global because the panels are non-activating:
+`⌘Z` only reaches them while this app is the active one.
 
 **Hiding is not erasing.** Leaving drawing mode lifts the strokes out of the panels and
-files them by display; the next `⌃⌥⌘D` puts them back. `C` (or Delete) is the only thing
+files them by display, together with the undo history; the next `⌃⌥⌘D` puts both back. `C` (or Delete) is the only thing
 that erases, and even that is undoable.
 
 ## Invariants
@@ -202,8 +204,9 @@ can see internals; `mkpix.py` does the same for offscreen rendering comparisons.
 Two suites carry the weight:
 
 - **Behaviour** — the mode matrix, hide/show keeping strokes with their tool attributes, the
-  unfinished-stroke commit, tool keys, `⌘Q` being swallowed, clear/undo/redo, the pointer
-  layer's coordinate space, tap versus hold. 20 checks. Every refactor is judged by whether
+  unfinished-stroke commit, tool keys, `⌘Q` being swallowed, clear/undo/redo, undo across a
+  hide, undo stepping over faded temporary ink, the cursor's hot spot, tap versus hold.
+  22 checks. Every refactor is judged by whether
   its output is byte-identical.
 - **Rendering** — the same session painted incrementally and in one pass, compared pixel by
   pixel at 1x, 2x and 3x.

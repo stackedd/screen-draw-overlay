@@ -307,9 +307,9 @@ final class DrawingView: NSView {
         } else if event.keyCode == UInt16(kVK_ANSI_C), shortcutFlags == [] || shortcutFlags == .shift {
             clear()
         } else if event.keyCode == UInt16(kVK_ANSI_Z), shortcutFlags == .command {
-            canvas.undo().forEach(invalidateInk)
+            undo()
         } else if event.keyCode == UInt16(kVK_ANSI_Z), shortcutFlags == [.command, .shift] {
-            canvas.redo().forEach(invalidateInk)
+            redo()
         } else if event.keyCode == UInt16(kVK_Delete) || event.keyCode == UInt16(kVK_ForwardDelete),
                   shortcutFlags == [] {
             clear()
@@ -393,6 +393,10 @@ final class DrawingView: NSView {
         canvas.capturedStrokes()
     }
 
+    func capturedDrawing() -> Canvas.Kept {
+        canvas.capture()
+    }
+
     func finishStrokeInProgress() {
         guard let dirty = canvas.finishStroke() else {
             return
@@ -402,9 +406,19 @@ final class DrawingView: NSView {
         invalidateInk(dirty)
     }
 
-    func restore(strokes restored: [Stroke]) {
-        canvas.restore(restored)
+    func restore(_ kept: Canvas.Kept) {
+        canvas.restore(kept)
         invalidateAllInk()
+    }
+
+    // Undo and redo reach the canvas from two directions: Command+Z while the panel is key,
+    // and the global shortcut, which works whatever has the keyboard.
+    func undo() {
+        canvas.undo().forEach(invalidateInk)
+    }
+
+    func redo() {
+        canvas.redo().forEach(invalidateInk)
     }
 
     func clear() {

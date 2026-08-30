@@ -15,14 +15,52 @@ final class Canvas {
     // Undo has to put back what the eraser and Clear take away, not just the last thing
     // drawn, so edits are recorded rather than inferred from the stroke list. Removals
     // remember where they were, so undo restores depth as well as content.
-    private struct Removal {
+    //
+    // Removal and Edit are the canvas's own vocabulary - nothing outside makes one - but
+    // they are not private, because Kept carries them across a hide and Kept has to be
+    // nameable by whoever holds a hidden drawing.
+    struct Removal {
         let index: Int
         let stroke: Stroke
     }
 
-    private enum Edit {
+    enum Edit {
         case added(Stroke)
         case removed([Removal])
+
+        // Temporary ink is not something anyone can take back: it was drawn to vanish. When
+        // it goes, the entries naming it go too, or undo steps over an entry that does
+        // nothing and redo puts back ink that has already expired.
+        func forgetting(_ id: UUID) -> Edit? {
+            switch self {
+            case .added(let stroke):
+                return stroke.id == id ? nil : self
+            case .removed(let removals):
+                let kept = removals.filter { $0.stroke.id != id }
+                return kept.isEmpty ? nil : .removed(kept)
+            }
+        }
+
+        // The same filter, for the ink that does not survive a hide.
+        var withoutTemporaryInk: Edit? {
+            switch self {
+            case .added(let stroke):
+                return stroke.createdAt == nil ? self : nil
+            case .removed(let removals):
+                let kept = removals.filter { $0.stroke.createdAt == nil }
+                return kept.isEmpty ? nil : .removed(kept)
+            }
+        }
+    }
+
+    // What a hide keeps so a show can put it back. The history travels with the ink: an
+    // undo that cannot take back the strokes you are looking at is worse than no undo.
+    struct Kept {
+        fileprivate let strokes: [Stroke]
+        fileprivate let undoStack: [Edit]
+        fileprivate let redoStack: [Edit]
+
+        var strokeCount: Int { strokes.count }
     }
 
     private(set) var strokes: [Stroke] = []
@@ -136,27 +174,33 @@ final class Canvas {
         return dirty
     }
 
+    // Steps back to the most recent edit that can still be taken back. An entry naming a
+    // stroke that is no longer here is skipped rather than applied to whatever happens to
+    // be last - that mistake took back the wrong line.
     func undo() -> [NSRect] {
-        guard let edit = undoStack.popLast() else {
-            return []
+        while let edit = undoStack.popLast() {
+            var dirty: [NSRect] = []
+
+            switch edit {
+            case .added(let stroke):
+                guard let index = strokes.firstIndex(where: { $0.id == stroke.id }) else {
+                    continue
+                }
+
+                strokes.remove(at: index)
+                dirty.append(stroke.repaintBounds)
+            case .removed(let removals):
+                for removal in removals {
+                    strokes.insert(removal.stroke, at: min(removal.index, strokes.count))
+                    dirty.append(removal.stroke.repaintBounds)
+                }
+            }
+
+            redoStack.append(edit)
+            return dirty
         }
 
-        var dirty: [NSRect] = []
-        switch edit {
-        case .added(let stroke):
-            if !strokes.isEmpty {
-                strokes.removeLast()
-            }
-            dirty.append(stroke.repaintBounds)
-        case .removed(let removals):
-            for removal in removals {
-                strokes.insert(removal.stroke, at: min(removal.index, strokes.count))
-                dirty.append(removal.stroke.repaintBounds)
-            }
-        }
-
-        redoStack.append(edit)
-        return dirty
+        return []
     }
 
     func redo() -> [NSRect] {
@@ -170,9 +214,15 @@ final class Canvas {
             strokes.append(stroke)
             dirty.append(stroke.repaintBounds)
         case .removed(let removals):
-            for removal in removals.reversed() where removal.index < strokes.count {
-                dirty.append(strokes[removal.index].repaintBounds)
-                strokes.remove(at: removal.index)
+            // By name, not by the index it had then: anything undone in between has moved
+            // these along.
+            for removal in removals.reversed() {
+                guard let index = strokes.firstIndex(where: { $0.id == removal.stroke.id }) else {
+                    continue
+                }
+
+                dirty.append(strokes[index].repaintBounds)
+                strokes.remove(at: index)
             }
         }
 
@@ -202,15 +252,24 @@ final class Canvas {
         strokes.filter { $0.createdAt == nil }
     }
 
-    func restore(_ restored: [Stroke]) {
-        strokes = restored
+    // The history goes across with the ink. It used to be thrown away here, on the grounds
+    // that undoing into a drawing you did not make is worse than not undoing at all - true,
+    // but this is the same drawing, in the same session, put back on the same screen. What
+    // the old rule actually produced was hiding the overlay and finding that the last five
+    // minutes of work could no longer be taken back.
+    func capture() -> Kept {
+        Kept(strokes: capturedStrokes(),
+             undoStack: undoStack.compactMap(\.withoutTemporaryInk),
+             redoStack: redoStack.compactMap(\.withoutTemporaryInk))
+    }
+
+    func restore(_ kept: Kept) {
+        strokes = kept.strokes
         strokeInProgress = nil
         shapeAnchor = nil
         lastPoint = nil
-        // The history belongs to the session that drew them; undoing into a drawing you
-        // did not make is worse than not undoing at all.
-        undoStack.removeAll()
-        redoStack.removeAll()
+        undoStack = kept.undoStack
+        redoStack = kept.redoStack
     }
 
     // MARK: - Fading
@@ -232,8 +291,10 @@ final class Canvas {
 
             if strokes[index].hasFaded {
                 // Temporary ink is not an edit: it was never meant to stay, so undo has
-                // nothing to say about it disappearing.
-                strokes.remove(at: index)
+                // nothing to say about it disappearing - and nothing to say about it at
+                // all, which is why the entry that put it there goes as well.
+                let faded = strokes.remove(at: index)
+                forget(faded.id)
                 changed = true
             } else {
                 stillFading = true
@@ -254,6 +315,11 @@ final class Canvas {
     }
 
     // MARK: - Private
+
+    private func forget(_ id: UUID) {
+        undoStack = undoStack.compactMap { $0.forgetting(id) }
+        redoStack = redoStack.compactMap { $0.forgetting(id) }
+    }
 
     private func record(_ edit: Edit) {
         undoStack.append(edit)
