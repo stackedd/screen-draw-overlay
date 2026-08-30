@@ -82,9 +82,9 @@ easy to repeat.
    the guarantee is that it always works.
 5. **Never repaint the whole view on a mouse move.** Invalidate the rect you changed.
    Whole-view repaints cost 26x more, and the suite fails on `fullViewInvalidations > 0`.
-   Better still, do not repaint at all: **the pointer follows the mouse by moving a layer**,
-   and painting it into `draw(_:)` instead would put a repaint back on every mouse move —
-   15.2% of a core against 1.5%.
+   Better still, do not repaint at all: **the pointer and the badge are layers**. Painting
+   either into `draw(_:)` puts a repaint back on every mouse move — 15.2% of a core against
+   1.5% — and the badge measures its own text before it can decide to do nothing.
 6. **Never call `invalidateCursorRects` from inside `cursorUpdate`.** It re-enters AppKit's
    tracking machinery and crashes — this was a shipped `SIGABRT` once.
 7. **Never put a modal dialog in front of the user.** `runModal` blocks a background app and

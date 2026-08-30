@@ -311,7 +311,7 @@ mouse is re-stroked in full on every mouse move, so a single unbroken line is qu
 the last tenth of a 5000-point line costs **5.5x** what its first tenth did. It is small in
 absolute terms until a line gets very long, which is exactly when someone notices.
 
-## 20. The pointer moves; it is not repainted
+## 20. The pointer and the badge are layers, not paint
 
 The crosshair used to be painted in `draw(_:)`, and following the mouse meant invalidating
 where it had been and where it had arrived. Both rectangles are about 26pt square, which
@@ -339,3 +339,18 @@ Two details that are not optional:
 The behaviour suite checks the one thing that could break silently: that the layer sits on
 the mouse point and the backing layer is not geometry-flipped. A flipped layer would put the
 crosshair as far from the pointer as the pointer is from the middle of the screen.
+
+**The badge went the same way, and for a sharper reason.** It changes when the tool, the
+colour or the mode changes — a few times a session — but it was painted inside `draw(_:)`,
+and the first thing it did there was measure itself, which meant building two
+`NSAttributedString`s and laying both out **before** the check that would have skipped it.
+So every repaint, for any reason anywhere on screen, laid out the badge's text.
+
+With the pointer already off the repaint path, that layout was all that a mouse move cost:
+**0.059 ms an event, painting nothing**. As a picture on a layer it is **0.029 ms**, and a
+60-point drag over a canvas of 200 strokes went from 0.065 ms an event to **0.033 ms**.
+
+Its old repaint machinery went with it — `repaintRegionAfterToolChange`, the repaint margin,
+and the "old rect union new rect" rule that existed because a badge growing leftwards out of
+the corner would otherwise be left half drawn. A layer that is given a new picture and a new
+frame has no such problem. The whole-view repaint on a mode switch went too.

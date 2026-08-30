@@ -13,7 +13,9 @@
 //      own, so following the mouse is a layer move and never a repaint - measured at 1.5%
 //      of a core against 15.2% for asking the view to repaint instead.
 //   3. The badge in the corner is the only interface. There is no palette on screen on
-//      purpose, so it has to say which tool, which colour and how to get out.
+//      purpose, so it has to say which tool, which colour and how to get out. It is a layer
+//      too, for the same reason as the pointer: it changed rarely and was being laid out on
+//      every repaint.
 
 import AppKit
 import Carbon
@@ -45,6 +47,7 @@ final class DrawingView: NSView {
     // 26pt crosshair cost as much as painting everything; moving a layer costs a tenth of
     // that and repaints nothing at all (docs/ARCHITECTURE.md).
     private let pointerLayer = CALayer()
+    private let badgeLayer = CALayer()
 
     // Set by AppDelegate when the click-through hot key is used. The view keeps drawing
     // its strokes either way; what changes is the badge and whether it claims the cursor.
@@ -64,15 +67,15 @@ final class DrawingView: NSView {
             badge?.forgetHover()
             // Click-through hands the real pointer back, so ours goes away with it.
             positionPointerLayer()
+            // The badge changes text, size and colour with the mode. It used to cost a
+            // repaint of the whole view; now it is a new picture on a layer.
+            refreshBadge()
             if isInteractionMode {
                 releaseDrawingCursor()
             } else {
                 refreshCursorRects()
                 applyDrawingCursor()
             }
-            // The badge changes text, size and colour; a mode switch is rare enough to
-            // just repaint everything.
-            needsDisplay = true
         }
     }
     private var mouseTrackingArea: NSTrackingArea?
@@ -95,8 +98,11 @@ final class DrawingView: NSView {
         pointerLayer.actions = ["position": NSNull(), "contents": NSNull(),
                                 "hidden": NSNull(), "bounds": NSNull()]
         pointerLayer.isHidden = true
-        attachPointerLayer()
+        badgeLayer.actions = ["contents": NSNull(), "hidden": NSNull(),
+                              "position": NSNull(), "bounds": NSNull()]
+        attachLayers()
         refreshPointerImage()
+        refreshBadge()
     }
 
     required init?(coder: NSCoder) {
@@ -107,33 +113,57 @@ final class DrawingView: NSView {
         fadeTimer?.invalidate()
     }
 
-    // AppKit can hand the view a new backing layer when it changes windows, and the
-    // pointer's picture is only right for one backing scale.
+    // AppKit can hand the view a new backing layer when it changes windows, and both
+    // pictures are only right for one backing scale.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        attachPointerLayer()
+        attachLayers()
         refreshPointerImage()
+        refreshBadge()
     }
 
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
         refreshPointerImage()
+        refreshBadge()
     }
 
-    private func attachPointerLayer() {
-        guard let layer, pointerLayer.superlayer !== layer else {
+    // The badge first, so the pointer stays on top of it - the same order they used to be
+    // painted in.
+    private func attachLayers() {
+        guard let layer else {
             return
         }
 
-        layer.addSublayer(pointerLayer)
+        for sublayer in [badgeLayer, pointerLayer] where sublayer.superlayer !== layer {
+            layer.addSublayer(sublayer)
+        }
+    }
+
+    private var backingScale: CGFloat {
+        window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
     }
 
     // Redrawn only when the tool or the colour changes - the laser is a coloured dot, the
     // rest is a crosshair - and when the display's scale does.
     private func refreshPointerImage() {
-        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
-        pointerLayer.contentsScale = scale
-        pointerLayer.contents = PointerCursor.image(tool: tools.tool, colour: tools.color, scale: scale)
+        pointerLayer.contentsScale = backingScale
+        pointerLayer.contents = PointerCursor.image(tool: tools.tool, colour: tools.color,
+                                                    scale: backingScale)
+    }
+
+    // Same story: a new picture on a tool, colour or mode change, and nothing at all on a
+    // mouse move.
+    private func refreshBadge() {
+        guard let badge else {
+            return
+        }
+
+        let (image, frame) = badge.render(scale: backingScale)
+        badgeLayer.contentsScale = backingScale
+        badgeLayer.contents = image
+        badgeLayer.frame = frame
+        badgeLayer.isHidden = badge.isHovered
     }
 
     override func updateTrackingAreas() {
@@ -154,9 +184,7 @@ final class DrawingView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if let region = badge?.updateHover(at: point) {
-            setNeedsDisplay(region)
-        }
+        updateBadgeHover(at: point)
         movePointer(to: point)
 
         guard tools.tool != .eraser else {
@@ -173,9 +201,7 @@ final class DrawingView: NSView {
 
     override func mouseDragged(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if let region = badge?.updateHover(at: point) {
-            setNeedsDisplay(region)
-        }
+        updateBadgeHover(at: point)
         movePointer(to: point)
 
         guard tools.tool != .eraser else {
@@ -193,18 +219,14 @@ final class DrawingView: NSView {
     override func mouseUp(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         movePointer(to: point)
-        if let region = badge?.updateHover(at: point) {
-            setNeedsDisplay(region)
-        }
+        updateBadgeHover(at: point)
         finishStrokeInProgress()
     }
 
     override func mouseMoved(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         movePointer(to: point)
-        if let region = badge?.updateHover(at: point) {
-            setNeedsDisplay(region)
-        }
+        updateBadgeHover(at: point)
     }
 
     override func mouseEntered(with event: NSEvent) {
@@ -266,6 +288,15 @@ final class DrawingView: NSView {
 
         let point = convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
         movePointer(to: bounds.contains(point) ? point : nil)
+    }
+
+    // The badge hides itself while the pointer is over it, so that corner stays drawable.
+    private func updateBadgeHover(at point: NSPoint) {
+        guard let badge, badge.updateHover(at: point) else {
+            return
+        }
+
+        badgeLayer.isHidden = badge.isHovered
     }
 
     private func movePointer(to point: NSPoint?) {
@@ -369,8 +400,6 @@ final class DrawingView: NSView {
             inProgress.renderColor.setStroke()
             inProgress.path.stroke()
         }
-
-        badge?.draw(in: dirtyRect)
     }
 
     // What AppDelegate lifts out before the panels are destroyed, and puts back when they
@@ -399,22 +428,12 @@ final class DrawingView: NSView {
         needsDisplay = true
     }
 
-    // The badge carries the tool name, its colour and its width, so a tool change has to
-    // repaint it - on every screen, not just the one the key was pressed on.
-    //
-    // The text changes length with the tool ("PEN 4" against "MARKER 24") and the badge is
-    // anchored to the corner, so it grows leftwards: repainting only where it used to be
-    // leaves the wider version half drawn. Old rect and new rect, both.
+    // The badge carries the tool name, its colour and its width, and the pointer is a
+    // coloured dot for the laser and a crosshair for everything else, so both pictures
+    // belong to the tool. Redrawn on every screen, not just the one the key was pressed on.
     func toolSettingsChanged() {
-        // The laser's dot is drawn in the current colour and the other tools get the
-        // crosshair, so the pointer's picture belongs to the tool.
         refreshPointerImage()
-
-        guard let badge else {
-            return
-        }
-
-        setNeedsDisplay(badge.repaintRegionAfterToolChange())
+        refreshBadge()
     }
 
     private func erase(at point: NSPoint) {

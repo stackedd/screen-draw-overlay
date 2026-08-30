@@ -9,6 +9,11 @@
 // press.
 //
 // It draws nothing while the pointer is over it, so the corner it occupies stays drawable.
+//
+// Like the pointer, it is handed over as a picture on a layer rather than painted into the
+// view. It changes when the tool, the colour or the mode does - which is rare - and a repaint
+// of the overlay costs the same whatever its dirty rect, so a badge painted in draw(_:) was
+// laying out two lines of text on every mouse move for a corner nothing had touched.
 
 import AppKit
 
@@ -22,9 +27,6 @@ final class ModeBadge {
     private static let lineGap: CGFloat = 2
     private static let margin: CGFloat = 14
 
-    // Repaints are grown by this much so antialiasing at the edges is covered.
-    static let repaintMargin: CGFloat = 4
-
     private let tools: ToolSettings
 
     // Where the badge is allowed to sit, in the view's coordinates: the screen's visible
@@ -36,49 +38,25 @@ final class ModeBadge {
     // Hidden while the pointer is over it, so the user can draw in that corner.
     private(set) var isHovered = false
 
-    // The rect the badge last reported. Kept because the badge changes size with the tool
-    // name ("PEN 4" against "MARKER 24") and repainting only the new rect would leave the
-    // wider version half erased.
-    private(set) var lastRect: NSRect = .zero
+    // Where the badge actually sits, as of the last picture drawn. Not the same as `bounds`,
+    // which is where it is allowed to sit: the badge changes size with the tool name ("PEN 4"
+    // against "MARKER 24") and is anchored to the corner, so it grows leftwards.
+    private(set) var frame: NSRect = .zero
 
     init(bounds: NSRect, tools: ToolSettings) {
         self.bounds = bounds
         self.tools = tools
     }
 
-    // MARK: - Geometry
+    // MARK: - Hovering
 
-    func rect() -> NSRect {
-        let (mode, hint) = lines()
-        let width = max(mode.size().width, hint.size().width) + ModeBadge.paddingX * 2
-        let height = mode.size().height + hint.size().height + ModeBadge.lineGap + ModeBadge.paddingY * 2
-
-        return NSRect(x: bounds.maxX - width - ModeBadge.margin,
-                      y: bounds.maxY - height - ModeBadge.margin,
-                      width: width,
-                      height: height)
-    }
-
-    // The region to repaint when the tool changed: where the badge was and where it now is.
-    func repaintRegionAfterToolChange() -> NSRect {
-        let updated = rect()
-        let region = lastRect == .zero ? updated : lastRect.union(updated)
-        return region.insetBy(dx: -ModeBadge.repaintMargin, dy: -ModeBadge.repaintMargin)
-    }
-
-    // Returns the region to repaint if the pointer crossing the badge changed anything.
-    func updateHover(at point: NSPoint) -> NSRect? {
+    // Returns whether the pointer crossing the badge changed anything, so the caller knows
+    // to show or hide it.
+    func updateHover(at point: NSPoint) -> Bool {
         let wasHovered = isHovered
-        let current = lastRect == .zero ? rect() : lastRect
-        isHovered = current.contains(point)
+        isHovered = frame.contains(point)
 
-        guard isHovered != wasHovered else {
-            return nil
-        }
-
-        // Showing or hiding the badge touches only its own rect; whatever is underneath is
-        // repainted by the same pass.
-        return current.insetBy(dx: -ModeBadge.repaintMargin, dy: -ModeBadge.repaintMargin)
+        return isHovered != wasHovered
     }
 
     func forgetHover() {
@@ -87,23 +65,44 @@ final class ModeBadge {
 
     // MARK: - Painting
 
-    func draw(in dirtyRect: NSRect) {
-        lastRect = rect()
+    // The badge as a picture, and where it goes. The two come back together because they
+    // change together: the badge is anchored to the corner and grows leftwards as the tool
+    // name gets longer, so a new name moves its origin as well as its size.
+    func render(scale: CGFloat) -> (image: CGImage?, frame: NSRect) {
+        let (mode, hint) = lines()
+        let width = max(mode.size().width, hint.size().width) + ModeBadge.paddingX * 2
+        let height = mode.size().height + hint.size().height + ModeBadge.lineGap + ModeBadge.paddingY * 2
+        frame = NSRect(x: bounds.maxX - width - ModeBadge.margin,
+                       y: bounds.maxY - height - ModeBadge.margin,
+                       width: width,
+                       height: height)
 
-        guard !isHovered, dirtyRect.intersects(lastRect) else {
-            return
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil,
+                                         pixelsWide: Int((width * scale).rounded()),
+                                         pixelsHigh: Int((height * scale).rounded()),
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                         isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0),
+              let context = NSGraphicsContext(bitmapImageRep: rep) else {
+            return (nil, frame)
         }
 
-        let (mode, hint) = lines()
+        rep.size = NSSize(width: width, height: height)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
 
         backgroundColor.setFill()
-        NSBezierPath(roundedRect: lastRect, xRadius: 5, yRadius: 5).fill()
+        NSBezierPath(roundedRect: NSRect(x: 0, y: 0, width: width, height: height),
+                     xRadius: 5, yRadius: 5).fill()
 
-        // Bottom line first: the view is not flipped, so the mode sits above the hint.
-        hint.draw(at: NSPoint(x: lastRect.minX + ModeBadge.paddingX,
-                              y: lastRect.minY + ModeBadge.paddingY))
-        mode.draw(at: NSPoint(x: lastRect.minX + ModeBadge.paddingX,
-                              y: lastRect.minY + ModeBadge.paddingY + hint.size().height + ModeBadge.lineGap))
+        // Bottom line first: the context is not flipped, so the mode sits above the hint.
+        hint.draw(at: NSPoint(x: ModeBadge.paddingX, y: ModeBadge.paddingY))
+        mode.draw(at: NSPoint(x: ModeBadge.paddingX,
+                              y: ModeBadge.paddingY + hint.size().height + ModeBadge.lineGap))
+
+        NSGraphicsContext.restoreGraphicsState()
+
+        return (rep.cgImage, frame)
     }
 
     // Red and solid while the overlay owns the mouse, hollow and neutral while clicks are
