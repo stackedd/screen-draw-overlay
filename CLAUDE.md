@@ -18,7 +18,9 @@ CoreGraphics, ServiceManagement (open at login). Universal binary, macOS 11+.
 
     Sources/ScreenDrawOverlay/
       main.swift              the four lines that start the app
-      AppDelegate.swift       modes, overlay lifetime, kept drawings, hot keys
+      AppDelegate.swift       launch, terminate, and the wiring between the next two
+      OverlayController.swift modes, overlay lifetime, kept drawings, the menu bar item
+      Shortcuts.swift         the global shortcuts as one set
       MenuBarItem.swift       menu bar icon, menu, Open at Login
       OverlayPanel.swift      the transparent window, one per screen
       DrawingView.swift       the view: events in, three layers out
@@ -36,7 +38,7 @@ CoreGraphics, ServiceManagement (open at login). Universal binary, macOS 11+.
     docs/ARCHITECTURE.md      what each piece owns, invariants, measurements
     docs/DECISIONS.md         why things are the way they are, and what was rejected
 
-The dependency runs one way: `AppDelegate` → `DrawingView` → `Canvas`. What is drawn belongs
+The dependency runs one way: `OverlayController` → `DrawingView` → `Canvas`. What is drawn belongs
 in `Canvas`; how it appears belongs in the view. Nothing is painted through `NSView.draw(_:)`
 — the ink and the badge each have a `CALayer`, which is worth 4.3x on every repaint, and the
 pointer is a cursor the window server draws for us.

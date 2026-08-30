@@ -15,7 +15,9 @@ tried and rejected on the way; [../CLAUDE.md](../CLAUDE.md) is the short operati
 | File | Owns |
 | --- | --- |
 | `main.swift` | The four lines that start the app. Nothing else. |
-| `AppDelegate.swift` | The mode model, the lifetime of the overlay panels, kept drawings, and the hot keys. The coordinator. |
+| `AppDelegate.swift` | Launch and terminate, the single-instance refusal, and the wiring between the other two. Little else. |
+| `OverlayController.swift` | The mode model, the lifetime of the overlay panels, kept drawings, and the menu bar item. |
+| `Shortcuts.swift` | The global shortcuts as one set: what each is, and reporting the ones macOS refused. |
 | `MenuBarItem.swift` | The menu bar presence: icon, menu, Open at Login, and the "shortcut unavailable" line. |
 | `OverlayPanel.swift` | The transparent window, one per screen: its level, its collection behaviour, and the fact that it swallows key equivalents. |
 | `DrawingView.swift` | The view: events in, paint out, plus the timer that drives the fade. It owns two layers - ink and badge - and paints nothing through `draw(_:)`. |
@@ -28,7 +30,7 @@ tried and rejected on the way; [../CLAUDE.md](../CLAUDE.md) is the short operati
 | `GlobalHotKey.swift` | The global shortcuts, on Carbon, and the ownership rules that keep the callback safe. |
 | `NSScreen+Display.swift` | Identifying a display across time. |
 
-The one dependency worth naming: `AppDelegate` → `DrawingView` → `Canvas`. Anything that
+The one dependency worth naming: `OverlayController` → `DrawingView` → `Canvas`. Anything that
 changes what is drawn belongs in `Canvas`; anything that changes how it appears belongs in
 the view. `Canvas` returns dirty rectangles instead of repainting, which is what lets the
 drawing rules be tested without a window on screen.

@@ -14,14 +14,14 @@
     }
 
     func press(_ code: Int, _ chars: String, _ flags: NSEvent.ModifierFlags = []) {
-        guard let panel = overlayWindowSnapshot().first else { return }
+        guard let panel = controller.overlayWindowSnapshot().first else { return }
         NSApp.sendEvent(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
                                          windowNumber: panel.windowNumber, context: nil, characters: chars,
                                          charactersIgnoringModifiers: chars, isARepeat: false, keyCode: UInt16(code))!)
     }
 
     func stroke(finish: Bool = true, y: CGFloat = 300) {
-        guard let panel = overlayWindowSnapshot().first else { return }
+        guard let panel = controller.overlayWindowSnapshot().first else { return }
         let v = panel.drawingView
         func ev(_ t: NSEvent.EventType, _ x: CGFloat) -> NSEvent {
             NSEvent.mouseEvent(with: t, location: NSPoint(x: x, y: y), modifierFlags: [], timestamp: 0,
@@ -32,8 +32,8 @@
         if finish { v.mouseUp(with: ev(.leftMouseUp, 380)) }
     }
 
-    var live: Int { drawingViewSnapshot(from: overlayWindowSnapshot()).first?.capturedStrokes().count ?? -1 }
-    var state: String { !isDrawingMode ? "OFF" : (isInteractionMode ? "CLICK-THROUGH" : "DRAWING") }
+    var live: Int { controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot()).first?.capturedStrokes().count ?? -1 }
+    var state: String { !controller.isDrawingMode ? "OFF" : (controller.isInteractionMode ? "CLICK-THROUGH" : "DRAWING") }
 
     func regress() {
         var pass = 0, fail = 0
@@ -42,36 +42,36 @@
             else { fail += 1; print("REG FAIL  \(name): got \(got), want \(want)") }
         }
 
-        check("off + E", { toggleInteractionMode(); return state }(), "OFF")
-        check("off + D", { toggleDrawingMode(); return state }(), "DRAWING")
+        check("off + E", { controller.toggleInteractionMode(); return self.state }(), "OFF")
+        check("off + D", { controller.toggleDrawingMode(); return self.state }(), "DRAWING")
         stroke(); stroke()
         check("two strokes", "\(live)", "2")
-        check("drawing + E", { toggleInteractionMode(); return state }(), "CLICK-THROUGH")
+        check("drawing + E", { controller.toggleInteractionMode(); return self.state }(), "CLICK-THROUGH")
         check("strokes survive E", "\(live)", "2")
-        check("click-through + D", { toggleDrawingMode(); return state }(), "DRAWING")
+        check("click-through + D", { controller.toggleDrawingMode(); return self.state }(), "DRAWING")
         check("strokes survive D from click-through", "\(live)", "2")
 
         press(kVK_ANSI_3, "3"); press(kVK_ANSI_A, "a")
         stroke(y: 400)
-        let signature = drawingViewSnapshot(from: overlayWindowSnapshot()).first!.capturedStrokes()
+        let signature = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot()).first!.capturedStrokes()
             .map { "\($0.style.label)/\(Int($0.width))/\($0.points.count)" }.joined(separator: ",")
         check("arrow tool produced a two-point stroke", signature.hasSuffix("/2") ? "yes" : "no: \(signature)", "yes")
-        toggleDrawingMode()
+        controller.toggleDrawingMode()
         check("hidden", state, "OFF")
-        toggleDrawingMode()
-        let restored = drawingViewSnapshot(from: overlayWindowSnapshot()).first!.capturedStrokes()
+        controller.toggleDrawingMode()
+        let restored = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot()).first!.capturedStrokes()
             .map { "\($0.style.label)/\(Int($0.width))/\($0.points.count)" }.joined(separator: ",")
         check("hide+show keeps strokes exactly", restored, signature)
 
         stroke(finish: false, y: 500)
-        toggleInteractionMode()
+        controller.toggleInteractionMode()
         check("unfinished stroke committed on mode switch", "\(live)", "4")
-        toggleInteractionMode()
+        controller.toggleInteractionMode()
 
         press(kVK_ANSI_E, "e")
-        check("bare E selects eraser", tools.tool.label + "/" + state, "ERASER/DRAWING")
+        check("bare E selects eraser", controller.tools.tool.label + "/" + state, "ERASER/DRAWING")
         press(kVK_Space, " ")
-        check("space selects laser", tools.tool.label, "LASER")
+        check("space selects laser", controller.tools.tool.label, "LASER")
         press(kVK_Space, " ")
         press(kVK_ANSI_P, "p")
         press(kVK_ANSI_Q, "q", .command)
@@ -88,8 +88,8 @@
         // came back and could no longer be taken back.
         stroke(y: 540)
         stroke(y: 560)
-        toggleDrawingMode()
-        toggleDrawingMode()
+        controller.toggleDrawingMode()
+        controller.toggleDrawingMode()
         press(kVK_ANSI_Z, "z", .command)
         check("undo still works after hide and show", "\(live)", "1")
 
@@ -103,7 +103,7 @@
         press(kVK_ANSI_T, "t")
         stroke(y: 600)
         press(kVK_ANSI_T, "t")
-        if let view = drawingViewSnapshot(from: overlayWindowSnapshot()).first {
+        if let view = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot()).first {
             let expired = Date().addingTimeInterval(-Stroke.fadeDuration - 1)
             view.canvas.strokes = view.canvas.strokes.map { stroke in
                 guard stroke.createdAt != nil else { return stroke }
@@ -120,14 +120,14 @@
         // The pointer is the system arrow with a ring around its tip. Three points have
         // to be the same one - the hot spot, the middle of the ring and where the ink
         // lands - or the stroke appears offset from the arrow the user is aiming with.
-        let cursor = PointerCursor.cursor(for: tools)
+        let cursor = PointerCursor.cursor(for: controller.tools)
         let aimed = cursor.hotSpot.x == cursor.image.size.width / 2
             && cursor.hotSpot.y == cursor.image.size.height / 2
             && cursor.image.size.width > NSCursor.arrow.image.size.width
         check("cursor is the arrow with its tip on the ink", aimed ? "yes" : "no", "yes")
 
         // hold to draw: a long press puts it away on release, a tap does not
-        toggleDrawingMode()
+        controller.toggleDrawingMode()
         fireHotKey(id: 1)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
             self.fireHotKey(id: 1, release: true)

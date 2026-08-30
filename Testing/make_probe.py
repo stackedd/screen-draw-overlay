@@ -29,11 +29,11 @@ io.open(pkg + "/Package.swift", "w", encoding="utf-8").write(
 # Where a spliced probe's body goes: the end of applicationDidFinishLaunching, after the
 # app has finished setting itself up. The probe closes that method and then declares its
 # own helpers, leaving the last one open for the brace added below.
-ANCHOR = """            menuBar?.reportUnavailableShortcuts(unavailable)
+ANCHOR = """            controller.reportUnavailableShortcuts(unavailable)
         }
     }
 """
-HEAD = """            menuBar?.reportUnavailableShortcuts(unavailable)
+HEAD = """            controller.reportUnavailableShortcuts(unavailable)
         }
 
 """
@@ -59,6 +59,9 @@ for source in sorted(os.listdir("Sources/ScreenDrawOverlay")):
 
     text = io.open("Sources/ScreenDrawOverlay/" + source, encoding="utf-8").read()
     if splice and ANCHOR in text:
+        # Probes drive the app with Carbon key codes and hot key events, which the file
+        # they are spliced into has no reason to import on its own.
+        text = text.replace("import AppKit", "import AppKit\nimport Carbon", 1)
         text = text.replace(ANCHOR, HEAD + probe + "    }\n", 1)
         spliced = True
     for a, b in OPEN_UP:
