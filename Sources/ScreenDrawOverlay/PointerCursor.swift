@@ -8,6 +8,11 @@
 //
 // Two shapes: a crosshair for aiming a pen, and a glowing dot for the laser, which is a
 // pointer rather than a pen and should look like one.
+//
+// It is handed over as a picture rather than painted where the pointer is. The view carries
+// it on a layer of its own and moving that layer is not a repaint at all: measured, asking
+// the overlay to repaint where the pointer was and where it arrived costs 15.2% of a core at
+// 60 moves a second, and moving a layer costs 1.5% (docs/ARCHITECTURE.md).
 
 import AppKit
 
@@ -16,6 +21,9 @@ enum PointerCursor {
     static let size: CGFloat = 20
     private static let casingWidth: CGFloat = 3
     private static let centreGap: CGFloat = 3.5
+
+    // The pointer's picture is this big: the crosshair plus the casing that outlines it.
+    static let extent = size + casingWidth * 2
 
     // A cursor made of nothing, so only the drawn pointer below is visible.
     static let transparent: NSCursor = {
@@ -28,19 +36,31 @@ enum PointerCursor {
         return NSCursor(image: image, hotSpot: NSPoint(x: 8, y: 8))
     }()
 
-    // What has to be repainted when the pointer arrives at or leaves a spot.
-    static func rect(at point: NSPoint) -> NSRect {
-        NSRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
-            .insetBy(dx: -casingWidth, dy: -casingWidth)
-    }
-
-    static func draw(at point: NSPoint, tools: ToolSettings) {
-        guard tools.tool != .laser else {
-            drawLaserDot(at: point, colour: tools.color)
-            return
+    // The pointer as a picture, centred, at the display's backing scale. Drawn once per
+    // tool and colour rather than once per mouse move.
+    static func image(tool: DrawingTool, colour: NSColor, scale: CGFloat) -> CGImage? {
+        let pixels = Int((extent * scale).rounded())
+        guard pixels > 0,
+              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                         isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0),
+              let context = NSGraphicsContext(bitmapImageRep: rep) else {
+            return nil
         }
 
-        drawCrosshair(at: point)
+        rep.size = NSSize(width: extent, height: extent)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        let centre = NSPoint(x: extent / 2, y: extent / 2)
+        if tool == .laser {
+            drawLaserDot(at: centre, colour: colour)
+        } else {
+            drawCrosshair(at: centre)
+        }
+        NSGraphicsContext.restoreGraphicsState()
+
+        return rep.cgImage
     }
 
     private static func drawLaserDot(at point: NSPoint, colour: NSColor) {

@@ -93,8 +93,8 @@ area. That single fact is the starting point for any performance work.
 do not meet `dirtyRect`; repainting the whole view per mouse move was 26x more expensive
 (0.325s against 0.012s for the same 960-event session). Incremental and full repaints agree
 exactly at 2x and 3x backing scale; at 1x a handful of pixels differ by 1–10/255 along clip
-boundaries, which is antialiasing at the seam and not a missed repaint — expanding every
-dirty rect makes it worse, not better.
+boundaries. Those last differences were the crosshair, not the ink: once the pointer moved
+onto a layer of its own the two passes agree **exactly, at 1x, 2x and 3x**.
 
 **Where the drawing bill actually goes** (2026-08-30, 1512x982 at 2x,
 `Testing/experiments/repaint_paths.swift`, a trivial paint so that only the asking is being
@@ -111,7 +111,8 @@ measured). Per second of one core:
 Three things follow, and they reorder every performance question in this app:
 
 1. **Area still does not matter.** A hundredfold larger dirty rect costs the same. The bill
-   is the number of repaints.
+   is the number of repaints. Painting a 26pt crosshair therefore cost as much as painting
+   everything else on the screen.
 2. **The path the repaint is asked through matters enormously.** The same repaint of the
    same full screen transparent layer is **4.3x** cheaper asked for through a `CALayer`
    delegate than through `NSView.draw(_:)`, and 5.4x cheaper at 120 a second. Nothing about
@@ -175,8 +176,9 @@ can see internals; `mkpix.py` does the same for offscreen rendering comparisons.
 Two suites carry the weight:
 
 - **Behaviour** — the mode matrix, hide/show keeping strokes with their tool attributes, the
-  unfinished-stroke commit, tool keys, `⌘Q` being swallowed, clear/undo/redo, tap versus
-  hold. 19 checks. Every refactor is judged by whether its output is byte-identical.
+  unfinished-stroke commit, tool keys, `⌘Q` being swallowed, clear/undo/redo, the pointer
+  layer's coordinate space, tap versus hold. 20 checks. Every refactor is judged by whether
+  its output is byte-identical.
 - **Rendering** — the same session painted incrementally and in one pass, compared pixel by
   pixel at 1x, 2x and 3x.
 - **Cost** — the same view driven through real sessions with every repaint it asks for

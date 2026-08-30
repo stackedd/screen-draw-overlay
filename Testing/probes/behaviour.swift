@@ -84,6 +84,18 @@
         press(kVK_ANSI_Z, "z", [.command, .shift])
         check("redo clears again", "\(live)", "0")
 
+        // The pointer rides on a layer instead of being painted, so the one thing that can
+        // silently go wrong is its coordinate space: a flipped backing layer would put the
+        // crosshair as far from the mouse as the mouse is from the middle of the screen.
+        if let view = drawingViewSnapshot(from: overlayWindowSnapshot()).first {
+            view.movePointer(to: NSPoint(x: 400, y: 300))
+            let placed = view.pointerLayer.position == CGPoint(x: 400, y: 300)
+                && !view.pointerLayer.isHidden
+                && view.layer?.isGeometryFlipped == false
+                && view.pointerLayer.superlayer === view.layer
+            check("pointer layer sits on the mouse, unflipped", placed ? "yes" : "no", "yes")
+        }
+
         // hold to draw: a long press puts it away on release, a tap does not
         toggleDrawingMode()
         fireHotKey(id: 1)

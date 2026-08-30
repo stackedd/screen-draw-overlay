@@ -39,7 +39,7 @@ in `Canvas`; how it appears belongs in the view.
 ## Commands
 
     swift build -c release        # must be warning-free
-    ./Testing/run.sh              # every suite; behaviour must be 19/19
+    ./Testing/run.sh              # every suite; behaviour must be 20/20
     ./build_app.sh                # universal, ad-hoc signed bundle in dist/
     open dist/ScreenDrawOverlay.app
 
@@ -82,6 +82,9 @@ easy to repeat.
    the guarantee is that it always works.
 5. **Never repaint the whole view on a mouse move.** Invalidate the rect you changed.
    Whole-view repaints cost 26x more, and the suite fails on `fullViewInvalidations > 0`.
+   Better still, do not repaint at all: **the pointer follows the mouse by moving a layer**,
+   and painting it into `draw(_:)` instead would put a repaint back on every mouse move —
+   15.2% of a core against 1.5%.
 6. **Never call `invalidateCursorRects` from inside `cursorUpdate`.** It re-enters AppKit's
    tracking machinery and crashes — this was a shipped `SIGABRT` once.
 7. **Never put a modal dialog in front of the user.** `runModal` blocks a background app and

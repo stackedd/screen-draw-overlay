@@ -9,7 +9,9 @@
 //      Anything added here should invalidate its own rect, never the view.
 //   2. The pointer is drawn, not requested. The system cursor over the panel is made
 //      transparent and the crosshair below is ours, because a presenting app hides the
-//      real pointer and a background app cannot win that fight.
+//      real pointer and a background app cannot win that fight. It lives on a layer of its
+//      own, so following the mouse is a layer move and never a repaint - measured at 1.5%
+//      of a core against 15.2% for asking the view to repaint instead.
 //   3. The badge in the corner is the only interface. There is no palette on screen on
 //      purpose, so it has to say which tool, which colour and how to get out.
 
@@ -38,6 +40,12 @@ final class DrawingView: NSView {
     private let badge: ModeBadge?
     let showsIndicator: Bool
 
+    // The pointer rides on this rather than being painted into the view. A repaint of a
+    // full screen transparent overlay costs the same whatever its dirty rect, so painting a
+    // 26pt crosshair cost as much as painting everything; moving a layer costs a tenth of
+    // that and repaints nothing at all (docs/ARCHITECTURE.md).
+    private let pointerLayer = CALayer()
+
     // Set by AppDelegate when the click-through hot key is used. The view keeps drawing
     // its strokes either way; what changes is the badge and whether it claims the cursor.
     var isInteractionMode = false {
@@ -54,6 +62,8 @@ final class DrawingView: NSView {
             // in effect at the moment of the switch would stick and hide the badge.
             badge?.isInteractionMode = isInteractionMode
             badge?.forgetHover()
+            // Click-through hands the real pointer back, so ours goes away with it.
+            positionPointerLayer()
             if isInteractionMode {
                 releaseDrawingCursor()
             } else {
@@ -77,6 +87,16 @@ final class DrawingView: NSView {
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
+
+        pointerLayer.bounds = NSRect(x: 0, y: 0, width: PointerCursor.extent, height: PointerCursor.extent)
+        // Without this the pointer eases towards the mouse instead of being under it: Core
+        // Animation animates a position change by default and a cursor that lags is worse
+        // than no cursor.
+        pointerLayer.actions = ["position": NSNull(), "contents": NSNull(),
+                                "hidden": NSNull(), "bounds": NSNull()]
+        pointerLayer.isHidden = true
+        attachPointerLayer()
+        refreshPointerImage()
     }
 
     required init?(coder: NSCoder) {
@@ -85,6 +105,35 @@ final class DrawingView: NSView {
 
     deinit {
         fadeTimer?.invalidate()
+    }
+
+    // AppKit can hand the view a new backing layer when it changes windows, and the
+    // pointer's picture is only right for one backing scale.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        attachPointerLayer()
+        refreshPointerImage()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        refreshPointerImage()
+    }
+
+    private func attachPointerLayer() {
+        guard let layer, pointerLayer.superlayer !== layer else {
+            return
+        }
+
+        layer.addSublayer(pointerLayer)
+    }
+
+    // Redrawn only when the tool or the colour changes - the laser is a coloured dot, the
+    // rest is a crosshair - and when the display's scale does.
+    private func refreshPointerImage() {
+        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+        pointerLayer.contentsScale = scale
+        pointerLayer.contents = PointerCursor.image(tool: tools.tool, colour: tools.color, scale: scale)
     }
 
     override func updateTrackingAreas() {
@@ -224,25 +273,20 @@ final class DrawingView: NSView {
             return
         }
 
-        // Only the pixels the pointer left and the ones it arrived at, never the view.
-        if let previous = pointerLocation {
-            setNeedsDisplay(PointerCursor.rect(at: previous))
-        }
-
         pointerLocation = point
-
-        if let point {
-            setNeedsDisplay(PointerCursor.rect(at: point))
-        }
+        positionPointerLayer()
     }
 
-    private func drawPointer(in dirtyRect: NSRect) {
-        guard !isInteractionMode, let point = pointerLocation,
-              dirtyRect.intersects(PointerCursor.rect(at: point)) else {
+    // The whole cost of following the mouse: one layer position, no invalidation, so a
+    // pointer crossing a full canvas repaints nothing and re-strokes nothing.
+    private func positionPointerLayer() {
+        guard !isInteractionMode, let point = pointerLocation else {
+            pointerLayer.isHidden = true
             return
         }
 
-        PointerCursor.draw(at: point, tools: tools)
+        pointerLayer.position = point
+        pointerLayer.isHidden = false
     }
 
     override func keyDown(with event: NSEvent) {
@@ -327,7 +371,6 @@ final class DrawingView: NSView {
         }
 
         badge?.draw(in: dirtyRect)
-        drawPointer(in: dirtyRect)
     }
 
     // What AppDelegate lifts out before the panels are destroyed, and puts back when they
@@ -363,6 +406,10 @@ final class DrawingView: NSView {
     // anchored to the corner, so it grows leftwards: repainting only where it used to be
     // leaves the wider version half drawn. Old rect and new rect, both.
     func toolSettingsChanged() {
+        // The laser's dot is drawn in the current colour and the other tools get the
+        // crosshair, so the pointer's picture belongs to the tool.
+        refreshPointerImage()
+
         guard let badge else {
             return
         }

@@ -141,12 +141,15 @@ whose bounds do not meet `dirtyRect`. Repainting the whole view per mouse move m
 of a drag grow with everything already drawn: the same 960-event session took **0.325s that
 way against 0.012s this way — 26x**.
 
-**On the differences the rendering suite reports:** incremental and full repaints are
-identical at 2x and 3x for freehand strokes; with shapes in the session a handful of pixels
-differ by 1–15/255. That is antialiasing where a clip boundary crosses a stroke, not missed
-paint, and the proof is that **expanding every dirty rect makes it worse** — 275 bytes at
-2x becomes 733 at +20pt and 4,482 at +60pt, with the per-pixel error unchanged. More
-repainting means more seams.
+**On the differences the rendering suite used to report:** a handful of pixels differed by
+1–15/255, and the explanation on file was antialiasing where a clip boundary crosses a
+stroke. That was wrong. It was the **crosshair**, composited over the ink against different
+clip rectangles in the incremental pass than in the single pass. With the pointer on a layer
+of its own (entry 20) the suite reports **0 differing bytes at 1x, 2x and 3x**.
+
+The related measurement still stands on its own: **expanding every dirty rect makes seams
+worse, not better** — 275 bytes at 2x became 733 at +20pt and 4,482 at +60pt, with the
+per-pixel error unchanged. More repainting means more seams.
 
 ## 8. The fade ticks at 15 Hz
 
@@ -307,3 +310,32 @@ cheaper.
 mouse is re-stroked in full on every mouse move, so a single unbroken line is quadratic —
 the last tenth of a 5000-point line costs **5.5x** what its first tenth did. It is small in
 absolute terms until a line gets very long, which is exactly when someone notices.
+
+## 20. The pointer moves; it is not repainted
+
+The crosshair used to be painted in `draw(_:)`, and following the mouse meant invalidating
+where it had been and where it had arrived. Both rectangles are about 26pt square, which
+sounded free and was not: a repaint of a full screen transparent overlay costs the same
+whatever its dirty rect, so **painting the crosshair cost as much as painting everything**.
+On a canvas with ink on it, it cost more than that — the two rectangles union into one
+region and every stroke that region touches is re-stroked, while the user is drawing nothing
+at all.
+
+**Now:** the pointer is a `CGImage` on a `CALayer`, and a mouse move sets `position`.
+Measured at 60 moves a second: **15.2% of a core before, 1.5% after**. The offscreen cost
+suite puts it more bluntly — moving the pointer over a canvas of 200 strokes now paints
+**nothing**, where it used to paint on every move.
+
+Two details that are not optional:
+
+- `pointerLayer.actions` disables the implicit animation on `position`. Core Animation
+  animates a position change by default, and a cursor that eases towards the mouse is worse
+  than no cursor at all.
+- The picture is redrawn only when the tool or colour changes (the laser is a coloured dot,
+  everything else is the crosshair) and when the backing scale does. A layer-backed view can
+  be handed a new backing layer when it changes windows, so the sublayer is re-attached in
+  `viewDidMoveToWindow` rather than only in `init`.
+
+The behaviour suite checks the one thing that could break silently: that the layer sits on
+the mouse point and the backing layer is not geometry-flipped. A flipped layer would put the
+crosshair as far from the pointer as the pointer is from the middle of the screen.
