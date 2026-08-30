@@ -40,7 +40,7 @@ Two measurements need a window on screen, so neither is in `run.sh`.
 second, reporting this process's own CPU for each thing a user might be doing. It is built
 the same way as the other probes and run by hand:
 
-    python3 Testing/make_onscreen_probe.py && \
+    python3 Testing/make_probe.py onscreen LIVE && \
       swift build --package-path .build/testing/onscreen -c release && \
       .build/testing/onscreen/.build/release/LIVE
 
@@ -48,7 +48,8 @@ To get a before as well as an after, run it against an older commit in a worktre
 uses API that has been there all along:
 
     git worktree add /tmp/before <commit>
-    cp Testing/probes/onscreen.swift Testing/make_onscreen_probe.py /tmp/before/Testing/
+    cp Testing/probes/onscreen.swift /tmp/before/Testing/probes/
+    cp Testing/make_probe.py /tmp/before/Testing/
 
 `experiments/repaint_paths.swift` is the other one: what one
 repaint of a full screen transparent overlay costs, split between this process and
@@ -62,11 +63,21 @@ cannot take anyone's click while it is up.
 
 ## Writing another probe
 
-`make_behaviour_probe.py` copies every source file into `.build/testing/behaviour`, splices
-the probe body into `applicationDidFinishLaunching`, and widens `private` so the probe can
-reach internals. A probe body is Swift statements that close
-`applicationDidFinishLaunching` and then declare helper methods, leaving the last one
-unclosed - the builder adds the final brace. Copy `probes/behaviour.swift` and start there.
+One builder makes all of them:
+
+    python3 Testing/make_probe.py <probe name> <target name> [--splice]
+
+It copies every source file into `.build/testing/<probe name>` and widens `private` so the
+probe can reach internals. There are two shapes, because the two kinds of probe need
+different things:
+
+- **Spliced** (`--splice`, which only `behaviour` uses). The probe runs inside the real app,
+  so its body goes into the end of `applicationDidFinishLaunching` and `main.swift` comes
+  along. A probe body is Swift statements that close `applicationDidFinishLaunching` and
+  then declare helper methods, leaving the last one unclosed - the builder adds the final
+  brace. Copy `probes/behaviour.swift` and start there.
+- **Standalone** (everything else). The probe *is* the program, so it replaces `main.swift`
+  and drives a view or a panel directly. Copy `probes/rendering.swift`.
 
 Two things learned the hard way, both worth keeping in mind:
 

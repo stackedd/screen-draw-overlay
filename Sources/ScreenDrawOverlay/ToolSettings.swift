@@ -10,8 +10,6 @@
 import AppKit
 import Foundation
 
-// The current pen, shared by every screen's panel: picking a colour on one display has to
-// apply on all of them, and the badge that shows it lives on only one.
 final class ToolSettings {
     static let colors: [NSColor] = [.systemRed, .systemOrange, .systemYellow,
                                     .systemGreen, .systemBlue, .white]

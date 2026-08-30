@@ -113,7 +113,6 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
         statusItem.menu = menu
     }
 
-
     func update(isDrawing: Bool, isClickThrough: Bool, hasKeptStrokes: Bool) {
         // The menu says the same thing the hot keys do: D returns to drawing or puts the
         // overlay away, E only means anything once there is something on screen.

@@ -24,15 +24,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBar: MenuBarItem?
     private var overlayWindows: [OverlayPanel] = []
     private var drawingViews: [DrawingView] = []
-    private var toggleHotKey: GlobalHotKey?
-    private var interactionHotKey: GlobalHotKey?
-    private var emergencyHotKey: GlobalHotKey?
-    private var undoHotKey: GlobalHotKey?
-    private var redoHotKey: GlobalHotKey?
+    // Held only to keep them registered; nothing here needs to reach one by name.
+    private var hotKeys: [GlobalHotKey] = []
     private var isDrawingMode = false
     private var isInteractionMode = false
     private var overlayScreenLayout: [String] = []
     private static let holdToDrawThreshold: TimeInterval = 0.4
+
+    // Carbon identifies a hot key by a number. Named rather than written out at the call
+    // site, because two of these are load-bearing elsewhere: the behaviour suite fires the
+    // draw and quit keys by id, so the numbers are part of the contract and not free to
+    // renumber.
+    private enum HotKeyID: UInt32 {
+        case draw = 1
+        case quit = 2
+        case clickThrough = 3
+        case undo = 4
+        case redo = 5
+    }
 
     private var drawingHotKeyPressedAt: Date?
     private var keptDrawings: [String: Canvas.Kept] = [:]
@@ -73,80 +82,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                name: NSApplication.didChangeScreenParametersNotification,
                                                object: nil)
 
-        toggleHotKey = GlobalHotKey(id: 1,
-                                    keyCode: UInt32(kVK_ANSI_D),
-                                    modifiers: UInt32(cmdKey | optionKey | controlKey),
-                                    handler: { [weak self] in
-            self?.drawingHotKeyPressed()
-        }, releaseHandler: { [weak self] in
-            self?.drawingHotKeyReleased()
-        })
+        // Every shortcut, its spoken name for the log, and the symbols the menu uses to
+        // report it if macOS will not give it to us.
+        let shortcuts: [(key: GlobalHotKey, spoken: String, symbols: String)] = [
+            (GlobalHotKey(id: HotKeyID.draw.rawValue,
+                          keyCode: UInt32(kVK_ANSI_D),
+                          modifiers: UInt32(cmdKey | optionKey | controlKey),
+                          handler: { [weak self] in self?.drawingHotKeyPressed() },
+                          releaseHandler: { [weak self] in self?.drawingHotKeyReleased() }),
+             "Control + Option + Command + D", "\u{2303}\u{2325}\u{2318}D"),
 
-        interactionHotKey = GlobalHotKey(id: 3,
-                                         keyCode: UInt32(kVK_ANSI_E),
-                                         modifiers: UInt32(cmdKey | optionKey | controlKey)) { [weak self] in
-            self?.toggleInteractionMode()
-        }
+            (GlobalHotKey(id: HotKeyID.clickThrough.rawValue,
+                          keyCode: UInt32(kVK_ANSI_E),
+                          modifiers: UInt32(cmdKey | optionKey | controlKey),
+                          handler: { [weak self] in self?.toggleInteractionMode() }),
+             "Control + Option + Command + E", "\u{2303}\u{2325}\u{2318}E"),
 
-        // Undo is global because Command+Z is not. The panels are non-activating, so they
-        // only get the keyboard while this app is the active one - and after the user has
-        // clicked anything at all in another app, they are not. Command+Z inside the
-        // overlay was then a silent no-op, in a state nothing on screen distinguishes from
-        // the working one.
-        undoHotKey = GlobalHotKey(id: 4,
-                                  keyCode: UInt32(kVK_ANSI_Z),
-                                  modifiers: UInt32(cmdKey | optionKey | controlKey)) { [weak self] in
-            self?.undoOnScreenUnderPointer(redo: false)
-        }
+            (GlobalHotKey(id: HotKeyID.quit.rawValue,
+                          keyCode: UInt32(kVK_Escape),
+                          modifiers: UInt32(cmdKey | optionKey | controlKey),
+                          handler: { [weak self] in self?.emergencyQuit() }),
+             "Control + Option + Command + Escape", "\u{2303}\u{2325}\u{2318}\u{238B}"),
 
-        // Redo comes with it. An undo that always works paired with a redo that only
-        // sometimes does is a trap: one press too many and the way back depends on a
-        // focus state the user cannot see.
-        redoHotKey = GlobalHotKey(id: 5,
-                                  keyCode: UInt32(kVK_ANSI_Z),
-                                  modifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey)) { [weak self] in
-            self?.undoOnScreenUnderPointer(redo: true)
-        }
+            // Undo is global because Command+Z is not. The panels are non-activating, so
+            // they only get the keyboard while this app is the active one - and after the
+            // user has clicked anything at all in another app, they are not. Command+Z
+            // inside the overlay was then a silent no-op, in a state nothing on screen
+            // distinguishes from the working one. Redo comes with it rather than after it:
+            // an undo that always works beside a redo that only sometimes does is a trap.
+            (GlobalHotKey(id: HotKeyID.undo.rawValue,
+                          keyCode: UInt32(kVK_ANSI_Z),
+                          modifiers: UInt32(cmdKey | optionKey | controlKey),
+                          handler: { [weak self] in self?.undoOnScreenUnderPointer(redo: false) }),
+             "Control + Option + Command + Z", "\u{2303}\u{2325}\u{2318}Z"),
 
-        emergencyHotKey = GlobalHotKey(id: 2,
-                                       keyCode: UInt32(kVK_Escape),
-                                       modifiers: UInt32(cmdKey | optionKey | controlKey)) { [weak self] in
-            self?.emergencyQuit()
-        }
+            (GlobalHotKey(id: HotKeyID.redo.rawValue,
+                          keyCode: UInt32(kVK_ANSI_Z),
+                          modifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey),
+                          handler: { [weak self] in self?.undoOnScreenUnderPointer(redo: true) }),
+             "Shift + Control + Option + Command + Z", "\u{21E7}\u{2303}\u{2325}\u{2318}Z")
+        ]
 
         // A modal alert is the wrong tool for a background app: runModal blocks the main
         // thread, and an accessory app's dialog can sit behind everything, so a failure
         // at login would look like a hang. Failures go to the menu bar item instead,
         // which is also the way to work without the shortcut.
         var unavailable: [String] = []
-        if toggleHotKey?.register() == true {
-            print("ScreenDrawOverlay: hotkey registered - Control + Option + Command + D")
-        } else {
-            unavailable.append("\u{2303}\u{2325}\u{2318}D")
-        }
-
-        if interactionHotKey?.register() == true {
-            print("ScreenDrawOverlay: hotkey registered - Control + Option + Command + E")
-        } else {
-            unavailable.append("\u{2303}\u{2325}\u{2318}E")
-        }
-
-        if emergencyHotKey?.register() == true {
-            print("ScreenDrawOverlay: hotkey registered - Control + Option + Command + Escape")
-        } else {
-            unavailable.append("\u{2303}\u{2325}\u{2318}\u{238B}")
-        }
-
-        if undoHotKey?.register() == true {
-            print("ScreenDrawOverlay: hotkey registered - Control + Option + Command + Z")
-        } else {
-            unavailable.append("\u{2303}\u{2325}\u{2318}Z")
-        }
-
-        if redoHotKey?.register() == true {
-            print("ScreenDrawOverlay: hotkey registered - Shift + Control + Option + Command + Z")
-        } else {
-            unavailable.append("\u{21E7}\u{2303}\u{2325}\u{2318}Z")
+        for shortcut in shortcuts {
+            hotKeys.append(shortcut.key)
+            if shortcut.key.register() {
+                print("ScreenDrawOverlay: hotkey registered - \(shortcut.spoken)")
+            } else {
+                unavailable.append(shortcut.symbols)
+            }
         }
 
         if !unavailable.isEmpty {
@@ -159,11 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         print("ScreenDrawOverlay: app terminating")
         NotificationCenter.default.removeObserver(self)
         forceCloseOverlay(reason: "app terminating")
-        toggleHotKey?.unregister()
-        interactionHotKey?.unregister()
-        emergencyHotKey?.unregister()
-        undoHotKey?.unregister()
-        redoHotKey?.unregister()
+        hotKeys.forEach { $0.unregister() }
     }
 
     private static func anotherInstanceIsRunning() -> Bool {
@@ -179,14 +163,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // Tap or hold, on the same shortcut. A tap toggles, as it always has. Holding it turns
-    // the overlay into something you reach for the way you reach for a laser pointer:
-    // press, scribble, let go, and the screen is yours again - no mode to remember to
-    // leave. That is the difference between a tool you switch on and a tool you can leave
-    // running in the background all day.
-    //
-    // Momentary only applies when the press is what opened the overlay. Holding the key
-    // while already drawing would otherwise have to undo the tap action mid-hold, which
     // One canvas per display, so "take that back" has to mean the one the user is looking
     // at. The pointer says which that is; if it is off every panel - another display, or
     // no panel there - the screen carrying the badge is the fallback.
@@ -198,7 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let location = NSEvent.mouseLocation
         let window = windows.first { $0.frame.contains(location) }
-            ?? windows.first { $0.drawingView.showsIndicator }
+            ?? windows.first { $0.drawingView.showsBadge }
             ?? windows[0]
 
         if redo {
@@ -208,6 +184,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // Tap or hold, on the same shortcut. A tap toggles, as it always has. Holding it turns
+    // the overlay into something you reach for the way you reach for a laser pointer:
+    // press, scribble, let go, and the screen is yours again - no mode to remember to
+    // leave. That is the difference between a tool you switch on and a tool you can leave
+    // running in the background all day.
+    //
+    // Momentary only applies when the press is what opened the overlay. Holding the key
+    // while already drawing would otherwise have to undo the tap action mid-hold, which
+    // reads as the shortcut fighting you.
     private func drawingHotKeyPressed() {
         let wasClosed = !isDrawingMode && overlayWindowSnapshot().isEmpty
         toggleDrawingMode()
@@ -293,17 +278,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // One panel per display. The ● DRAW badge would be noise repeated on every
-        // screen, so only the main screen's panel draws it; index lookup guarantees
-        // exactly one panel gets it even if NSScreen.main is not in NSScreen.screens.
-        let indicatorScreen = NSScreen.main ?? screens[0]
-        let indicatorIndex = screens.firstIndex { $0.matches(indicatorScreen) } ?? 0
+        // One panel per display. The badge would be noise repeated on every screen, so
+        // only the main screen's panel draws it; the index lookup guarantees exactly one
+        // panel gets it even if NSScreen.main is not in NSScreen.screens.
+        let badgeScreen = NSScreen.main ?? screens[0]
+        let badgeIndex = screens.firstIndex { $0.matches(badgeScreen) } ?? 0
 
         var windows: [OverlayPanel] = []
         var views: [DrawingView] = []
 
         for (index, screen) in screens.enumerated() {
-            let window = OverlayPanel(screen: screen, showsIndicator: index == indicatorIndex, tools: tools)
+            let window = OverlayPanel(screen: screen, showsBadge: index == badgeIndex, tools: tools)
             let drawingView = window.drawingView
 
             if let kept = keptDrawings[window.screenKey] {
@@ -325,10 +310,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Only one window can be key, so the secondary panels are just ordered in front.
         // The panels are non-activating, but making one key lets Escape reach keyDown.
-        for (index, window) in windows.enumerated() where index != indicatorIndex {
+        for (index, window) in windows.enumerated() where index != badgeIndex {
             window.orderFrontRegardless()
         }
-        windows[indicatorIndex].makeKeyAndOrderFront(nil)
+        windows[badgeIndex].makeKeyAndOrderFront(nil)
         startDrawingPointer()
         refreshMenuBar()
     }
@@ -409,7 +394,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             print("ScreenDrawOverlay: click-through mode ON (drawing kept, clicks pass through)")
         } else {
             // Escape, C and Command+Z are local keys, so the panel has to be key again.
-            let keyPanel = windows.first { $0.drawingView.showsIndicator } ?? windows[0]
+            let keyPanel = windows.first { $0.drawingView.showsBadge } ?? windows[0]
             keyPanel.makeKeyAndOrderFront(nil)
             startDrawingPointer()
             print("ScreenDrawOverlay: click-through mode OFF (drawing again)")

@@ -10,7 +10,7 @@ import Foundation
 //
 // It needs a window on screen, so it is run by hand rather than by run.sh:
 //
-//     python3 Testing/make_onscreen_probe.py && \
+//     python3 Testing/make_probe.py onscreen LIVE && \
 //       swift build --package-path .build/testing/onscreen -c release && \
 //       .build/testing/onscreen/.build/release/LIVE
 //
@@ -29,7 +29,7 @@ app.setActivationPolicy(.accessory)
 
 let tools = ToolSettings()
 let screen = NSScreen.main!
-let panel = OverlayPanel(screen: screen, showsIndicator: true, tools: tools)
+let panel = OverlayPanel(screen: screen, showsBadge: true, tools: tools)
 let view = panel.drawingView
 tools.onChange = { view.toolSettingsChanged() }
 panel.ignoresMouseEvents = true

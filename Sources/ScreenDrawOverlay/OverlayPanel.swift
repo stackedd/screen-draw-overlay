@@ -33,7 +33,7 @@ final class OverlayPanel: NSPanel {
 
     let screenKey: String
 
-    init(screen: NSScreen, showsIndicator: Bool, tools: ToolSettings) {
+    init(screen: NSScreen, showsBadge: Bool, tools: ToolSettings) {
         screenKey = screen.displayIdentifier
         let screenFrame = screen.frame
         let visibleFrame = screen.visibleFrame
@@ -42,8 +42,8 @@ final class OverlayPanel: NSPanel {
                                        width: visibleFrame.width,
                                        height: visibleFrame.height)
         drawingView = DrawingView(frame: NSRect(origin: .zero, size: screenFrame.size),
-                                  indicatorBounds: localVisibleFrame,
-                                  showsIndicator: showsIndicator,
+                                  badgeBounds: localVisibleFrame,
+                                  showsBadge: showsBadge,
                                   tools: tools)
 
         // NSPanel subclasses must call a designated initializer. The panel is

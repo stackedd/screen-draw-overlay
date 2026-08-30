@@ -53,7 +53,7 @@ final class Bench {
 
     init(_ model: Model) {
         self.model = model
-        view = Rec(frame: frame, indicatorBounds: frame, showsIndicator: true, tools: tools)
+        view = Rec(frame: frame, badgeBounds: frame, showsBadge: true, tools: tools)
         window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView = view
         let v = view

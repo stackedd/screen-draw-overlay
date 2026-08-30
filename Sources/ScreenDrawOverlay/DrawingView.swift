@@ -41,7 +41,7 @@ final class DrawingView: NSView {
 
     // nil on every screen but one: the badge would be noise repeated on each display.
     private let badge: ModeBadge?
-    let showsIndicator: Bool
+    let showsBadge: Bool
 
     // The pointer rides on this rather than being painted into the view. A repaint of a
     // full screen transparent overlay costs the same whatever its dirty rect, so painting a
@@ -94,9 +94,9 @@ final class DrawingView: NSView {
     override var acceptsFirstResponder: Bool { true }
     override var isOpaque: Bool { false }
 
-    init(frame frameRect: NSRect, indicatorBounds: NSRect, showsIndicator: Bool, tools: ToolSettings) {
-        self.badge = showsIndicator ? ModeBadge(bounds: indicatorBounds, tools: tools) : nil
-        self.showsIndicator = showsIndicator
+    init(frame frameRect: NSRect, badgeBounds: NSRect, showsBadge: Bool, tools: ToolSettings) {
+        self.badge = showsBadge ? ModeBadge(bounds: badgeBounds, tools: tools) : nil
+        self.showsBadge = showsBadge
         self.tools = tools
         super.init(frame: frameRect)
         wantsLayer = true

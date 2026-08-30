@@ -209,10 +209,11 @@ Things that cannot be done without giving up the no-permissions promise:
 ## Testing
 
 There is no XCTest target. Tests are built by compiling the app's own sources into a probe
-that drives the real code and prints what happened. `make_behaviour_probe.py` copies every
-source file, splices a probe body into `applicationDidFinishLaunching`, and widens `private`
-so the probe can see internals; `make_render_probe.py`, `make_cost_probe.py` and
-`make_onscreen_probe.py` do the same for the other three.
+that drives the real code and prints what happened. One builder, `make_probe.py`, makes all
+four: it copies every source file and widens `private` so the probe can see internals, then
+either splices the probe into `applicationDidFinishLaunching` (the behaviour suite, which
+runs inside the real app) or lets the probe stand in for `main.swift` (the other three,
+which drive a view or a panel directly).
 
 Two suites carry the weight:
 
