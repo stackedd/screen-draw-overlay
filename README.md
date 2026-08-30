@@ -32,7 +32,7 @@ Requires macOS 11 Big Sur or later, on Apple Silicon or Intel.
 
 The app has no Dock icon and no window — it lives only in the menu bar. If your menu bar is full, macOS quietly hides the items that do not fit, and this one is small enough to be among them. Hold `Command` and drag the menu bar icons to rearrange them and make room.
 
-The quickest way to check that it is running at all is to press the shortcut: `Control + Option + Command + D`. Nothing dims — the overlay is fully transparent — but a red `● DRAW` badge appears in the top-right corner and the pointer becomes a crosshair. Press it again to hide it.
+The quickest way to check that it is running at all is to press the shortcut: `Control + Option + Command + D`. Nothing dims — the overlay is fully transparent — but a badge appears in the top-right corner with a red stripe down its edge, and a coloured ring appears around your pointer. Press it again to hide it.
 
 Your colour, width and tool are remembered between launches, so a highlighter-in-yellow habit only has to be set once. The eraser and the laser are not: they are things you pick up for a moment, so what comes back is the last tool that actually drew.
 
@@ -40,13 +40,19 @@ To have it start with your Mac, use **Open at Login** in the menu bar item (macO
 
 ## Shortcuts
 
-These three work anywhere, whatever app you are in:
+These work anywhere, whatever app you are in:
 
 | Shortcut | What it does |
 | --- | --- |
 | `Control + Option + Command + D` | Tap: start drawing · back to drawing from click-through · hide the overlay, keeping what you drew. **Hold: draw only while you hold it**, and it puts itself away when you let go |
 | `Control + Option + Command + E` | Switch between drawing and click-through |
+| `Control + Option + Command + Z` | Undo · add `Shift` to redo |
 | `Control + Option + Command + Escape` | Panic key: quits the app outright, from any state |
+
+Undo is on that list rather than only on `Command + Z` for a reason: the overlay is a
+non-activating panel, so it only receives ordinary keystrokes while ScreenDrawOverlay is the
+active app. Click anything in another app and `Command + Z` stops reaching it, with nothing
+on screen to tell you so. The global one always works.
 
 While you are drawing, the keyboard belongs to the tool. No modifiers to hold — your other hand is on the mouse:
 
@@ -67,7 +73,7 @@ While you are drawing, the keyboard belongs to the tool. No modifiers to hold �
 | `T` | Temporary ink — strokes fade away after about three seconds, the way a presenter's pen does |
 | `[` `]` | Thinner / thicker |
 | `Shift` while drawing a shape | Snap a line or arrow to 45°, make a rectangle square or an oval round |
-| `Command + Z` / `Shift + Command + Z` | Undo / redo — including undoing a Clear |
+| `Command + Z` / `Shift + Command + Z` | Undo / redo — including undoing a Clear. Works while the overlay has the keyboard; the global `⌃⌥⌘Z` always does |
 | `Delete` or `C` | Clear everything (undoable) |
 
 ### Drawing and click-through
@@ -82,13 +88,17 @@ While you are **drawing**, the overlay takes the mouse and the keyboard: your st
 
 **While drawing, the keyboard belongs to the tool.** The keys above do their thing and everything else — including `Escape` — is swallowed and does nothing. If you need to type, or need `Escape` to reach the app underneath (leaving a slideshow, for instance), switch to click-through with `Control + Option + Command + E` first.
 
-You can always tell which state you are in, and which tool you are holding: the corner badge reads `● PEN 4` — the tool, its width, and a dot in the current colour — or a dim `◌ CLICK-THROUGH` when your clicks pass through. Its second line names the two shortcuts that apply right now (`⌃⌥⌘E click · ⌃⌥⌘D hide` while drawing). There is no palette on screen on purpose: a tool that occupies screen space is not one you leave running. The crosshair pointer is drawn only while drawing, and the menu bar icon turns red while the overlay is taking clicks and becomes a dimmed struck-through pen in click-through.
+You can always tell which state you are in, and which tool you are holding: the corner badge reads `PEN 4` — the tool, its width, and a dot in the current colour beside it — or `CLICK-THROUGH` when your clicks pass through. A red stripe down its left edge means the overlay is taking your clicks; it disappears in click-through, when it is not. Its second line names the shortcuts that apply right now (`⌃⌥⌘E click · ⌃⌥⌘D hide · ⌃⌥⌘Z undo` while drawing). There is no palette on screen on purpose: a tool that occupies screen space is not one you leave running.
+
+The pointer stays the ordinary arrow — it just gains a ring around its tip in the colour you are drawing with, sized to the eraser when you are erasing. That is deliberate. The app used to hide the system pointer and draw its own crosshair, which works right up until something else takes the cursor back (the menu bar will do it), and then you have two pointers and no way to get rid of one. One cursor cannot double.
+
+The menu bar icon turns red while the overlay is taking clicks and becomes a dimmed struck-through pen in click-through.
 
 `Control + Option + Command + Escape` is the panic key, and it is blunt on purpose: **it quits the app**, exactly like Quit in the menu. If the overlay is ever swallowing your clicks and nothing else responds, ending the process is the one recovery that cannot fail — the app releases the screen and closes its panels on the way out. Your drawing goes with it, so use `Control + Option + Command + D` for ordinary "get this out of my way". Start it again from `/Applications` afterwards.
 
 The menu bar item carries **Start / Show / Hide / Back to Drawing**, a **Click-Through** checkbox, and **Quit** — but note that while you are drawing, the overlay covers the whole screen including the menu bar, so the item is not clickable until you hide the overlay or switch to click-through. That is deliberate: drawing mode is meant to interact with nothing. The shortcuts are how you get out of it.
 
-If `Control + Option + Command + D` does nothing, another app is probably using the same shortcut. macOS lets several apps register one shortcut without complaining, so the conflict is usually silent — the app can only warn you when the system refuses the registration outright, and it does that in the menu ("Shortcut unavailable"), never with a dialog. Either way the menu bar item still works, and you can change the key code or modifiers in `Sources/ScreenDrawOverlay/main.swift` and rebuild.
+If `Control + Option + Command + D` does nothing, another app is probably using the same shortcut. macOS lets several apps register one shortcut without complaining, so the conflict is usually silent — the app can only warn you when the system refuses the registration outright, and it does that in the menu ("Shortcut unavailable"), never with a dialog. Either way the menu bar item still works, and you can change the key code or modifiers in `Sources/ScreenDrawOverlay/AppDelegate.swift` and rebuild.
 
 ## Build from source
 

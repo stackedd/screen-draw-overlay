@@ -112,6 +112,24 @@ run("drawing over a canvas that already has ink", existing: 200) {
 }
 view.finishStrokeInProgress()
 
+// Temporary ink, fading for real: drawn with the temporary flag on, then simply left alone
+// for the whole of its life while the CPU is watched. Nothing drives it - each stroke's
+// layer takes its own opacity down - so what this measures is whether that is true.
+print("")
+print("  and temporary ink fading, over the whole of its three seconds")
+for count in [3, 10, 50] {
+    view.clear()
+    tools.toggleTemporaryInk()
+    prefill(strokes: count)
+    tools.toggleTemporaryInk()
+    let before = cpuSeconds()
+    let started = Date()
+    RunLoop.current.run(until: started.addingTimeInterval(Stroke.fadeDuration))
+    print(String(format: "  %-46@ %5d           %5.1f%%", "temporary strokes fading" as NSString,
+                 count, (cpuSeconds() - before) / Date().timeIntervalSince(started) * 100))
+}
+view.clear()
+
 panel.ignoresMouseEvents = true
 panel.close()
 print("")

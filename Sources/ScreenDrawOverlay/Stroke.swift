@@ -167,7 +167,8 @@ enum StrokeStyle {
 struct Stroke {
     // How long a temporary stroke lives, and how much of that it spends at full strength
     // before it starts going. Fading from the first instant reads as a rendering fault
-    // rather than a decision.
+    // rather than a decision. The curve itself is handed to Core Animation as a keyframed
+    // opacity, so nothing in this app computes it per frame any more.
     static let fadeDuration: TimeInterval = 3
     static let fadeHold = 0.55
 
@@ -188,19 +189,6 @@ struct Stroke {
 
     var renderColor: NSColor {
         color.withAlphaComponent(style.alpha)
-    }
-
-    func opacity(at date: Date) -> CGFloat {
-        guard let createdAt else {
-            return 1
-        }
-
-        let age = date.timeIntervalSince(createdAt) / Stroke.fadeDuration
-        guard age > Stroke.fadeHold else {
-            return 1
-        }
-
-        return max(0, CGFloat(1 - (age - Stroke.fadeHold) / (1 - Stroke.fadeHold)))
     }
 
     // NSBezierPath.bounds covers the path geometry only, so grow it by this stroke's own

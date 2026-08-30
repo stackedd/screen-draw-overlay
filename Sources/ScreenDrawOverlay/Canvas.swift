@@ -274,20 +274,19 @@ final class Canvas {
 
     // MARK: - Fading
 
-    // Ages the temporary strokes one step. Returns the region that has to be repainted, if
-    // any, and whether anything is still fading - the caller uses that to stop its timer.
-    func advanceFade() -> (dirty: NSRect?, stillFading: Bool) {
-        let now = Date()
+    // Drops temporary ink that has run out of life, and says whether any is left. It no
+    // longer says what to repaint, because a fade is not painted any more: each temporary
+    // stroke sits on a layer of its own and Core Animation takes its opacity down. What
+    // this is for is keeping the model honest - a stroke that has faded is gone, so the
+    // eraser, undo and "is anything still fading" all agree with what is on screen.
+    @discardableResult
+    func dropFadedInk() -> Bool {
         var stillFading = false
-        var changed = false
-        var region = NSRect.zero
 
         for index in strokes.indices.reversed() {
-            guard let createdAt = strokes[index].createdAt else {
+            guard strokes[index].createdAt != nil else {
                 continue
             }
-
-            let bounds = strokes[index].repaintBounds
 
             if strokes[index].hasFaded {
                 // Temporary ink is not an edit: it was never meant to stay, so undo has
@@ -295,23 +294,12 @@ final class Canvas {
                 // all, which is why the entry that put it there goes as well.
                 let faded = strokes.remove(at: index)
                 forget(faded.id)
-                changed = true
             } else {
                 stillFading = true
-                // Nothing to repaint while the stroke is still at full strength, which is
-                // more than half of its life.
-                if now.timeIntervalSince(createdAt) / Stroke.fadeDuration > Stroke.fadeHold {
-                    changed = true
-                }
             }
-
-            region = region == .zero ? bounds : region.union(bounds)
         }
 
-        // One region covering all of them, not one per stroke: fifty separate rects mean
-        // fifty repaint passes that each redraw every stroke they touch, and the cost of a
-        // fade then grows with the square of what is on screen. Measured: 12.5% CPU.
-        return (changed && region != .zero ? region : nil, stillFading)
+        return stillFading
     }
 
     // MARK: - Private

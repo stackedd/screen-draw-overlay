@@ -37,7 +37,7 @@ target app's document — an annotation written into a PDF, a shape added to a K
 needs a coordinate bridge from screen space to document space. There are only three ways to
 get one: ask the app (Automation/Accessibility), render the document yourself (become a
 viewer), or look at the screen (Screen Recording). Each ends the no-permissions promise, and
-the per-app adapters would turn a 2,300-line tool into a product with a maintenance surface
+the per-app adapters would turn a 2,700-line tool into a product with a maintenance surface
 per target app.
 
 ## 2. The overlay sits at window level 101 (`.popUpMenu`)
@@ -58,8 +58,8 @@ level 9 and its fade at 26; the menu bar is 24, status items 25.
   mid-stroke.
 
 101 clears everything measured and leaves drawing mode owning the screen. It is only safe
-because no way out depends on anything on screen: all three shortcuts are global, and the
-panic key quits the process.
+because no way out depends on anything on screen: every shortcut that matters is global, and
+the panic key quits the process.
 
 ## 3. Escape does nothing while drawing
 
@@ -177,24 +177,48 @@ The related measurement still stands on its own: **expanding every dirty rect ma
 worse, not better** — 275 bytes at 2x became 733 at +20pt and 4,482 at +60pt, with the
 per-pixel error unchanged. More repainting means more seams.
 
-## 8. The fade ticks at 15 Hz
+## 8. Temporary ink fades itself, on a layer
 
-Temporary ink (`T`) holds full strength for the first 55% of three seconds, then fades.
+Temporary ink (`T`) holds full strength for the first 55% of three seconds, then goes.
 
-The first version cost **12.5% CPU** with 50 strokes fading — it invalidated each stroke
-separately, so fifty repaint passes each redrew every stroke they touched. Invalidating the
-union once removed that square law: **5.0%**.
+**How it used to work:** a timer at 15 Hz walked the strokes, worked out each one's opacity,
+and asked for a repaint of the region covering all of them. Two costs were found and fixed
+along the way — invalidating each stroke separately made the cost grow with the square of
+what was on screen (12.5% CPU with fifty of them, 5.0% invalidating the union once), and the
+tick rate was settled at 15 because 20/s cost 5.1%, 15/s 4.4% and 12/s 4.3%. End to end that
+came to 2.8% of a core with three strokes fading and 3.8% with fifty.
 
-Then the tick rate: 20/s cost 5.1%, 15/s 4.4%, 12/s 4.3%. Past 15 the smoothness is free and
-the savings are not, so 15 it is.
+**Then the ink moved to a `CALayer` (entry 21) and that arithmetic inverted.** A layer repaint
+is four times cheaper than a view repaint for a small dirty rect and about four times dearer
+for a whole-screen one — and the union of every fading stroke *is* most of the screen once
+there are a few. Measured after the move: **29.8% of a core** with fifty strokes fading,
+against 3.8% for the same thing before it. A regression, straight out of an optimisation.
 
-Chasing this turned up the fact that governs all performance work here: **each repaint of a
-full-screen transparent layer costs about 0.4% CPU whatever the dirty rect contains**. The
-bill is the number of repaints, not their area — which is why 50 fading strokes and 1 cost
-the same. For scale: drawing by hand at 60 mouse moves a second costs 23.2%.
+**Now:** each temporary stroke is painted once into a picture, put on a layer of its own, and
+handed the rest of its life as a keyframed `opacity` animation. Core Animation takes it down.
+Nothing is repainted, nothing is computed per frame, and the cost stops depending on how many
+there are:
 
-The timer starts when the first temporary stroke lands and stops when the last one is gone,
-so idle stays at 0.0%.
+| strokes fading | painted through the view | painted on a layer | on their own layers |
+| --- | --- | --- | --- |
+| 3 | 2.8% | 4.0% | **0.3%** |
+| 10 | 3.1% | 9.7% | **0.3%** |
+| 50 | 3.8% | 29.8% | **0.7%** |
+
+The middle column is the regression: four to eight times worse than what it replaced, and
+growing with the number of strokes because their union grows with it. The last column does
+not grow, because there is nothing there to grow.
+
+The timer survives, at 2 Hz, doing something else entirely: dropping strokes that have run
+out of life so the model agrees with the screen — the eraser, undo and "is anything still
+fading" all read the canvas, not the layers. Nothing waits on it, so it can be slow. It still
+starts with the first temporary stroke and stops with the last, so idle is still 0.0%.
+
+The layers are reconciled against the canvas after anything that changes it, rather than each
+of erase, undo, redo, clear and restore knowing about them. That is what keeps the eraser
+working on temporary ink without the eraser knowing where temporary ink lives.
+
+`Stroke.opacity(at:)` went with the old scheme. Nothing computes a fade curve any more.
 
 ## 9. The menu bar icon is never tinted
 
@@ -309,14 +333,20 @@ Performance work here started from the wrong end twice, so this entry is the map
 
 **Measured** (2026-08-30, `Testing/experiments/repaint_paths.swift`, and
 `./Testing/run.sh cost`). Asking a full screen transparent overlay to repaint 60 times a
-second costs **15.2% of a core**, whatever the dirty rect's size. Actually painting what a
-drag puts on screen costs **0.3–0.5%**. The ratio is about thirty to one, and every idea
-that makes painting cheaper is bidding for that half point.
+second costs **15.7% of a core** through `NSView`, whatever the dirty rect's size. Actually
+painting what a drag puts on screen costs **0.3–0.5%**. The ratio is about thirty to one, and
+every idea that makes painting cheaper is bidding for that half point.
 
-The same repaint asked for through a `CALayer` delegate rather than `NSView.draw(_:)` costs
-**3.5%** — 4.3x less for identical output — and moving a sublayer, which is not a repaint,
-costs **1.5%**. WindowServer does not move in any of these runs, so this is our own process
-and not the compositor.
+The same repaint asked for through a `CALayer` delegate costs **3.8%** — 4x less for
+identical output — and moving a sublayer, which is not a repaint, costs **1.6%**. WindowServer
+does not move in any of these runs, so this is our own process and not the compositor.
+
+**The one caveat, and it has already bitten once:** the layer path is only cheaper for small
+dirty rects. Its fixed cost is a quarter of the view path's but its cost grows with area,
+where the view path's does not — 3.8% at 40x40, 21.0% at 400x400, 50.7% for the whole screen,
+against a flat ~15% for the view path. Everything a drag repaints is small. The fade was not,
+and moving it to a layer made it four times *worse* before it was taken off the repaint path
+altogether (entry 8).
 
 **So the order of work is:** stop repainting for things that are not ink (the pointer, the
 badge), then move the ink off the `NSView` display path, and only then make painting itself
@@ -371,9 +401,11 @@ frame has no such problem. The whole-view repaint on a mode switch went too.
 ## 21. The ink is painted through a layer, not through `NSView.draw(_:)`
 
 The measurement in entry 19 said the same repaint of the same full screen transparent layer
-costs **15.2% of a core through AppKit's view display machinery and 3.5% through a
-`CALayer`** — 4.3x, for identical output. Nothing about what is painted changes; the
-difference is the path the repaint is asked through.
+costs **15.7% of a core through AppKit's view display machinery and 3.8% through a
+`CALayer`** — 4x, for identical output. Nothing about what is painted changes; the difference
+is the path the repaint is asked through. The catch, which entry 8 paid for, is that this
+holds for small dirty rects: a layer repaint costs more as its rect grows, and a view repaint
+does not.
 
 So `DrawingView` now owns three layers, bottom to top — ink, badge, pointer — and paints
 nothing through `draw(_:)` at all. The `draw(_:)` override is gone. The painting code did not

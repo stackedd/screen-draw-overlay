@@ -25,11 +25,11 @@ import Foundation
 
 final class DrawingView: NSView {
 
-    // 15 a second. Measured: the cost of a fade is one repaint of a full screen
-    // transparent layer per tick - about 0.4% CPU each - and is almost independent of how
-    // many strokes are fading or how big they are. 20/s cost 5.1%, 15/s costs 4.4% and 12/s
-    // 4.3%, so past this point the smoothness is free and the savings are not.
-    private static let fadeTickInterval: TimeInterval = 1.0 / 15
+    // The fade is not painted, so this timer does not drive it - Core Animation does, on
+    // each temporary stroke's own layer. All this does is drop ink that has run out of
+    // life so the model agrees with the screen, which nothing is waiting on. Twice a
+    // second is plenty and costs nothing.
+    private static let fadeTickInterval: TimeInterval = 0.5
 
 
 
@@ -52,6 +52,15 @@ final class DrawingView: NSView {
     private let inkLayer = CALayer()
     private let badgeLayer = CALayer()
     private let inkPainter = InkPainter()
+
+    // One layer per temporary stroke, above the ink, each fading itself.
+    //
+    // Painting the fade was costing what the whole screen costs to repaint: the strokes
+    // are invalidated as one region, that region is most of the screen once there are a
+    // few of them, and it was being repainted fifteen times a second - 29.8% of a core
+    // with fifty of them on screen. Opacity on a layer is not a repaint at all, so this
+    // costs nothing whatever is fading (docs/DECISIONS.md).
+    private var fadingLayers: [UUID: CALayer] = [:]
 
     // Set by AppDelegate when the click-through hot key is used. The view keeps drawing
     // its strokes either way; what changes is the badge and whether it claims the cursor.
@@ -370,14 +379,10 @@ final class DrawingView: NSView {
     func drawInk(in dirtyRect: NSRect) {
         // Skip strokes that are nowhere near the region being repainted. With
         // incremental invalidation this is what keeps a drag cheap on a long session.
-        let now = Date()
-        for stroke in canvas.strokes where stroke.repaintBounds.intersects(dirtyRect) {
-            let opacity = stroke.opacity(at: now)
-            guard opacity > 0 else {
-                continue
-            }
-
-            stroke.renderColor.withAlphaComponent(stroke.renderColor.alphaComponent * opacity).setStroke()
+        // Temporary ink is not here: it is on a layer of its own, fading itself.
+        for stroke in canvas.strokes
+        where stroke.createdAt == nil && stroke.repaintBounds.intersects(dirtyRect) {
+            stroke.renderColor.setStroke()
             stroke.path.stroke()
         }
 
@@ -403,11 +408,13 @@ final class DrawingView: NSView {
         }
 
         startFadingIfNeeded()
+        syncFadingLayers()
         invalidateInk(dirty)
     }
 
     func restore(_ kept: Canvas.Kept) {
         canvas.restore(kept)
+        syncFadingLayers()
         invalidateAllInk()
     }
 
@@ -415,15 +422,20 @@ final class DrawingView: NSView {
     // and the global shortcut, which works whatever has the keyboard.
     func undo() {
         canvas.undo().forEach(invalidateInk)
+        syncFadingLayers()
+        startFadingIfNeeded()
     }
 
     func redo() {
         canvas.redo().forEach(invalidateInk)
+        syncFadingLayers()
+        startFadingIfNeeded()
     }
 
     func clear() {
         canvas.clear()
         stopFading()
+        syncFadingLayers()
         invalidateAllInk()
     }
 
@@ -441,6 +453,7 @@ final class DrawingView: NSView {
 
     private func erase(at point: NSPoint) {
         canvas.erase(at: point, radius: tools.eraserRadius).forEach(invalidateInk)
+        syncFadingLayers()
     }
 
     // The only timer in the app, and it exists only while temporary ink is on screen:
@@ -459,17 +472,93 @@ final class DrawingView: NSView {
     }
 
     private func advanceFade() {
-        let (dirty, stillFading) = canvas.advanceFade()
-
-        if let dirty {
-            invalidateInk(dirty)
-        }
+        let stillFading = canvas.dropFadedInk()
+        syncFadingLayers()
 
         guard !stillFading else {
             return
         }
 
         stopFading()
+    }
+
+    // Brings the layers in line with what the canvas holds: a new temporary stroke gets one
+    // and starts fading, and anything the canvas no longer has - faded out, erased, undone,
+    // cleared - loses one. Reconciling rather than tracking each of those separately is
+    // what keeps the eraser and undo working on temporary ink without either of them
+    // knowing that it lives on a layer.
+    private func syncFadingLayers() {
+        var wanted: Set<UUID> = []
+
+        for stroke in canvas.strokes where stroke.createdAt != nil {
+            wanted.insert(stroke.id)
+            guard fadingLayers[stroke.id] == nil, let layer = makeFadingLayer(for: stroke) else {
+                continue
+            }
+
+            fadingLayers[stroke.id] = layer
+            inkLayer.superlayer?.insertSublayer(layer, above: inkLayer)
+        }
+
+        for (id, layer) in fadingLayers where !wanted.contains(id) {
+            layer.removeFromSuperlayer()
+            fadingLayers.removeValue(forKey: id)
+        }
+    }
+
+    // The stroke painted once into a picture of its own, then handed the rest of its life
+    // as an opacity animation. The curve is the one the painted version had: full strength
+    // for the first stretch, because fading from the first instant reads as a rendering
+    // fault rather than a decision.
+    private func makeFadingLayer(for stroke: Stroke) -> CALayer? {
+        guard let createdAt = stroke.createdAt else {
+            return nil
+        }
+
+        let frame = stroke.repaintBounds
+        let scale = backingScale
+        guard frame.width > 0, frame.height > 0,
+              let rep = NSBitmapImageRep(bitmapDataPlanes: nil,
+                                         pixelsWide: Int((frame.width * scale).rounded(.up)),
+                                         pixelsHigh: Int((frame.height * scale).rounded(.up)),
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                         isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0),
+              let context = NSGraphicsContext(bitmapImageRep: rep) else {
+            return nil
+        }
+
+        rep.size = frame.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        context.cgContext.translateBy(x: -frame.minX, y: -frame.minY)
+        stroke.renderColor.setStroke()
+        stroke.path.stroke()
+        NSGraphicsContext.restoreGraphicsState()
+
+        let layer = CALayer()
+        layer.frame = frame
+        layer.contentsScale = scale
+        layer.contents = rep.cgImage
+        layer.actions = ["contents": NSNull(), "position": NSNull(), "bounds": NSNull()]
+
+        let age = Date().timeIntervalSince(createdAt)
+        let remaining = Stroke.fadeDuration - age
+        guard remaining > 0 else {
+            return nil
+        }
+
+        let animation = CAKeyframeAnimation(keyPath: "opacity")
+        let holdEnds = Stroke.fadeDuration * Stroke.fadeHold
+        animation.values = [1, 1, 0]
+        animation.keyTimes = [0, NSNumber(value: max(0, min(1, (holdEnds - age) / remaining))), 1]
+        animation.duration = remaining
+        animation.fillMode = .forwards
+        animation.isRemovedOnCompletion = false
+        layer.opacity = 0
+        layer.add(animation, forKey: "fade")
+
+        return layer
     }
 
     private func stopFading() {

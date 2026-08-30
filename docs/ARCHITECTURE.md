@@ -25,7 +25,7 @@ tried and rejected on the way; [../CLAUDE.md](../CLAUDE.md) is the short operati
 | `ToolSettings.swift` | The pen in hand: colour, width, tool. Shared across screens, remembered between launches. |
 | `ModeBadge.swift` | The badge in the corner — the app's entire on-screen interface. It hands over a picture, snapped to whole pixels; the view carries it on a layer. |
 | `PointerCursor.swift` | The cursor drawing mode hands the window server: the system arrow with a ring around its tip. |
-| `GlobalHotKey.swift` | The three shortcuts, on Carbon, and the ownership rules that keep the callback safe. |
+| `GlobalHotKey.swift` | The global shortcuts, on Carbon, and the ownership rules that keep the callback safe. |
 | `NSScreen+Display.swift` | Identifying a display across time. |
 
 The one dependency worth naming: `AppDelegate` → `DrawingView` → `Canvas`. Anything that
@@ -86,11 +86,10 @@ clickable, and that turned out worse in use: the menu bar took the pointer and t
 whenever the cursor went near the top of the screen.
 
 **Cost.** Idle with the overlay closed: 0.0% CPU, ~41MB, and 0.11s of CPU total since
-launch. 200 open/draw/hide cycles leave memory flat at ~45MB and no leaked panels. Drawing
-by hand at 60 mouse moves a second costs 23.2% CPU; a fade costs 4.3%. The reason both are
-what they are: **each repaint of a full screen transparent layer costs about 0.4% CPU
-regardless of the dirty rect's size**, so the bill is the number of repaints, not their
-area. That single fact is the starting point for any performance work.
+launch. 200 open/draw/hide cycles leave memory flat at ~45MB and no leaked panels. What the
+overlay costs while it is being used is measured below, and has moved a long way: drawing
+over a canvas of 200 strokes was 20.4% of a core and is 5.4%; moving the pointer over the
+same was 22.5% and is 0.5%.
 
 **Repainting.** A drag invalidates only the new segment and `draw(_:)` skips strokes that
 do not meet `dirtyRect`; repainting the whole view per mouse move was 26x more expensive
@@ -103,26 +102,32 @@ onto a layer of its own the two passes agree **exactly, at 1x, 2x and 3x**.
 `Testing/experiments/repaint_paths.swift`, a trivial paint so that only the asking is being
 measured). Per second of one core:
 
-| what is asked for | 60 a second | 120 a second |
-| --- | --- | --- |
-| nothing | 0.1% | — |
-| `NSView.setNeedsDisplay`, 40x40 dirty rect | **15.2%** | **26.1%** |
-| `NSView.setNeedsDisplay`, 400x400 dirty rect | 14.7% | — |
-| `CALayer.setNeedsDisplay`, 40x40 dirty rect | **3.5%** | **4.8%** |
-| moving a sublayer (not a repaint at all) | **1.5%** | 2.7% |
+| what is asked for | dirty rect | 15 a second | 60 a second | 120 a second |
+| --- | --- | --- | --- | --- |
+| nothing | — | — | 0.1% | — |
+| `NSView.setNeedsDisplay` | 40x40 | — | **15.7%** | 25.9% |
+| `NSView.setNeedsDisplay` | 400x400 | — | 15.3% | — |
+| `NSView.setNeedsDisplay` | whole screen | 4.2% | — | — |
+| `CALayer.setNeedsDisplay` | 40x40 | — | **3.8%** | 4.8% |
+| `CALayer.setNeedsDisplay` | 400x400 | — | 21.0% | — |
+| `CALayer.setNeedsDisplay` | whole screen | 19.9% | 50.7% | — |
+| moving a sublayer (not a repaint) | — | — | **1.6%** | 2.6% |
 
-Three things follow, and they reorder every performance question in this app:
+Four things follow, and they govern every performance question in this app:
 
-1. **Area still does not matter.** A hundredfold larger dirty rect costs the same. The bill
-   is the number of repaints. Painting a 26pt crosshair therefore cost as much as painting
-   everything else on the screen.
-2. **The path the repaint is asked through matters enormously.** The same repaint of the
-   same full screen transparent layer is **4.3x** cheaper asked for through a `CALayer`
-   delegate than through `NSView.draw(_:)`, and 5.4x cheaper at 120 a second. Nothing about
-   what is painted changes; the cost is AppKit's view display machinery.
-3. **WindowServer is not the payer.** It sat between 48.7% and 54.2% in every run including
-   the one that repaints nothing at all. Compositing a full screen transparent surface is
-   not what this app is spending its time on.
+1. **The two paths have opposite shapes.** Asked for through `NSView`, a repaint costs about
+   the same whatever its dirty rect — 15.7% for 40x40 and 15.3% for a rect a hundred times
+   larger. Asked for through a `CALayer`, the fixed cost is a quarter of that but the area is
+   not free: 3.8% small, 21.0% at 400x400, 50.7% for the whole screen.
+2. **So the layer path wins by about 4x on small dirty rects and loses by about 4x on
+   whole-screen ones.** Everything this app repaints is small — a stroke segment — which is
+   why the ink moved to a layer. The one thing that was not small was the fade, and it had
+   to stop being a repaint at all.
+3. **Not repainting beats both.** Moving a layer costs 1.6%, and a cursor the window server
+   draws costs nothing measurable.
+4. **WindowServer is not the payer.** It sat between 44% and 55% in every run including the
+   one that repaints nothing at all. Compositing a full screen transparent surface is not
+   what this app spends its time on.
 
 **What painting itself costs** (`./Testing/run.sh cost`, offscreen, painting only). Small,
 next to the numbers above:
@@ -133,10 +138,11 @@ next to the numbers above:
 - One unbroken stroke is **quadratic**: the per-event painting cost of a 5000-point line is
   **5.5x** higher over its last tenth than its first (0.067 ms to 0.362 ms). Confirmed, but
   it only reaches the size of a single repaint after a few thousand points.
-- A fade tick with 50 temporary strokes costs **1.7 ms** to paint, at 15 ticks a second.
+- A fade paints **nothing at all** now, which is what the cost suite's fourth sweep exists
+  to keep true.
 
-Put together: of the 23.2% a drag costs, painting is roughly half a point and the repaints
-are the rest.
+Put together: of the ~23% a drag used to cost, painting was roughly half a point and the
+repaints were the rest.
 
 **End to end, before and after** (`Testing/probes/onscreen.swift`: a real `OverlayPanel` on a
 real screen, driven at 60 events a second, this process's own CPU). Ink, badge and pointer
@@ -145,14 +151,20 @@ each moved onto a `CALayer`; nothing about what is painted changed.
 | what the user is doing | strokes on screen | before | after |
 | --- | --- | --- | --- |
 | nothing, the overlay is just up | 200 | 0.5% | 0.5% |
-| moving the pointer, drawing nothing | 0 | 22.1% | **0.5%** |
-| moving the pointer, drawing nothing | 200 | 22.5% | **0.5%** |
-| drawing one long unbroken stroke | 0 | 21.9% | **4.2%** |
-| drawing over a canvas that already has ink | 200 | 20.4% | **5.4%** |
+| moving the pointer, drawing nothing | 0 | 23.1% | **0.5%** |
+| moving the pointer, drawing nothing | 200 | 22.9% | **0.5%** |
+| drawing one long unbroken stroke | 0 | 22.5% | **4.1%** |
+| drawing over a canvas that already has ink | 200 | 23.4% | **5.4%** |
+| 3 temporary strokes fading | — | 2.8% | **0.3%** |
+| 10 temporary strokes fading | — | 3.1% | **0.3%** |
+| 50 temporary strokes fading | — | 3.8% | **0.7%** |
+
+Both columns are single runs of the same probe on the same machine; run to run these move by
+a point or two, which is smaller than anything the table is being used to claim.
 
 The first row is the invariant holding: an overlay that is up and not being used costs
 nothing either way. The second and third are the ones worth staring at — **moving the mouse
-without drawing anything used to cost as much as drawing** (22.1% against 21.9%), because
+without drawing anything used to cost as much as drawing** (23.1% against 22.5%), because
 the crosshair was paint and paint meant a repaint of the whole overlay. It is now indexed to
 the idle number, because the window server draws the cursor and we do nothing at all.
 
@@ -197,9 +209,10 @@ Things that cannot be done without giving up the no-permissions promise:
 ## Testing
 
 There is no XCTest target. Tests are built by compiling the app's own sources into a probe
-that drives the real code and prints what happened. `mkprobe.py` copies every source file,
-splices a probe body into `applicationDidFinishLaunching`, and widens `private` so the probe
-can see internals; `mkpix.py` does the same for offscreen rendering comparisons.
+that drives the real code and prints what happened. `make_behaviour_probe.py` copies every
+source file, splices a probe body into `applicationDidFinishLaunching`, and widens `private`
+so the probe can see internals; `make_render_probe.py`, `make_cost_probe.py` and
+`make_onscreen_probe.py` do the same for the other three.
 
 Two suites carry the weight:
 

@@ -143,6 +143,8 @@ func run(_ name: String, rate: Double, reset: () -> Void, draws: () -> Int,
 
 func small(_ tick: Int) -> NSRect { NSRect(x: 200 + CGFloat(tick % 300), y: 300, width: 40, height: 40) }
 func large(_ tick: Int) -> NSRect { NSRect(x: 200 + CGFloat(tick % 300), y: 300, width: 400, height: 400) }
+// The whole screen, which is what a fade's union region comes to.
+func everything(_ tick: Int) -> NSRect { view.bounds.insetBy(dx: CGFloat(tick % 3), dy: 0) }
 
 let viewReset = { view.draws = 0 }
 let viewDraws = { view.draws }
@@ -164,6 +166,18 @@ run("CALayer.setNeedsDisplay, 40x40", rate: 60, reset: layerReset, draws: layerD
 }
 run("CALayer.setNeedsDisplay, 40x40", rate: 120, reset: layerReset, draws: layerDraws) {
     inkLayer.setNeedsDisplay(small($0))
+}
+run("CALayer.setNeedsDisplay, 400x400", rate: 60, reset: layerReset, draws: layerDraws) {
+    inkLayer.setNeedsDisplay(large($0))
+}
+run("CALayer.setNeedsDisplay, whole screen", rate: 60, reset: layerReset, draws: layerDraws) {
+    inkLayer.setNeedsDisplay(everything($0))
+}
+run("CALayer.setNeedsDisplay, whole screen", rate: 15, reset: layerReset, draws: layerDraws) {
+    inkLayer.setNeedsDisplay(everything($0))
+}
+run("NSView.setNeedsDisplay, whole screen", rate: 15, reset: viewReset, draws: viewDraws) {
+    view.setNeedsDisplay(everything($0))
 }
 run("moving a sublayer, no repaint", rate: 60, reset: layerReset, draws: layerDraws) {
     view.sublayer.position = CGPoint(x: 200 + CGFloat($0 % 300), y: 300)

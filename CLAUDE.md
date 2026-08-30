@@ -95,7 +95,8 @@ easy to repeat.
 7. **Never put a modal dialog in front of the user.** `runModal` blocks a background app and
    can sit behind every window; failures are said in the menu.
 8. **Never leave a timer running when the overlay is idle.** Idle is 0.0% CPU and that is a
-   tested property. The fade timer starts with temporary ink and stops with it.
+   tested property. The fade timer starts with temporary ink and stops with it — and it no
+   longer drives the fade, which Core Animation does; it only drops ink that has expired.
 9. **Never make drawing mode interact with anything** — no key should escape it, no click
    should reach what is underneath. Interaction is what click-through is for.
 10. **Never let hiding erase.** `⌃⌥⌘D` keeps the strokes **and the undo history**; `C` is
@@ -109,17 +110,23 @@ The app is feature-complete for v0.2 and stable. What is open is **performance**
 now been measured rather than guessed (`docs/ARCHITECTURE.md`, "Where the drawing bill
 actually goes"). Three numbers govern everything:
 
-- Asking this overlay to repaint 60 times a second costs **15.2% CPU**, whatever the dirty
-  rect's size. The bill is the number of repaints.
-- The same repaint asked for through a **`CALayer` delegate instead of `NSView.draw(_:)`
-  costs 3.5%** — 4.3x less, for identical output. Moving a sublayer, which is not a repaint,
-  costs 1.5%.
+- Asking this overlay to repaint 60 times a second through `NSView` costs **15.7% CPU**,
+  whatever the dirty rect's size. The bill is the number of repaints.
+- The same repaint asked for through a **`CALayer` costs 3.8%** — 4x less, for identical
+  output — **but only while the dirty rect is small.** A layer repaint costs 21.0% at
+  400x400 and 50.7% for the whole screen, where the view path stays flat. Small rects: use a
+  layer. Whole-screen ones: do not repaint at all.
+- Moving a sublayer, which is not a repaint, costs **1.6%**. A cursor the window server draws
+  costs nothing.
 - Actually painting a drag costs **0.3–0.5%**. Optimising the painting is bidding for half a
   point out of twenty-three.
 
-That route has now been walked: pointer, badge and ink each moved onto a layer. Measured end
-to end on a real panel at 60 events a second — moving the pointer over 200 strokes went from
-**22.5% to 1.6%**, drawing over them from **20.4% to 5.4%**, and idle stayed at 0.5%.
+That route has now been walked, and one step of it had to be walked back. Ink and badge are
+layers; the pointer turned out to belong to the window server instead; and the fade, which is
+the one thing whose dirty rect is *not* small, had to come off the repaint path altogether.
+Measured end to end on a real panel — moving the pointer over 200 strokes went from **22.9%
+to 0.5%**, drawing over them from **23.4% to 5.4%**, fifty strokes fading from 3.8% to 0.7%,
+and idle stayed at 0.5%.
 
 **What is still open**, in order:
 

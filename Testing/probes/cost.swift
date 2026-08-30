@@ -237,11 +237,13 @@ for model in [Bench.Model.rects, .union] {
 
 // MARK: - Sweep 4: a fade tick
 //
-// Temporary ink is aged 15 times a second and the strokes are backdated here so the tick
-// lands in the part of the life where the opacity is actually changing.
+// Kept as a guard rather than as a measurement. A fade is not painted any more - each
+// temporary stroke fades itself, on a layer - so this should paint nothing at all. If it
+// starts painting again, something has put the fade back on the repaint path, and the cost
+// of that is in docs/DECISIONS.md.
 
 line("")
-line("== 4. one fade tick, 50 temporary strokes (ms per tick)")
+line("== 4. one fade tick, 50 temporary strokes (should paint nothing)")
 for model in [Bench.Model.rects, .union] {
     let bench = Bench(model)
     bench.prefill(strokes: 50)
