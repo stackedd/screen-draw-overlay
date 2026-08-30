@@ -16,7 +16,8 @@ let package = Package(
             name: "ScreenDrawOverlay",
             linkerSettings: [
                 .linkedFramework("AppKit"),
-                .linkedFramework("Carbon")
+                .linkedFramework("Carbon"),
+                .linkedFramework("ServiceManagement")
             ]
         )
     ]

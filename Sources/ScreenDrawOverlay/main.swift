@@ -1,11 +1,13 @@
 import AppKit
 import Carbon
 import Foundation
+import ServiceManagement
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private var drawingMenuItem: NSMenuItem?
     private var hotKeyWarningItem: NSMenuItem?
+    private var loginItem: NSMenuItem?
     private var interactionMenuItem: NSMenuItem?
     private var overlayWindows: [OverlayPanel] = []
     private var drawingViews: [DrawingView] = []
@@ -154,11 +156,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(interactionItem)
         interactionMenuItem = interactionItem
         menu.addItem(.separator())
+
+        // Only offered where the system can do it without a helper bundle, and only for a
+        // real installed copy - an unbundled build has nothing to register.
+        if #available(macOS 13.0, *), Bundle.main.bundleIdentifier != nil {
+            let launchItem = NSMenuItem(title: "Open at Login",
+                                        action: #selector(toggleLaunchAtLogin),
+                                        keyEquivalent: "")
+            launchItem.target = self
+            menu.addItem(launchItem)
+            loginItem = launchItem
+            menu.addItem(.separator())
+        }
+
         let quitItem = NSMenuItem(title: "Quit",
                                   action: #selector(quit),
                                   keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
+        menu.delegate = self
         statusItem?.menu = menu
 
         updateStatusItemAppearance()
@@ -174,6 +190,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    // The login state can be changed from System Settings behind our back, so it is read
+    // when the menu opens rather than cached.
+    func menuWillOpen(_ menu: NSMenu) {
+        refreshLoginItem()
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        guard #available(macOS 13.0, *) else {
+            return
+        }
+
+        do {
+            if SMAppService.mainApp.status == .enabled {
+                try SMAppService.mainApp.unregister()
+                print("ScreenDrawOverlay: will no longer open at login")
+            } else {
+                try SMAppService.mainApp.register()
+                print("ScreenDrawOverlay: will open at login")
+            }
+        } catch {
+            // Nothing to shout about: macOS refuses this for copies in odd places, and the
+            // app works exactly the same either way.
+            print("ScreenDrawOverlay: could not change the login item - \(error.localizedDescription)")
+        }
+
+        refreshLoginItem()
+    }
+
+    private func refreshLoginItem() {
+        guard #available(macOS 13.0, *), let loginItem else {
+            return
+        }
+
+        switch SMAppService.mainApp.status {
+        case .enabled:
+            loginItem.title = "Open at Login"
+            loginItem.state = .on
+        case .requiresApproval:
+            // macOS is waiting for the user in System Settings; saying so beats a
+            // checkbox that looks broken.
+            loginItem.title = "Open at Login (approve in System Settings)"
+            loginItem.state = .mixed
+        default:
+            loginItem.title = "Open at Login"
+            loginItem.state = .off
+        }
     }
 
     // Tap or hold, on the same shortcut. A tap toggles, as it always has. Holding it turns

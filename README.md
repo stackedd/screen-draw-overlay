@@ -36,7 +36,7 @@ The quickest way to check that it is running at all is to press the shortcut: `C
 
 Your colour, width and tool are remembered between launches, so a highlighter-in-yellow habit only has to be set once. The eraser and the laser are not: they are things you pick up for a moment, so what comes back is the last tool that actually drew.
 
-The app does not launch at login by itself. Add it under System Settings → General → Login Items if you want that.
+To have it start with your Mac, use **Open at Login** in the menu bar item (macOS 13 and later). On older systems, add it under System Settings → General → Login Items.
 
 ## Shortcuts
 
