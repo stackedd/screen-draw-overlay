@@ -22,6 +22,7 @@ tried and rejected on the way; [../CLAUDE.md](../CLAUDE.md) is the short operati
 | `OverlayPanel.swift` | The transparent window, one per screen: its level, its collection behaviour, and the fact that it swallows key equivalents. |
 | `DrawingView.swift` | The view: events in, paint out, plus the timer that drives the fade. It owns two layers - ink and badge - and paints nothing through `draw(_:)`. |
 | `InkPainter.swift` | The ink layer's delegate, which is why the ink is not painted through the view. |
+| `FadingInk.swift` | Temporary ink on its way out: one self-fading layer each, reconciled against the canvas. |
 | `Canvas.swift` | The drawing itself: strokes, the eraser, undo/redo, fading. Knows nothing about windows — it returns the rectangles that changed. |
 | `Stroke.swift` | What a mark is made of, and what each tool does with two points. |
 | `ToolSettings.swift` | The pen in hand: colour, width, tool. Shared across screens, remembered between launches. |

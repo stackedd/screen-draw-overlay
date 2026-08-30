@@ -25,6 +25,7 @@ CoreGraphics, ServiceManagement (open at login). Universal binary, macOS 11+.
       OverlayPanel.swift      the transparent window, one per screen
       DrawingView.swift       the view: events in, three layers out
       InkPainter.swift        the ink layer's delegate
+      FadingInk.swift         temporary ink, on its way out, one layer each
       Canvas.swift            the drawing: strokes, eraser, undo/redo, fading
       Stroke.swift            what a mark is made of; what each tool draws
       ToolSettings.swift      the pen in hand, shared and remembered

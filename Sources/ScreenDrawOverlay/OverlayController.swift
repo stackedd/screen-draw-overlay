@@ -11,7 +11,7 @@
 //      only C erases - along with the undo history that goes with it.
 //   3. Recovery. forceCloseOverlay releases the mouse before it closes anything, and
 //      overlayWindowSnapshot deliberately re-scans NSApp.windows for panels that fell out
-//      of our own records. Both exist because a stuck overlay traps the user\'s clicks.
+//      of our own records. Both exist because a stuck overlay traps the user's clicks.
 //
 // See docs/ARCHITECTURE.md for the invariants this file must not break.
 
@@ -59,7 +59,7 @@ final class OverlayController {
     }
 
     // Said in the menu, never in a dialog: runModal blocks the main thread and an accessory
-    // app\'s alert can sit behind every window, so a failure at login would look like a hang.
+    // app's alert can sit behind every window, so a failure at login would look like a hang.
     func reportUnavailableShortcuts(_ shortcuts: [String]) {
         menuBar?.reportUnavailableShortcuts(shortcuts)
     }
