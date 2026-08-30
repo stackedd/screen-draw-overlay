@@ -65,6 +65,63 @@ enum DrawingTool {
         }
     }
 
+// MARK: - Shape geometry
+
+    // Shapes are two-point figures. Holding Shift snaps a line or arrow to the nearest 45
+    // degrees and makes a rectangle square or an ellipse round, which is what every other
+    // drawing tool does and what fingers expect.
+    func constrainedEnd(from anchor: NSPoint, to point: NSPoint, shiftHeld: Bool) -> NSPoint {
+        guard shiftHeld else {
+            return point
+        }
+
+        let dx = point.x - anchor.x
+        let dy = point.y - anchor.y
+
+        if self == .rectangle || self == .ellipse {
+            let side = max(abs(dx), abs(dy))
+            return NSPoint(x: anchor.x + (dx < 0 ? -side : side), y: anchor.y + (dy < 0 ? -side : side))
+        }
+
+        let angle = atan2(dy, dx)
+        let step = CGFloat.pi / 4
+        let snapped = (angle / step).rounded() * step
+        let length = hypot(dx, dy)
+        return NSPoint(x: anchor.x + cos(snapped) * length, y: anchor.y + sin(snapped) * length)
+    }
+
+    func shapePath(from anchor: NSPoint, to end: NSPoint, width: CGFloat) -> NSBezierPath {
+        let path = NSBezierPath()
+        path.lineWidth = width
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+
+        switch self {
+        case .rectangle:
+            path.appendRect(NSRect(x: min(anchor.x, end.x), y: min(anchor.y, end.y),
+                                   width: abs(end.x - anchor.x), height: abs(end.y - anchor.y)))
+        case .ellipse:
+            path.appendOval(in: NSRect(x: min(anchor.x, end.x), y: min(anchor.y, end.y),
+                                       width: abs(end.x - anchor.x), height: abs(end.y - anchor.y)))
+        case .arrow:
+            path.move(to: anchor)
+            path.line(to: end)
+            // Head scaled to the line width so a thick arrow does not end in a pin prick.
+            let headLength = max(12, width * 3.5)
+            let angle = atan2(end.y - anchor.y, end.x - anchor.x)
+            let spread = CGFloat.pi / 7
+            for side in [angle + .pi - spread, angle + .pi + spread] {
+                path.move(to: end)
+                path.line(to: NSPoint(x: end.x + cos(side) * headLength, y: end.y + sin(side) * headLength))
+            }
+        default:
+            path.move(to: anchor)
+            path.line(to: end)
+        }
+
+        return path
+    }
+
     var label: String {
         switch self {
         case .pen: return "PEN"
@@ -138,6 +195,44 @@ struct Stroke {
         }
 
         return max(0, CGFloat(1 - (age - Stroke.fadeHold) / (1 - Stroke.fadeHold)))
+    }
+
+    // NSBezierPath.bounds covers the path geometry only, so grow it by this stroke's own
+    // line width to include the drawn line, its caps and antialiasing.
+    var repaintBounds: NSRect {
+        path.bounds.insetBy(dx: -width, dy: -width)
+    }
+
+    // Distance from a point to the stroke's polyline. This is why a Stroke keeps its
+    // points: NSBezierPath can only answer this for its filled area, not for the line.
+    func distance(to point: NSPoint) -> CGFloat {
+        guard let first = points.first else {
+            return .greatestFiniteMagnitude
+        }
+
+        guard points.count > 1 else {
+            return hypot(point.x - first.x, point.y - first.y)
+        }
+
+        var best = CGFloat.greatestFiniteMagnitude
+        for index in 1..<points.count {
+            best = min(best, Stroke.distance(from: point, toSegmentFrom: points[index - 1], to: points[index]))
+        }
+
+        return best
+    }
+
+    private static func distance(from point: NSPoint, toSegmentFrom start: NSPoint, to end: NSPoint) -> CGFloat {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let lengthSquared = dx * dx + dy * dy
+
+        guard lengthSquared > 0 else {
+            return hypot(point.x - start.x, point.y - start.y)
+        }
+
+        let t = max(0, min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
+        return hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy))
     }
 
     var hasFaded: Bool {

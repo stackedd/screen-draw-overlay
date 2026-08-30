@@ -27,24 +27,9 @@ final class DrawingView: NSView {
 
 
 
-    // Undo has to put back what the eraser and Clear take away, not just the last thing
-    // drawn, so edits are recorded rather than inferred from the stroke list.
-    private struct Removal {
-        let index: Int
-        let stroke: Stroke
-    }
-
-    private enum Edit {
-        case added(Stroke)
-        case removed([Removal])
-    }
-
-    private var strokes: [Stroke] = []
-    private var currentStroke: Stroke?
-    private var shapeAnchor: NSPoint?
-    private var lastStrokePoint: NSPoint?
-    private var undoStack: [Edit] = []
-    private var redoStack: [Edit] = []
+    // What has been drawn. This view paints it and feeds it events; the rules about what
+    // a stroke is and how undo works live in Canvas.
+    private let canvas = Canvas()
     private var fadeTimer: Timer?
     let tools: ToolSettings
     private var pointerLocation: NSPoint?
@@ -134,19 +119,7 @@ final class DrawingView: NSView {
             return
         }
 
-        let width = tools.renderWidth
-        let path = NSBezierPath()
-        path.lineWidth = width
-        path.lineCapStyle = tools.style.lineCapStyle
-        path.lineJoinStyle = .round
-        path.move(to: point)
-
-        currentStroke = Stroke(points: [point], path: path, color: tools.color,
-                               width: width, style: tools.style,
-                               createdAt: tools.drawsTemporaryInk ? Date() : nil)
-        shapeAnchor = tools.tool.isShape ? point : nil
-        lastStrokePoint = point
-        invalidateSegment(from: point, to: point, width: width)
+        setNeedsDisplay(canvas.beginStroke(at: point, with: tools))
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -161,33 +134,11 @@ final class DrawingView: NSView {
             return
         }
 
-        guard currentStroke != nil else { return }
-
-        // A shape is defined by two points, so it is rebuilt on every move rather than
-        // extended. Repainting covers where it was and where it now is.
-        if let anchor = shapeAnchor, let existing = currentStroke {
-            let end = constrainedShapeEnd(from: anchor, to: point, shiftHeld: event.modifierFlags.contains(.shift))
-            let previousBounds = strokeBounds(of: existing)
-            let rebuilt = shapePath(from: anchor, to: end, width: existing.width)
-            currentStroke = Stroke(points: [anchor, end], path: rebuilt, color: existing.color,
-                                   width: existing.width, style: existing.style,
-                                   createdAt: existing.createdAt)
-            lastStrokePoint = end
-            if let updated = currentStroke {
-                setNeedsDisplay(previousBounds.union(strokeBounds(of: updated)))
-            }
-            return
+        if let dirty = canvas.extendStroke(to: point,
+                                           shiftHeld: event.modifierFlags.contains(.shift),
+                                           with: tools) {
+            setNeedsDisplay(dirty)
         }
-
-        let previousPoint = lastStrokePoint ?? point
-        currentStroke?.path.line(to: point)
-        currentStroke?.points.append(point)
-        lastStrokePoint = point
-
-        // Only the new segment changed. Invalidating the whole view here meant every
-        // mouse move re-stroked every path drawn so far, so the cost of a drag grew
-        // with the number of strokes already on screen.
-        invalidateSegment(from: previousPoint, to: point, width: currentStroke?.width ?? tools.renderWidth)
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -196,18 +147,7 @@ final class DrawingView: NSView {
         if let region = badge?.updateHover(at: point) {
             setNeedsDisplay(region)
         }
-        shapeAnchor = nil
-
-        if let currentStroke {
-            strokes.append(currentStroke)
-            recordEdit(.added(currentStroke))
-            startFadingIfNeeded()
-            // The pixels do not change here, the stroke just moves from currentStroke
-            // into strokes. Repainting its own bounds once is cheap insurance.
-            setNeedsDisplay(strokeBounds(of: currentStroke))
-        }
-        currentStroke = nil
-        lastStrokePoint = nil
+        finishStrokeInProgress()
     }
 
     override func mouseMoved(with event: NSEvent) {
@@ -317,9 +257,9 @@ final class DrawingView: NSView {
         } else if event.keyCode == UInt16(kVK_ANSI_C), shortcutFlags == [] || shortcutFlags == .shift {
             clear()
         } else if event.keyCode == UInt16(kVK_ANSI_Z), shortcutFlags == .command {
-            undoLastEdit()
+            canvas.undo().forEach(setNeedsDisplay)
         } else if event.keyCode == UInt16(kVK_ANSI_Z), shortcutFlags == [.command, .shift] {
-            redoLastEdit()
+            canvas.redo().forEach(setNeedsDisplay)
         } else if event.keyCode == UInt16(kVK_Delete) || event.keyCode == UInt16(kVK_ForwardDelete),
                   shortcutFlags == [] {
             clear()
@@ -371,7 +311,7 @@ final class DrawingView: NSView {
         // Skip strokes that are nowhere near the region being repainted. With
         // incremental invalidation this is what keeps a drag cheap on a long session.
         let now = Date()
-        for stroke in strokes where strokeBounds(of: stroke).intersects(dirtyRect) {
+        for stroke in canvas.strokes where stroke.repaintBounds.intersects(dirtyRect) {
             let opacity = stroke.opacity(at: now)
             guard opacity > 0 else {
                 continue
@@ -381,63 +321,38 @@ final class DrawingView: NSView {
             stroke.path.stroke()
         }
 
-        if let currentStroke, strokeBounds(of: currentStroke).intersects(dirtyRect) {
-            currentStroke.renderColor.setStroke()
-            currentStroke.path.stroke()
+        if let inProgress = canvas.strokeInProgress, inProgress.repaintBounds.intersects(dirtyRect) {
+            inProgress.renderColor.setStroke()
+            inProgress.path.stroke()
         }
 
         badge?.draw(in: dirtyRect)
         drawPointer(in: dirtyRect)
     }
 
-    // Temporary ink is deliberately left behind: it was drawn to vanish, and bringing it
-    // back mid-fade on the next show would be a surprise.
+    // What AppDelegate lifts out before the panels are destroyed, and puts back when they
+    // are recreated: hiding the overlay is not erasing it.
     func capturedStrokes() -> [Stroke] {
-        strokes.filter { $0.createdAt == nil }
+        canvas.capturedStrokes()
     }
 
-    // A stroke the user has not lifted the mouse off yet is still a stroke. Whenever the
-    // tool is taken away mid-drag - hiding the overlay, or stepping into click-through -
-    // it has to be committed, or it is dropped on the floor: hiding lost it, and after a
-    // round trip through click-through it sat there unfinished until the next mouseDown
-    // silently replaced it.
     func finishStrokeInProgress() {
-        guard let currentStroke else {
+        guard let dirty = canvas.finishStroke() else {
             return
         }
 
-        strokes.append(currentStroke)
-        recordEdit(.added(currentStroke))
         startFadingIfNeeded()
-        self.currentStroke = nil
-        shapeAnchor = nil
-        lastStrokePoint = nil
-        setNeedsDisplay(strokeBounds(of: currentStroke))
+        setNeedsDisplay(dirty)
     }
 
     func restore(strokes restored: [Stroke]) {
-        strokes = restored
-        undoStack.removeAll()
-        redoStack.removeAll()
-        currentStroke = nil
-        lastStrokePoint = nil
+        canvas.restore(restored)
         needsDisplay = true
     }
 
-    // Clearing is an edit like any other, so an accidental Delete can be taken back.
     func clear() {
-        finishStrokeInProgress()
-
-        if !strokes.isEmpty {
-            recordEdit(.removed(strokes.enumerated().map { Removal(index: $0.offset, stroke: $0.element) }))
-        }
-
-        strokes.removeAll()
-        currentStroke = nil
-        shapeAnchor = nil
-        lastStrokePoint = nil
-        fadeTimer?.invalidate()
-        fadeTimer = nil
+        canvas.clear()
+        stopFading()
         needsDisplay = true
     }
 
@@ -455,126 +370,15 @@ final class DrawingView: NSView {
         setNeedsDisplay(badge.repaintRegionAfterToolChange())
     }
 
-    // Shapes are two-point figures. Holding Shift snaps a line or arrow to the nearest 45
-    // degrees and makes a rectangle square or an ellipse round, which is what every other
-    // drawing tool does and what fingers expect.
-    private func constrainedShapeEnd(from anchor: NSPoint, to point: NSPoint, shiftHeld: Bool) -> NSPoint {
-        guard shiftHeld else {
-            return point
-        }
-
-        let dx = point.x - anchor.x
-        let dy = point.y - anchor.y
-
-        if tools.tool == .rectangle || tools.tool == .ellipse {
-            let side = max(abs(dx), abs(dy))
-            return NSPoint(x: anchor.x + (dx < 0 ? -side : side), y: anchor.y + (dy < 0 ? -side : side))
-        }
-
-        let angle = atan2(dy, dx)
-        let step = CGFloat.pi / 4
-        let snapped = (angle / step).rounded() * step
-        let length = hypot(dx, dy)
-        return NSPoint(x: anchor.x + cos(snapped) * length, y: anchor.y + sin(snapped) * length)
-    }
-
-    private func shapePath(from anchor: NSPoint, to end: NSPoint, width: CGFloat) -> NSBezierPath {
-        let path = NSBezierPath()
-        path.lineWidth = width
-        path.lineCapStyle = .round
-        path.lineJoinStyle = .round
-
-        switch tools.tool {
-        case .rectangle:
-            path.appendRect(NSRect(x: min(anchor.x, end.x), y: min(anchor.y, end.y),
-                                   width: abs(end.x - anchor.x), height: abs(end.y - anchor.y)))
-        case .ellipse:
-            path.appendOval(in: NSRect(x: min(anchor.x, end.x), y: min(anchor.y, end.y),
-                                       width: abs(end.x - anchor.x), height: abs(end.y - anchor.y)))
-        case .arrow:
-            path.move(to: anchor)
-            path.line(to: end)
-            // Head scaled to the line width so a thick arrow does not end in a pin prick.
-            let headLength = max(12, width * 3.5)
-            let angle = atan2(end.y - anchor.y, end.x - anchor.x)
-            let spread = CGFloat.pi / 7
-            for side in [angle + .pi - spread, angle + .pi + spread] {
-                path.move(to: end)
-                path.line(to: NSPoint(x: end.x + cos(side) * headLength, y: end.y + sin(side) * headLength))
-            }
-        default:
-            path.move(to: anchor)
-            path.line(to: end)
-        }
-
-        return path
-    }
-
-    // The eraser rubs out whole strokes: partial erasing would mean splitting paths, and
-    // on an annotation overlay "take that line away" is what people actually want.
     private func erase(at point: NSPoint) {
-        let radius = tools.eraserRadius
-        var removed: [Removal] = []
-
-        for index in strokes.indices.reversed() {
-            let stroke = strokes[index]
-            guard strokeBounds(of: stroke).insetBy(dx: -radius, dy: -radius).contains(point) else {
-                continue
-            }
-
-            guard distance(from: point, to: stroke) <= radius + stroke.width / 2 else {
-                continue
-            }
-
-            removed.append(Removal(index: index, stroke: stroke))
-            setNeedsDisplay(strokeBounds(of: stroke))
-            strokes.remove(at: index)
-        }
-
-        guard !removed.isEmpty else {
-            return
-        }
-
-        recordEdit(.removed(removed.sorted { $0.index < $1.index }))
-    }
-
-    // Distance from the pointer to the stroke's polyline. This is why Stroke keeps its
-    // points: NSBezierPath can only test its filled area, not the line itself.
-    private func distance(from point: NSPoint, to stroke: Stroke) -> CGFloat {
-        guard let first = stroke.points.first else {
-            return .greatestFiniteMagnitude
-        }
-
-        guard stroke.points.count > 1 else {
-            return hypot(point.x - first.x, point.y - first.y)
-        }
-
-        var best = CGFloat.greatestFiniteMagnitude
-        for index in 1..<stroke.points.count {
-            best = min(best, distance(from: point, toSegmentFrom: stroke.points[index - 1], to: stroke.points[index]))
-        }
-
-        return best
-    }
-
-    private func distance(from point: NSPoint, toSegmentFrom start: NSPoint, to end: NSPoint) -> CGFloat {
-        let dx = end.x - start.x
-        let dy = end.y - start.y
-        let lengthSquared = dx * dx + dy * dy
-
-        guard lengthSquared > 0 else {
-            return hypot(point.x - start.x, point.y - start.y)
-        }
-
-        let t = max(0, min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
-        return hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy))
+        canvas.erase(at: point, radius: tools.eraserRadius).forEach(setNeedsDisplay)
     }
 
     // The only timer in the app, and it exists only while temporary ink is on screen:
     // it starts when one is drawn and stops the moment the last one is gone, so an idle
     // overlay still costs nothing.
     private func startFadingIfNeeded() {
-        guard fadeTimer == nil, strokes.contains(where: { $0.createdAt != nil }) else {
+        guard fadeTimer == nil, canvas.hasTemporaryInk else {
             return
         }
 
@@ -586,110 +390,21 @@ final class DrawingView: NSView {
     }
 
     private func advanceFade() {
-        let now = Date()
-        var fadingRemains = false
-        var changed = false
-        var region = NSRect.zero
+        let (dirty, stillFading) = canvas.advanceFade()
 
-        for index in strokes.indices.reversed() {
-            guard let createdAt = strokes[index].createdAt else {
-                continue
-            }
-
-            let bounds = strokeBounds(of: strokes[index])
-
-            if strokes[index].hasFaded {
-                // Temporary ink is not an edit: it was never meant to stay, so undo has
-                // nothing to say about it disappearing.
-                strokes.remove(at: index)
-                changed = true
-            } else {
-                fadingRemains = true
-                // Nothing to repaint while the stroke is still at full strength, which is
-                // more than half of its life.
-                if now.timeIntervalSince(createdAt) / Stroke.fadeDuration > Stroke.fadeHold {
-                    changed = true
-                }
-            }
-
-            region = region == .zero ? bounds : region.union(bounds)
+        if let dirty {
+            setNeedsDisplay(dirty)
         }
 
-        // One repaint covering all of them, not one per stroke: fifty separate rects mean
-        // fifty passes that each redraw every stroke they touch, and the cost of a fade
-        // then grows with the square of what is on screen. Measured: 12.5% CPU that way.
-        if changed, region != .zero {
-            setNeedsDisplay(region)
-        }
-
-        guard !fadingRemains else {
+        guard !stillFading else {
             return
         }
 
+        stopFading()
+    }
+
+    private func stopFading() {
         fadeTimer?.invalidate()
         fadeTimer = nil
     }
-
-    private func recordEdit(_ edit: Edit) {
-        undoStack.append(edit)
-        // A new edit is a new branch: whatever was undone is no longer ahead of us.
-        redoStack.removeAll()
-    }
-
-    private func undoLastEdit() {
-        guard let edit = undoStack.popLast() else {
-            return
-        }
-
-        switch edit {
-        case .added(let stroke):
-            if !strokes.isEmpty {
-                strokes.removeLast()
-            }
-            setNeedsDisplay(strokeBounds(of: stroke))
-        case .removed(let removals):
-            for removal in removals {
-                strokes.insert(removal.stroke, at: min(removal.index, strokes.count))
-                setNeedsDisplay(strokeBounds(of: removal.stroke))
-            }
-        }
-
-        redoStack.append(edit)
-    }
-
-    private func redoLastEdit() {
-        guard let edit = redoStack.popLast() else {
-            return
-        }
-
-        switch edit {
-        case .added(let stroke):
-            strokes.append(stroke)
-            setNeedsDisplay(strokeBounds(of: stroke))
-        case .removed(let removals):
-            for removal in removals.reversed() where removal.index < strokes.count {
-                setNeedsDisplay(strokeBounds(of: strokes[removal.index]))
-                strokes.remove(at: removal.index)
-            }
-        }
-
-        undoStack.append(edit)
-    }
-
-    // NSBezierPath.bounds covers the path geometry only, so grow it by that stroke's own
-    // line width to include the drawn line, its caps and antialiasing.
-    private func strokeBounds(of stroke: Stroke) -> NSRect {
-        stroke.path.bounds.insetBy(dx: -stroke.width, dy: -stroke.width)
-    }
-
-    private func invalidateSegment(from start: NSPoint, to end: NSPoint, width: CGFloat) {
-        let segment = NSRect(x: min(start.x, end.x),
-                             y: min(start.y, end.y),
-                             width: abs(end.x - start.x),
-                             height: abs(end.y - start.y))
-        setNeedsDisplay(segment.insetBy(dx: -width, dy: -width))
-    }
-
-
-
 }
