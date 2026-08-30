@@ -13,7 +13,7 @@ import Foundation
 // What the pointer does while the button is down. Freehand tools trail the mouse; shape
 // tools are defined by where the drag started and where it is now; the eraser removes
 // instead of adding.
-enum DrawingTool {
+enum DrawingTool: Hashable {
     case pen
     case highlighter
     case line

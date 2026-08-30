@@ -112,27 +112,51 @@ This needed `GlobalHotKey` to carry the release half of the keypress
 (`kEventHotKeyReleased`). If a system ever fails to deliver it, the hold degrades to a tap —
 the old behaviour, not a broken one.
 
-## 6. The pointer is drawn, not requested
+## 6. The pointer is the system arrow with a ring around its tip
 
-**Tried:** `NSCursor.crosshair` — invisible over a presentation, because the presenting app
-had hidden the pointer entirely.
+**Tried:** `NSCursor.crosshair`. Invisible over a Keynote slideshow — though see below, that
+test was run while the overlay itself was at window level 3 and underneath Keynote, so it may
+never have been the cursor's fault at all.
 
-**Tried:** `NSCursor.unhide()` + `CGDisplayShowCursor` to force it back. Unverifiable and
-ineffective: cursor hiding is per application and only applies while that application is
-active, so a background `.accessory` app hides and unhides nothing.
+**Tried:** `NSCursor.unhide()` + `CGDisplayShowCursor`, then `NSCursor.hide()`. Both
+ineffective for the same reason: cursor hiding is per application and only applies while that
+application is active, so a background `.accessory` app hides and unhides nothing. The second
+attempt put **two pointers** on screen during a presentation.
 
-**Tried:** `NSCursor.hide()` so only our drawn crosshair shows. Same reason, same failure —
-and the user got two pointers on screen during a presentation.
+**Chosen, and then reversed:** a fully transparent cursor (a 16x16 empty `NSImage`) with the
+app painting its own crosshair underneath. It worked as long as we owned the window under the
+pointer — and that is the flaw. The moment something else takes the cursor, and the menu bar
+does it reliably, the real arrow comes back and stays, and from then on there are two
+pointers: the system's and ours. A transparent cursor has no failure mode between *invisible*
+and *doubled*.
 
-**Chosen:** hand the window a **fully transparent cursor** (a 16×16 empty `NSImage`). The
-window server asks whoever owns the window under the pointer, and in drawing mode that is
-us. It needs no permission and does not depend on being frontmost. The crosshair below it is
-drawn by the view; click-through drops the cursor rects and hands the real pointer back.
+**Now:** one cursor that cannot double. The system arrow, composited with a ring around its
+tip, handed over as a single `NSCursor`. The ring carries the tool and its colour; the eraser
+gets a ring the size of what it will rub out; the laser gets its glowing dot. Losing cursor
+ownership now degrades to a plain arrow instead of to a bug.
 
-**A crash to not repeat:** the first version called
-`window.invalidateCursorRects(for:)` from inside `cursorUpdate`. That re-enters AppKit's
-tracking machinery and throws — `SIGABRT` the moment the pointer moved over the panel.
-Rebuilding cursor rects now lives in its own method that only mode changes call.
+Three points have to be the same point — the cursor's hot spot, the middle of the ring, and
+where the ink lands — or a stroke appears offset from the arrow the user is aiming with. The
+behaviour suite checks it.
+
+**It is also free.** The window server draws the cursor, so following the mouse costs this
+process nothing: moving the pointer over a canvas of 200 strokes went 22.5% of a core (paint
+it) to 1.6% (move a layer) to **0.5%**, which is what an idle overlay costs anyway.
+
+The image is built through `NSImage(size:flipped:drawingHandler:)` rather than into a bitmap,
+so the cursor is redrawn at whatever resolution the display it lands on needs, and cached per
+tool, colour and width — a keypress, never a mouse move.
+
+**A crash to not repeat:** the first version called `window.invalidateCursorRects(for:)` from
+inside `cursorUpdate`. That re-enters AppKit's tracking machinery and throws — `SIGABRT` the
+moment the pointer moved over the panel. Rebuilding cursor rects lives in its own method that
+only mode and tool changes call.
+
+**Unverified:** whether a presenting app that hides the pointer can hide this one too. The
+original note says a Keynote slideshow did, but that was measured with the overlay at level 3,
+underneath Keynote, where Keynote owned the window under the pointer and set the cursor. At
+level 101 we own it. If it turns out otherwise, the fallback is in the history: paint the ring
+on a layer and accept that it lags the arrow by a frame.
 
 ## 7. Repainting is incremental
 
@@ -311,34 +335,19 @@ mouse is re-stroked in full on every mouse move, so a single unbroken line is qu
 the last tenth of a 5000-point line costs **5.5x** what its first tenth did. It is small in
 absolute terms until a line gets very long, which is exactly when someone notices.
 
-## 20. The pointer and the badge are layers, not paint
+## 20. The badge is a layer, not paint
 
 The crosshair used to be painted in `draw(_:)`, and following the mouse meant invalidating
 where it had been and where it had arrived. Both rectangles are about 26pt square, which
 sounded free and was not: a repaint of a full screen transparent overlay costs the same
 whatever its dirty rect, so **painting the crosshair cost as much as painting everything**.
-On a canvas with ink on it, it cost more than that — the two rectangles union into one
-region and every stroke that region touches is re-stroked, while the user is drawing nothing
-at all.
+On a canvas with ink on it, more — the two rectangles union into one region and every stroke
+that region touches is re-stroked, while the user is drawing nothing at all. Measured at 60
+moves a second: **22.5% of a core**.
 
-**Now:** the pointer is a `CGImage` on a `CALayer`, and a mouse move sets `position`.
-Measured at 60 moves a second: **15.2% of a core before, 1.5% after**. The offscreen cost
-suite puts it more bluntly — moving the pointer over a canvas of 200 strokes now paints
-**nothing**, where it used to paint on every move.
-
-Two details that are not optional:
-
-- `pointerLayer.actions` disables the implicit animation on `position`. Core Animation
-  animates a position change by default, and a cursor that eases towards the mouse is worse
-  than no cursor at all.
-- The picture is redrawn only when the tool or colour changes (the laser is a coloured dot,
-  everything else is the crosshair) and when the backing scale does. A layer-backed view can
-  be handed a new backing layer when it changes windows, so the sublayer is re-attached in
-  `viewDidMoveToWindow` rather than only in `init`.
-
-The behaviour suite checks the one thing that could break silently: that the layer sits on
-the mouse point and the backing layer is not geometry-flipped. A flipped layer would put the
-crosshair as far from the pointer as the pointer is from the middle of the screen.
+Moving it to a layer took that to 1.6%. It has since gone further and left the app entirely —
+the pointer is a real cursor now (entry 6), which costs 0.5%, which is nothing. The layer
+version is worth recording anyway, because the reasoning is what carried over to the badge.
 
 **The badge went the same way, and for a sharper reason.** It changes when the tool, the
 colour or the mode changes — a few times a session — but it was painted inside `draw(_:)`,

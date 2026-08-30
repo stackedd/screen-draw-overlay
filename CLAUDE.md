@@ -25,7 +25,7 @@ CoreGraphics, ServiceManagement (open at login). Universal binary, macOS 11+.
       Stroke.swift            what a mark is made of; what each tool draws
       ToolSettings.swift      the pen in hand, shared and remembered
       ModeBadge.swift         the corner badge - the only on-screen UI
-      PointerCursor.swift     transparent system cursor + the drawn crosshair
+      PointerCursor.swift     the cursor drawing mode hands over: arrow + a ring at its tip
       GlobalHotKey.swift      Carbon shortcuts and their ownership rules
       NSScreen+Display.swift  identifying a display across time
     Testing/                  the two test suites (see below)
@@ -36,7 +36,8 @@ CoreGraphics, ServiceManagement (open at login). Universal binary, macOS 11+.
 
 The dependency runs one way: `AppDelegate` → `DrawingView` → `Canvas`. What is drawn belongs
 in `Canvas`; how it appears belongs in the view. Nothing is painted through `NSView.draw(_:)`
-— ink, badge and pointer each have a `CALayer`, which is worth 4.3x on every repaint.
+— the ink and the badge each have a `CALayer`, which is worth 4.3x on every repaint, and the
+pointer is a cursor the window server draws for us.
 
 ## Commands
 
@@ -84,9 +85,9 @@ easy to repeat.
    the guarantee is that it always works.
 5. **Never repaint the whole drawing on a mouse move.** Invalidate the rect you changed.
    Repainting everything cost 26x more, and the suite fails on `fullInkInvalidations > 0`.
-   Better still, do not repaint at all: **the pointer and the badge are layers**. Painting
-   either into `draw(_:)` puts a repaint back on every mouse move — 15.2% of a core against
-   1.5% — and the badge measures its own text before it can decide to do nothing.
+   Better still, do not repaint at all: **the badge is a layer and the pointer is a real
+   cursor**. Painting either put a repaint on every mouse move — 22.5% of a core against the
+   0.5% it costs now.
 6. **Never call `invalidateCursorRects` from inside `cursorUpdate`.** It re-enters AppKit's
    tracking machinery and crashes — this was a shipped `SIGABRT` once.
 7. **Never put a modal dialog in front of the user.** `runModal` blocks a background app and

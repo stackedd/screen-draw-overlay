@@ -84,17 +84,14 @@
         press(kVK_ANSI_Z, "z", [.command, .shift])
         check("redo clears again", "\(live)", "0")
 
-        // The pointer rides on a layer instead of being painted, so the one thing that can
-        // silently go wrong is its coordinate space: a flipped backing layer would put the
-        // crosshair as far from the mouse as the mouse is from the middle of the screen.
-        if let view = drawingViewSnapshot(from: overlayWindowSnapshot()).first {
-            view.movePointer(to: NSPoint(x: 400, y: 300))
-            let placed = view.pointerLayer.position == CGPoint(x: 400, y: 300)
-                && !view.pointerLayer.isHidden
-                && view.layer?.isGeometryFlipped == false
-                && view.pointerLayer.superlayer === view.layer
-            check("pointer layer sits on the mouse, unflipped", placed ? "yes" : "no", "yes")
-        }
+        // The pointer is the system arrow with a ring around its tip. Three points have
+        // to be the same one - the hot spot, the middle of the ring and where the ink
+        // lands - or the stroke appears offset from the arrow the user is aiming with.
+        let cursor = PointerCursor.cursor(for: tools)
+        let aimed = cursor.hotSpot.x == cursor.image.size.width / 2
+            && cursor.hotSpot.y == cursor.image.size.height / 2
+            && cursor.image.size.width > NSCursor.arrow.image.size.width
+        check("cursor is the arrow with its tip on the ink", aimed ? "yes" : "no", "yes")
 
         // hold to draw: a long press puts it away on release, a tap does not
         toggleDrawingMode()

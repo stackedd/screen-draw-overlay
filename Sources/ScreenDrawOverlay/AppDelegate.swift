@@ -359,17 +359,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshMenuBar()
     }
 
-    // The real pointer is replaced by a fully transparent cursor over the panel, and the
-    // view draws its own crosshair instead. NSCursor.hide() was the obvious approach and
-    // the wrong one: hiding is per application and only applies while that application is
-    // active, so a background .accessory app hides nothing and the user ends up with two
-    // pointers. A transparent cursor rect works because the window server asks whoever
-    // owns the window under the pointer, which is us.
+    // Drawing mode hands the window server the system arrow with a ring around its tip, so
+    // the pointer says which tool is in hand without there ever being two of it. The window
+    // server asks whoever owns the window under the pointer, which in drawing mode is us.
     private func startDrawingPointer() {
         drawingViewSnapshot(from: overlayWindowSnapshot()).forEach { drawingView in
             drawingView.refreshCursorRects()
             drawingView.applyDrawingCursor()
-            drawingView.syncPointerToMouseLocation()
         }
     }
 

@@ -18,13 +18,13 @@ tried and rejected on the way; [../CLAUDE.md](../CLAUDE.md) is the short operati
 | `AppDelegate.swift` | The mode model, the lifetime of the overlay panels, kept drawings, and the hot keys. The coordinator. |
 | `MenuBarItem.swift` | The menu bar presence: icon, menu, Open at Login, and the "shortcut unavailable" line. |
 | `OverlayPanel.swift` | The transparent window, one per screen: its level, its collection behaviour, and the fact that it swallows key equivalents. |
-| `DrawingView.swift` | The view: events in, paint out, plus the timer that drives the fade. It owns three layers - ink, badge, pointer - and paints nothing through `draw(_:)`. |
+| `DrawingView.swift` | The view: events in, paint out, plus the timer that drives the fade. It owns two layers - ink and badge - and paints nothing through `draw(_:)`. |
 | `InkPainter.swift` | The ink layer's delegate, which is why the ink is not painted through the view. |
 | `Canvas.swift` | The drawing itself: strokes, the eraser, undo/redo, fading. Knows nothing about windows — it returns the rectangles that changed. |
 | `Stroke.swift` | What a mark is made of, and what each tool does with two points. |
 | `ToolSettings.swift` | The pen in hand: colour, width, tool. Shared across screens, remembered between launches. |
 | `ModeBadge.swift` | The badge in the corner — the app's entire on-screen interface. It hands over a picture; the view carries it on a layer. |
-| `PointerCursor.swift` | The transparent system cursor and the picture of the crosshair or laser dot shown in its place. |
+| `PointerCursor.swift` | The cursor drawing mode hands the window server: the system arrow with a ring around its tip. |
 | `GlobalHotKey.swift` | The three shortcuts, on Carbon, and the ownership rules that keep the callback safe. |
 | `NSScreen+Display.swift` | Identifying a display across time. |
 
@@ -143,15 +143,23 @@ each moved onto a `CALayer`; nothing about what is painted changed.
 | what the user is doing | strokes on screen | before | after |
 | --- | --- | --- | --- |
 | nothing, the overlay is just up | 200 | 0.5% | 0.5% |
-| moving the pointer, drawing nothing | 0 | 22.1% | **1.5%** |
-| moving the pointer, drawing nothing | 200 | 22.5% | **1.6%** |
+| moving the pointer, drawing nothing | 0 | 22.1% | **0.5%** |
+| moving the pointer, drawing nothing | 200 | 22.5% | **0.5%** |
 | drawing one long unbroken stroke | 0 | 21.9% | **4.2%** |
 | drawing over a canvas that already has ink | 200 | 20.4% | **5.4%** |
 
 The first row is the invariant holding: an overlay that is up and not being used costs
 nothing either way. The second and third are the ones worth staring at — **moving the mouse
 without drawing anything used to cost as much as drawing** (22.1% against 21.9%), because
-the crosshair was paint and paint meant a repaint of the whole overlay.
+the crosshair was paint and paint meant a repaint of the whole overlay. It is now indexed to
+the idle number, because the window server draws the cursor and we do nothing at all.
+
+**Cursor.** `NSCursor.hide()` is per application and only applies while that application is
+active, so a background app hides nothing — that attempt left two pointers on screen during a
+presentation. Handing the window a transparent cursor and painting our own removed the system
+one, but only while we owned the window under the pointer: lose that once, to the menu bar,
+and there are two pointers again with no way back. The pointer is now the system arrow with a
+ring around its tip, as one cursor, which cannot double.
 
 **`needsToDraw(_:)` is not a lever here.** It looked like a free win — AppKit hands
 `draw(_:)` the bounding box of every invalid rectangle, so a pointer that invalidates where
