@@ -1,0 +1,220 @@
+// A radial menu: hold a key, push the mouse in a direction, let go.
+//
+// The whole point is that it costs no aim. There is no small target to hit - a sector is a
+// forty-five degree wedge of the screen around wherever the pointer already was - so it can
+// be driven at speed without looking, which is what a tool you use in the middle of talking
+// to a room has to be.
+//
+// This type is the model and the drawing, and nothing else: it knows its sectors, which one
+// a direction picks, and how to paint itself into a context. Where it appears and how it is
+// opened is WheelPanel's business, and what a sector means is the caller's.
+
+import AppKit
+
+struct Wheel {
+    struct Item {
+        let label: String
+        // An SF Symbol, which is macOS 11 and so is the floor this app already targets.
+        let symbol: String
+        // Set where the sector *is* the colour - the colour wheel - and left nil where the
+        // glyph should read as an icon rather than a swatch.
+        let tint: NSColor?
+
+        init(label: String, symbol: String, tint: NSColor? = nil) {
+            self.label = label
+            self.symbol = symbol
+            self.tint = tint
+        }
+    }
+
+    // Big enough to read across a room's projector, small enough to sit inside one screen
+    // at the corner the pointer happens to be in.
+    static let outerRadius: CGFloat = 138
+    static let innerRadius: CGFloat = 52
+    // Room for the drop shadow, so the panel does not clip it.
+    static let margin: CGFloat = 18
+    static var extent: CGFloat { (outerRadius + margin) * 2 }
+
+    let items: [Item]
+
+    // Sector zero points right and they run clockwise, so the two that need no thought -
+    // the pen and the eraser - are a flick right and a flick left.
+    private var sweep: CGFloat { items.isEmpty ? 0 : .pi * 2 / CGFloat(items.count) }
+
+    // Which sector a push in this direction picks, or nil for none: inside the dead zone
+    // in the middle, which is how you change your mind. Come back to the centre, let go,
+    // nothing happens.
+    func selection(for offset: NSPoint) -> Int? {
+        guard !items.isEmpty else {
+            return nil
+        }
+
+        let distance = hypot(offset.x, offset.y)
+        guard distance >= Wheel.innerRadius else {
+            return nil
+        }
+
+        // Clockwise from due right, with the sector centred on its direction rather than
+        // starting at it - so "straight right" is the middle of the pen's wedge and not
+        // the seam between two of them.
+        var angle = -atan2(offset.y, offset.x) + sweep / 2
+        while angle < 0 {
+            angle += .pi * 2
+        }
+
+        return Int(angle / sweep) % items.count
+    }
+
+    // The direction a sector sits in, for placing its label.
+    private func direction(of index: Int) -> CGFloat {
+        -CGFloat(index) * sweep
+    }
+
+    // MARK: - Painting
+
+    func draw(in context: CGContext, bounds: NSRect, highlighted: Int?) {
+        guard !items.isEmpty else {
+            return
+        }
+
+        let centre = NSPoint(x: bounds.midX, y: bounds.midY)
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+
+        for (index, item) in items.enumerated() {
+            drawSector(index, item: item, at: centre, lit: index == highlighted)
+        }
+
+        // The hub, over the sectors' inner edge. It is also the cancel target, so it says
+        // so rather than being an unexplained hole.
+        let hub = NSBezierPath(ovalIn: NSRect(x: centre.x - Wheel.innerRadius,
+                                              y: centre.y - Wheel.innerRadius,
+                                              width: Wheel.innerRadius * 2,
+                                              height: Wheel.innerRadius * 2))
+        NSColor.black.withAlphaComponent(0.55).setFill()
+        hub.fill()
+        NSColor.white.withAlphaComponent(0.16).setStroke()
+        hub.lineWidth = 1
+        hub.stroke()
+
+        let title = highlighted.map { items[$0].label } ?? "CANCEL"
+        let colour = highlighted == nil
+            ? NSColor.white.withAlphaComponent(0.45)
+            : NSColor.white
+        let text = NSAttributedString(string: title, attributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+            .foregroundColor: colour,
+            .kern: 0.4
+        ])
+        let size = text.size()
+        text.draw(at: NSPoint(x: centre.x - size.width / 2, y: centre.y - size.height / 2))
+
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private func drawSector(_ index: Int, item: Item, at centre: NSPoint, lit: Bool) {
+        let middle = direction(of: index)
+        let half = sweep / 2
+        // A hairline of space between wedges, so eight of them read as eight and not as a
+        // disc with lines on it.
+        let gap: CGFloat = 0.012
+
+        let wedge = NSBezierPath()
+        wedge.appendArc(withCenter: centre, radius: Wheel.outerRadius,
+                        startAngle: (middle - half + gap) * 180 / .pi,
+                        endAngle: (middle + half - gap) * 180 / .pi)
+        wedge.appendArc(withCenter: centre, radius: Wheel.innerRadius,
+                        startAngle: (middle + half - gap) * 180 / .pi,
+                        endAngle: (middle - half + gap) * 180 / .pi,
+                        clockwise: true)
+        wedge.close()
+
+        // Lit in the sector's own colour where it has one, so choosing blue does not light
+        // up red, and in the app's red where the sector is a tool rather than a colour.
+        (lit ? (item.tint ?? NSColor.systemRed).withAlphaComponent(0.92)
+             : NSColor.black.withAlphaComponent(0.62)).setFill()
+        wedge.fill()
+        NSColor.white.withAlphaComponent(lit ? 0.35 : 0.12).setStroke()
+        wedge.lineWidth = 1
+        wedge.stroke()
+
+        let seat = NSPoint(x: centre.x + cos(middle) * (Wheel.innerRadius + Wheel.outerRadius) / 2,
+                           y: centre.y + sin(middle) * (Wheel.innerRadius + Wheel.outerRadius) / 2)
+        drawGlyph(item, at: seat, lit: lit)
+    }
+
+    private func drawGlyph(_ item: Item, at seat: NSPoint, lit: Bool) {
+        let ink = lit ? NSColor.white : NSColor.white.withAlphaComponent(0.82)
+
+        let label = NSAttributedString(string: item.label, attributes: [
+            .font: NSFont.systemFont(ofSize: 10, weight: lit ? .semibold : .medium),
+            .foregroundColor: ink.withAlphaComponent(lit ? 0.95 : 0.62),
+            .kern: 0.5
+        ])
+        let labelSize = label.size()
+
+        // A colour sector is a swatch, not an icon: drawing the colour itself says more
+        // than any symbol tinted with it, and it cannot come out looking like a glyph that
+        // failed to load.
+        if let tint = item.tint {
+            let radius: CGFloat = 11
+            let swatch = NSBezierPath(ovalIn: NSRect(x: seat.x - radius, y: seat.y - radius + 7,
+                                                     width: radius * 2, height: radius * 2))
+            // Lit, the whole wedge is already the colour, so a swatch in that same colour
+            // would disappear into it - and a white one would disappear into white. A dark
+            // disc reads against every one of the six.
+            (lit ? NSColor.black.withAlphaComponent(0.3) : tint).setFill()
+            swatch.fill()
+            swatch.lineWidth = 1.5
+            NSColor.white.withAlphaComponent(lit ? 0.9 : 0.45).setStroke()
+            swatch.stroke()
+            label.draw(at: NSPoint(x: seat.x - labelSize.width / 2,
+                                   y: seat.y - radius + 7 - labelSize.height - 3))
+            return
+        }
+
+        if let symbol = tinted(item.symbol, described: item.label, with: ink) {
+            let box = NSRect(x: seat.x - symbol.size.width / 2,
+                             y: seat.y - symbol.size.height / 2 + 7,
+                             width: symbol.size.width, height: symbol.size.height)
+            symbol.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1)
+            label.draw(at: NSPoint(x: seat.x - labelSize.width / 2, y: box.minY - labelSize.height - 2))
+            return
+        }
+
+        // No symbol on this system: the word alone still says which wedge this is.
+        label.draw(at: NSPoint(x: seat.x - labelSize.width / 2, y: seat.y - labelSize.height / 2))
+    }
+
+    // A template image does not take the current fill colour when it is drawn - it takes
+    // the appearance of wherever it lands, which on a dark wedge in a bitmap is black. The
+    // colour has to be painted onto a copy of it, inside that copy's own context, where
+    // sourceAtop can only touch the glyph.
+    //
+    // Cached, because there are only ever sixteen of these - eight symbols, lit and unlit -
+    // and building them on every repaint was most of what a wheel cost to follow.
+    private static var glyphs: [String: NSImage] = [:]
+
+    private func tinted(_ symbol: String, described: String, with colour: NSColor) -> NSImage? {
+        let key = symbol + "|" + String(describing: colour)
+        if let cached = Wheel.glyphs[key] {
+            return cached
+        }
+
+        guard let image = NSImage(systemSymbolName: symbol, accessibilityDescription: described)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 21, weight: .medium)) else {
+            return nil
+        }
+
+        let made = NSImage(size: image.size, flipped: false) { rect in
+            image.draw(in: rect)
+            colour.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        Wheel.glyphs[key] = made
+
+        return made
+    }
+}

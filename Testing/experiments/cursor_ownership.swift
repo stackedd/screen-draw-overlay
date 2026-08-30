@@ -23,8 +23,22 @@
 //
 // A big pink disc means the overlay owns the cursor there. The ordinary arrow means it does
 // not, and no cursor we choose will show up in that spot.
+//
+// The panel below is configured exactly like OverlayPanel, and that matters more than it
+// looks. The first version of this experiment used a plain NSPanel and saw nothing at all,
+// anywhere: NSPanel defaults hidesOnDeactivate to true, so the panel took itself off screen
+// the moment this background app was not the active one, and a borderless window does not
+// become key unless it says it can. Both are settings the real overlay makes and a lookalike
+// forgets.
 
 import AppKit
+
+// Borderless windows do not become key on their own, and a panel that hides itself on
+// deactivate is no use to a background app. OverlayPanel says both of these; so must this.
+final class Panel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
 
 final class Catcher: NSView {
     private(set) var seen: Set<String> = []
@@ -45,6 +59,15 @@ final class Catcher: NSView {
     }()
 
     override var isOpaque: Bool { false }
+
+    // A hairline frame, so there is no doubt on screen about whether the panel is up. The
+    // real overlay paints nothing at all when it is empty.
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.systemPink.withAlphaComponent(0.55).setStroke()
+        let edge = NSBezierPath(rect: bounds.insetBy(dx: 2, dy: 2))
+        edge.lineWidth = 4
+        edge.stroke()
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -69,6 +92,9 @@ final class Catcher: NSView {
     override func cursorUpdate(with event: NSEvent) {
         cursor.set()
         note(event, "cursor")
+        // Live feedback, so a run that is receiving nothing is obvious while it happens
+        // rather than fourteen seconds later.
+        FileHandle.standardOutput.write(Data("·".utf8))
     }
 
     override func mouseMoved(with event: NSEvent) {
@@ -102,14 +128,19 @@ let frame = screen.frame
 let view = Catcher(frame: NSRect(origin: .zero, size: frame.size))
 view.wantsLayer = true
 
-let panel = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel],
-                    backing: .buffered, defer: false)
+let panel = Panel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel],
+                  backing: .buffered, defer: false)
 panel.isOpaque = false
 panel.backgroundColor = .clear
 panel.hasShadow = false
 panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
 panel.acceptsMouseMovedEvents = true
+// The two the first version of this got wrong.
+panel.hidesOnDeactivate = false
+panel.isMovable = false
+panel.isReleasedWhenClosed = false
 panel.contentView = view
+panel.makeFirstResponder(view)
 
 let seconds = 14.0
 print("Move the pointer slowly around the screen and along the top edge - over the middle,")
@@ -126,7 +157,10 @@ for (name, level) in [("popUpMenu (101) - what the app ships with", NSWindow.Lev
 
     print("")
     print("=== level \(name) - go ===")
+    print("    panel on screen: \(panel.isVisible), key: \(panel.isKeyWindow), "
+          + "app active: \(NSApp.isActive)")
     RunLoop.current.run(until: Date().addingTimeInterval(seconds))
+    print("")
 
     let regions = ["the middle of the screen", "menu bar left (Apple menu)", "menu bar middle",
                    "menu bar right (Control Center)", "the bottom, where the Dock is"]

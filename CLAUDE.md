@@ -8,6 +8,8 @@ Three global shortcuts run it — `⌃⌥⌘D` draw (tap to toggle, hold for mom
 click-through, `⌃⌥⌘Esc` quit — plus `⌃⌥⌘Z` / `⇧⌃⌥⌘Z` to take a mistake back, which are
 global for the same reason: a non-activating panel only gets the keyboard while this app is
 the active one, so `⌘Z` alone was a no-op whenever the user had clicked anything else.
+While the overlay is up, `⌥Z` / `⌥X` / `⌥C` hold open a wheel of tools, colours and widths:
+push the mouse at one and let go.
 
 ## Stack
 
@@ -29,7 +31,9 @@ CoreGraphics, ServiceManagement (open at login). Universal binary, macOS 11+.
       Canvas.swift            the drawing: strokes, eraser, undo/redo, fading
       Stroke.swift            what a mark is made of; what each tool draws
       ToolSettings.swift      the pen in hand, shared and remembered
-      ModeBadge.swift         the corner badge - the only on-screen UI
+      ModeBadge.swift         the corner badge
+      Wheel.swift             a radial menu: sectors, hit test, painting
+      WheelPanel.swift        the window a wheel opens in, and hold-push-release
       PointerCursor.swift     the cursor drawing mode hands over: arrow + a ring at its tip
       GlobalHotKey.swift      Carbon shortcuts and their ownership rules
       NSScreen+Display.swift  identifying a display across time
@@ -47,7 +51,7 @@ pointer is a cursor the window server draws for us.
 ## Commands
 
     swift build -c release        # must be warning-free
-    ./Testing/run.sh              # every suite; behaviour must be 22/22
+    ./Testing/run.sh              # every suite; behaviour must be 26/26
     ./build_app.sh                # universal, ad-hoc signed bundle in dist/
     open dist/ScreenDrawOverlay.app
 
@@ -61,6 +65,10 @@ easy to repeat.
 
 ## Conventions
 
+- **Every tool brings its own context.** The width wheel shows widths, the eraser's cursor is
+  the size of what it rubs out, and the text tool will take the pen's colour as its colour and
+  its width as a point size. The same way the menu bar changes with the app in front: what is
+  in hand decides what the interface offers, rather than one interface offering everything.
 - **Measure, do not assume.** Every performance or platform claim in this repo has a number
   behind it. If you change something for speed, show the before and after; if you cannot
   measure it, say so instead of asserting it.

@@ -49,6 +49,16 @@ These work anywhere, whatever app you are in:
 | `Control + Option + Command + Z` | Undo · add `Shift` to redo |
 | `Control + Option + Command + Escape` | Panic key: quits the app outright, from any state |
 
+And while the overlay is up, three wheels. Hold the key, push the mouse at what you want, let
+go — the sectors are forty-five degrees wide, so there is nothing to aim at. Letting go in the
+middle changes nothing.
+
+| Shortcut | Wheel |
+| --- | --- |
+| `Option + Z` | Tools — pen right, eraser left, the rest around |
+| `Option + X` | Colours |
+| `Option + C` | Widths |
+
 Undo is on that list rather than only on `Command + Z` for a reason: the overlay is a
 non-activating panel, so it only receives ordinary keystrokes while ScreenDrawOverlay is the
 active app. Click anything in another app and `Command + Z` stops reaching it, with nothing

@@ -117,6 +117,37 @@
         press(kVK_ANSI_Z, "z", [.command, .shift])
         check("undo steps over temporary ink that has faded", "\(live)", "2")
 
+        // The wheel's whole promise is that a direction picks a tool without aiming, so the
+        // two that need no thought have to be the two that need no thought: a flick right
+        // is the pen, a flick left is the eraser. And letting go in the middle has to pick
+        // nothing, because that is the only way to change your mind.
+        let wheel = OverlayController.toolWheel
+        func toolPushing(_ x: CGFloat, _ y: CGFloat) -> String {
+            guard let sector = wheel.selection(for: NSPoint(x: x, y: y)) else { return "none" }
+            return OverlayController.toolOrder[sector].label
+        }
+        check("wheel: right is the pen, left is the eraser",
+              toolPushing(120, 0) + "/" + toolPushing(-120, 0), "PEN/ERASER")
+        check("wheel: the dead zone picks nothing", toolPushing(6, -4), "none")
+
+        // And the whole gesture, end to end: open the wheel where the pointer is, push the
+        // pointer right, let go, and be holding the pen. Driven through track() rather than
+        // by moving the mouse, which is the only way a test can reach it.
+        let panel = WheelPanel()
+        var chosen: DrawingTool?
+        panel.open(OverlayController.toolWheel) { chosen = OverlayController.toolOrder[$0] }
+        panel.track(NSPoint(x: NSEvent.mouseLocation.x + 120, y: NSEvent.mouseLocation.y))
+        panel.release()
+        check("wheel: push right, let go, holding the pen", chosen?.label ?? "none", "PEN")
+
+        // Letting go in the middle changes nothing. It is the only way out of a wheel you
+        // opened by mistake, so it has to be exactly nothing.
+        var afterCancel: DrawingTool?
+        panel.open(OverlayController.toolWheel) { afterCancel = OverlayController.toolOrder[$0] }
+        panel.track(NSEvent.mouseLocation)
+        panel.release()
+        check("wheel: let go in the middle and nothing happens", afterCancel?.label ?? "none", "none")
+
         // The pointer is the system arrow with a ring around its tip. Three points have
         // to be the same one - the hot spot, the middle of the ring and where the ink
         // lands - or the stroke appears offset from the arrow the user is aiming with.

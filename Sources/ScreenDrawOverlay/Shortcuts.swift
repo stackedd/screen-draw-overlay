@@ -33,10 +33,23 @@ final class Shortcuts {
         case clickThrough = 3
         case undo = 4
         case redo = 5
+        case toolWheel = 6
+        case colourWheel = 7
+        case widthWheel = 8
+    }
+
+    // The wheels are held down rather than tapped, so each one needs both halves of the
+    // keypress - the same mechanism hold-to-draw uses.
+    struct WheelActions {
+        let tools: () -> Void
+        let colours: () -> Void
+        let widths: () -> Void
+        let released: () -> Void
     }
 
     // Held only to keep them registered; nothing here needs to reach one by name.
     private var hotKeys: [GlobalHotKey] = []
+    private var wheelKeys: [GlobalHotKey] = []
 
     // Registers the lot and returns the ones macOS refused, written the way a menu would
     // show them. A refusal is rare and quiet - two different processes can register the
@@ -104,5 +117,39 @@ final class Shortcuts {
     func unregister() {
         hotKeys.forEach { $0.unregister() }
         hotKeys.removeAll()
+        unregisterWheels()
+    }
+
+    // The wheels come and go with the overlay, and deliberately: ⌥Z is a key that types
+    // something, and taking it system-wide for a tool picker that only means anything while
+    // there is a canvas would be rude. Held while drawing, it is ours; the rest of the time
+    // it is not registered at all.
+    func registerWheels(_ actions: WheelActions) {
+        guard wheelKeys.isEmpty else {
+            return
+        }
+
+        let wheels: [(ID, UInt32, () -> Void)] = [
+            (.toolWheel, UInt32(kVK_ANSI_Z), actions.tools),
+            (.colourWheel, UInt32(kVK_ANSI_X), actions.colours),
+            (.widthWheel, UInt32(kVK_ANSI_C), actions.widths)
+        ]
+
+        for (id, keyCode, opened) in wheels {
+            let key = GlobalHotKey(id: id.rawValue,
+                                   keyCode: keyCode,
+                                   modifiers: UInt32(optionKey),
+                                   handler: opened,
+                                   releaseHandler: actions.released)
+            wheelKeys.append(key)
+            if !key.register() {
+                print("ScreenDrawOverlay: wheel shortcut unavailable")
+            }
+        }
+    }
+
+    func unregisterWheels() {
+        wheelKeys.forEach { $0.unregister() }
+        wheelKeys.removeAll()
     }
 }

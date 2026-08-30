@@ -89,6 +89,16 @@ final class ToolSettings {
         onChange?()
     }
 
+    func selectWidth(_ index: Int) {
+        guard ToolSettings.widths.indices.contains(index), index != widthIndex else {
+            return
+        }
+
+        widthIndex = index
+        persist()
+        onChange?()
+    }
+
     func stepWidth(by delta: Int) {
         let next = min(max(widthIndex + delta, 0), ToolSettings.widths.count - 1)
         guard next != widthIndex else {

@@ -19,6 +19,37 @@ import AppKit
 import Foundation
 
 final class OverlayController {
+    // The wheels, and what each sector means. The order runs clockwise from due right, so
+    // the two that need no thought are a flick right for the pen and a flick left for the
+    // eraser.
+    //
+    // The eighth tool is the laser for now and will be the text tool when there is one;
+    // the laser keeps Space either way, which is where a momentary thing belongs. Changing
+    // a sector's meaning later is a real cost, so it is one slot and it is written down.
+    private static let toolOrder: [DrawingTool] = [.pen, .highlighter, .line, .arrow,
+                                                   .eraser, .rectangle, .ellipse, .laser]
+
+    private static let toolWheel = Wheel(items: [
+        Wheel.Item(label: "PEN", symbol: "pencil.tip"),
+        Wheel.Item(label: "MARKER", symbol: "highlighter"),
+        Wheel.Item(label: "LINE", symbol: "line.diagonal"),
+        Wheel.Item(label: "ARROW", symbol: "arrow.up.right"),
+        Wheel.Item(label: "ERASER", symbol: "eraser"),
+        Wheel.Item(label: "RECT", symbol: "rectangle"),
+        Wheel.Item(label: "OVAL", symbol: "circle"),
+        Wheel.Item(label: "LASER", symbol: "dot.circle.and.hand.point.up.left.fill")
+    ])
+
+    private static let colourWheel = Wheel(items: zip(
+        ["RED", "ORANGE", "YELLOW", "GREEN", "BLUE", "WHITE"], ToolSettings.colors
+    ).map { Wheel.Item(label: $0.0, symbol: "circle.fill", tint: $0.1) })
+
+    private static let widthWheel = Wheel(items: ToolSettings.widths.map {
+        Wheel.Item(label: "\(Int($0))", symbol: "line.3.horizontal.decrease")
+    })
+
+    private let wheels = WheelPanel()
+    private let shortcuts = Shortcuts()
     private var menuBar: MenuBarItem?
     private var overlayWindows: [OverlayPanel] = []
     private var drawingViews: [DrawingView] = []
@@ -34,7 +65,8 @@ final class OverlayController {
 
     // The menu bar item and the display-change observer come up with the controller and
     // stay for the life of the app; the panels come and go.
-    func start() {
+    @discardableResult
+    func start() -> [String] {
         menuBar = MenuBarItem(actions: MenuBarItem.Actions(
             toggleDrawing: { [weak self] in self?.toggleDrawingMode() },
             toggleClickThrough: { [weak self] in self?.toggleInteractionMode() },
@@ -51,11 +83,52 @@ final class OverlayController {
                                                selector: #selector(screenParametersDidChange(_:)),
                                                name: NSApplication.didChangeScreenParametersNotification,
                                                object: nil)
+
+        return shortcuts.register(Shortcuts.Actions(
+            drawPressed: { [weak self] in self?.drawingHotKeyPressed() },
+            drawReleased: { [weak self] in self?.drawingHotKeyReleased() },
+            toggleClickThrough: { [weak self] in self?.toggleInteractionMode() },
+            quit: {
+                print("ScreenDrawOverlay: emergency quit")
+                NSApp.terminate(nil)
+            },
+            undo: { [weak self] in self?.undoOnScreenUnderPointer(redo: false) },
+            redo: { [weak self] in self?.undoOnScreenUnderPointer(redo: true) }
+        ))
+    }
+
+    // The wheels only exist while there is a canvas to change, which is also what keeps ⌥Z
+    // out of the way the rest of the time.
+    private func startWheels() {
+        shortcuts.registerWheels(Shortcuts.WheelActions(
+            tools: { [weak self] in
+                self?.wheels.open(OverlayController.toolWheel) { [weak self] index in
+                    self?.tools.select(tool: OverlayController.toolOrder[index])
+                }
+            },
+            colours: { [weak self] in
+                self?.wheels.open(OverlayController.colourWheel) { [weak self] index in
+                    self?.tools.selectColor(index)
+                }
+            },
+            widths: { [weak self] in
+                self?.wheels.open(OverlayController.widthWheel) { [weak self] index in
+                    self?.tools.selectWidth(index)
+                }
+            },
+            released: { [weak self] in self?.wheels.release() }
+        ))
+    }
+
+    private func stopWheels() {
+        shortcuts.unregisterWheels()
+        wheels.close()
     }
 
     func shutDown() {
         NotificationCenter.default.removeObserver(self)
         forceCloseOverlay(reason: "app terminating")
+        shortcuts.unregister()
     }
 
     // Said in the menu, never in a dialog: runModal blocks the main thread and an accessory
@@ -213,6 +286,7 @@ final class OverlayController {
         }
         windows[badgeIndex].makeKeyAndOrderFront(nil)
         startDrawingPointer()
+        startWheels()
         refreshMenuBar()
     }
 
@@ -322,6 +396,10 @@ final class OverlayController {
     // applicationWillTerminate releases the overlay's mouse events and closes the panels on
     // the way out.
     private func forceCloseOverlay(reason: String) {
+        // Before anything else: the wheels belong to an overlay that is about to stop
+        // existing, and ⌥Z has to go back to typing what it types.
+        stopWheels()
+
         let windows = overlayWindowSnapshot()
         let views = drawingViewSnapshot(from: windows)
 

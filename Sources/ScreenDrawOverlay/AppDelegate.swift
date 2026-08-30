@@ -10,7 +10,6 @@ import Foundation
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let controller = OverlayController()
-    private let shortcuts = Shortcuts()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("ScreenDrawOverlay: app launched")
@@ -29,17 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Keep the app out of the Dock. The small menu bar item is the whole presence.
         NSApp.setActivationPolicy(.accessory)
 
-        controller.start()
-
-        let unavailable = shortcuts.register(Shortcuts.Actions(
-            drawPressed: { [weak self] in self?.controller.drawingHotKeyPressed() },
-            drawReleased: { [weak self] in self?.controller.drawingHotKeyReleased() },
-            toggleClickThrough: { [weak self] in self?.controller.toggleInteractionMode() },
-            quit: { [weak self] in self?.emergencyQuit() },
-            undo: { [weak self] in self?.controller.undoOnScreenUnderPointer(redo: false) },
-            redo: { [weak self] in self?.controller.undoOnScreenUnderPointer(redo: true) }
-        ))
-
+        let unavailable = controller.start()
         if !unavailable.isEmpty {
             print("ScreenDrawOverlay: hotkeys unavailable: \(unavailable.joined(separator: ", "))")
             controller.reportUnavailableShortcuts(unavailable)
@@ -49,16 +38,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         print("ScreenDrawOverlay: app terminating")
         controller.shutDown()
-        shortcuts.unregister()
-    }
-
-    // The panic key. Anything short of ending the process can in principle still leave the
-    // user stuck, so this quits outright, the same as Quit in the menu.
-    // applicationWillTerminate releases the overlay's mouse events and closes the panels on
-    // the way out.
-    private func emergencyQuit() {
-        print("ScreenDrawOverlay: emergency quit")
-        NSApp.terminate(nil)
     }
 
     private static func anotherInstanceIsRunning() -> Bool {

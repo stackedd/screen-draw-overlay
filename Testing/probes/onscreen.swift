@@ -130,6 +130,62 @@ for count in [3, 10, 50] {
 }
 view.clear()
 
+// The wheel, driven the way a hand drives it: open it and sweep the pointer round. It
+// reads the pointer by polling rather than by taking events, which is what makes this
+// measurable at all - warping the cursor moves it without generating anything to deliver.
+//
+// Warping sixty times a second is not free either, so the same sweep is run with nothing
+// open first. The wheel costs the difference, not the total.
+print("")
+print("  and the wheel, swept once a second for \(Int(seconds))s")
+// Middle of the screen, so opening the wheel does not have to clamp it away from the
+// pointer and leave the sweep circling the dead zone.
+CGWarpMouseCursorPosition(CGPoint(x: bounds.midX, y: bounds.midY))
+RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+let start = NSEvent.mouseLocation
+let wheelPanel = WheelPanel()
+
+func sweepPointer(around origin: NSPoint, for duration: Double) -> Double {
+    RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+    let before = cpuSeconds()
+    let began = Date()
+    let sweep = Timer(timeInterval: 1.0 / 60, repeats: true) { _ in
+        let turn = Date().timeIntervalSince(began) * 2 * Double.pi
+        CGWarpMouseCursorPosition(CGPoint(x: origin.x + cos(turn) * 100,
+                                          y: bounds.maxY - (origin.y + sin(turn) * 100)))
+    }
+    RunLoop.current.add(sweep, forMode: .common)
+    RunLoop.current.run(until: began.addingTimeInterval(duration))
+    sweep.invalidate()
+    return (cpuSeconds() - before) / Date().timeIntervalSince(began) * 100
+}
+
+let control = sweepPointer(around: start, for: seconds)
+print(String(format: "  %-46@ %5d           %5.1f%%",
+             "nothing open, just the warping" as NSString, 0, control))
+
+// Back to the middle before opening: the wheel centres itself on the pointer, and the
+// control sweep left it out on the circle.
+CGWarpMouseCursorPosition(CGPoint(x: start.x, y: bounds.maxY - start.y))
+RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+
+var picked = -1
+wheelPanel.open(OverlayController.toolWheel) { picked = $0 }
+
+// Held open with the pointer still, which is what it is doing while someone decides.
+let restingBefore = cpuSeconds()
+let restingStarted = Date()
+RunLoop.current.run(until: restingStarted.addingTimeInterval(seconds))
+print(String(format: "  %-46@ %5d           %5.1f%%", "open, pointer still" as NSString, 0,
+             (cpuSeconds() - restingBefore) / Date().timeIntervalSince(restingStarted) * 100))
+
+let withWheel = sweepPointer(around: start, for: seconds)
+wheelPanel.release()
+CGWarpMouseCursorPosition(CGPoint(x: start.x, y: bounds.maxY - start.y))
+print(String(format: "  %-46@ %5d           %5.1f%%   (%.1f%% of it the wheel)",
+             "wheel open and following" as NSString, 0, withWheel, withWheel - control))
+print("  (it settled on sector \(picked), which only proves the release fired)")
+
 panel.ignoresMouseEvents = true
 panel.close()
 print("")

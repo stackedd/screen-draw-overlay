@@ -29,6 +29,8 @@ tried and rejected on the way; [../CLAUDE.md](../CLAUDE.md) is the short operati
 | `ModeBadge.swift` | The badge in the corner — the app's entire on-screen interface. It hands over a picture, snapped to whole pixels; the view carries it on a layer. |
 | `PointerCursor.swift` | The cursor drawing mode hands the window server: the system arrow with a ring around its tip. |
 | `GlobalHotKey.swift` | The global shortcuts, on Carbon, and the ownership rules that keep the callback safe. |
+| `Wheel.swift` | A radial menu: its sectors, which one a direction picks, and how it paints itself. |
+| `WheelPanel.swift` | The window a wheel appears in, and the hold-push-release that drives it. |
 | `NSScreen+Display.swift` | Identifying a display across time. |
 
 The one dependency worth naming: `OverlayController` → `DrawingView` → `Canvas`. Anything that
@@ -50,6 +52,10 @@ drawing away. Held down rather than tapped, it is momentary: draw while held, go
 release. `⌃⌥⌘E` flips drawing and click-through. `⌃⌥⌘Esc` quits the process outright.
 `⌃⌥⌘Z` and `⇧⌃⌥⌘Z` undo and redo, and are global because the panels are non-activating:
 `⌘Z` only reaches them while this app is the active one.
+
+While the overlay is up, three more are live: `⌥Z`, `⌥X` and `⌥C` hold open a wheel of tools,
+colours and widths. They are registered on entry and unregistered on exit, because `⌥Z` types
+something and a tool picker has no business owning it when there is no canvas.
 
 **Hiding is not erasing.** Leaving drawing mode lifts the strokes out of the panels and
 files them by display, together with the undo history; the next `⌃⌥⌘D` puts both back. `C` (or Delete) is the only thing

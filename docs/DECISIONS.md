@@ -497,3 +497,49 @@ not travel.
 
 Both of the last two are regression checks in the behaviour suite, and both were run against
 the old code first to confirm they fail: 2 where 1 is wanted, and 1 where 2 is wanted.
+
+## 24. Tools are picked by pushing the mouse, not by remembering a letter
+
+The tool keys work and are not going anywhere, but they ask the user to remember seven
+letters. A radial menu asks them to remember one key and a direction, and the direction is a
+forty-five degree wedge of the whole screen rather than a target to hit — so it can be driven
+at speed, without looking, in the middle of talking to a room. That is the difference between
+a tool you use while presenting and a tool you stop presenting to use.
+
+**Hold, push, let go.** `⌥Z` opens the tools, `⌥X` the colours, `⌥C` the widths. The wheel
+appears where the pointer already is. Letting go picks whatever the pointer is pushing
+towards; letting go in the dead zone in the middle picks nothing, which is the only way out
+of a wheel opened by mistake and so has to be exactly nothing. Sector zero is due right and
+they run clockwise, which puts the two that need no thought — the pen and the eraser — a
+flick right and a flick left.
+
+**Three decisions worth the words:**
+
+- **The wheel keys are registered only while the overlay is up.** `⌥Z` types something. Taking
+  it system-wide for a tool picker that means nothing without a canvas would be rude, so it
+  is registered on entering drawing mode and unregistered on leaving.
+- **The pointer is polled, not received.** `NSEvent.mouseLocation` on a timer, rather than
+  taking mouse events. That is what lets a wheel work in drawing mode, in click-through and
+  over any app, without the panel having to take the mouse away from what is underneath —
+  and it needs no permission. The poll runs only while a wheel is open. It also made the
+  gesture testable: the tracking takes the pointer as an argument, so the behaviour suite
+  drives the whole thing without a hand on the mouse.
+- **The wheel has its own small panel.** A repaint costs more the larger its rectangle and the
+  overlay's is the whole screen; the wheel is three hundred points across and repaints its
+  own backing store, never the ink.
+
+**Measured** (`Testing/probes/onscreen.swift`, warping the pointer in a circle once a second,
+against a control that warps with nothing open): open with the pointer still, **1.0%** of a
+core — that is the poll and nothing else. Open and being swept, **3.8%**, which is eight full
+repaints a second while the highlight moves. A wheel is up for about a second at a time, so
+this is small in the only sense that matters; it is recorded because the claim was that it
+would be free and it is not quite.
+
+Most of it was worse. Building the tinted glyphs on every repaint — eight `NSImage`s a frame,
+because a template image does not take the current fill colour — cost **6.6%**. They are
+cached now; there are only ever sixteen.
+
+**The eighth tool is the laser and will be the text tool.** Nine tools do not fit in eight
+sectors. The laser holds the slot until there is a text tool, and keeps `Space` either way,
+which is where a momentary thing belongs. Changing what a sector means is a real cost to
+someone who has learned it, so it is one slot, once, and written down here first.
