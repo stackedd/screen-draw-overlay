@@ -19,40 +19,13 @@ import Foundation
 
 final class DrawingView: NSView {
 
-    // A cursor made of nothing. The pointer over the panel has to disappear so only the
-    // drawn crosshair is visible, and this is the one way to do that which needs no
-    // permission and does not depend on the app being frontmost.
-    private static let transparentCursor: NSCursor = {
-        let image = NSImage(size: NSSize(width: 16, height: 16))
-        image.lockFocus()
-        NSColor.clear.setFill()
-        NSRect(origin: .zero, size: image.size).fill(using: .copy)
-        image.unlockFocus()
-
-        return NSCursor(image: image, hotSpot: NSPoint(x: 8, y: 8))
-    }()
-
     // 15 a second. Measured: the cost of a fade is one repaint of a full screen
     // transparent layer per tick - about 0.4% CPU each - and is almost independent of how
     // many strokes are fading or how big they are. 20/s cost 5.1%, 15/s costs 4.4% and 12/s
     // 4.3%, so past this point the smoothness is free and the savings are not.
     private static let fadeTickInterval: TimeInterval = 1.0 / 15
 
-    // Modest: big enough to aim with, small enough not to sit on the content.
-    private static let pointerSize: CGFloat = 20
-    private static let pointerCasingWidth: CGFloat = 3
-    private static let pointerCentreGap: CGFloat = 3.5
 
-    // Always shown: what the other two shortcuts do from here. Escape is not on this
-    // list because it no longer leaves drawing mode - this line is the only place a
-    // stuck-feeling user is told what does.
-    private static let drawingHintText = "⌃⌥⌘E click · ⌃⌥⌘D hide"
-    private static let interactionHintText = "⌃⌥⌘E draw · ⌃⌥⌘Esc quit"
-    private static let indicatorPaddingX: CGFloat = 8
-    private static let indicatorPaddingY: CGFloat = 5
-    private static let indicatorLineGap: CGFloat = 2
-    private static let indicatorMargin: CGFloat = 14
-    private static let indicatorRepaintMargin: CGFloat = 4
 
     // Undo has to put back what the eraser and Clear take away, not just the last thing
     // drawn, so edits are recorded rather than inferred from the stroke list.
@@ -75,7 +48,9 @@ final class DrawingView: NSView {
     private var fadeTimer: Timer?
     let tools: ToolSettings
     private var pointerLocation: NSPoint?
-    private var indicatorBounds: NSRect
+
+    // nil on every screen but one: the badge would be noise repeated on each display.
+    private let badge: ModeBadge?
     let showsIndicator: Bool
 
     // Set by AppDelegate when the click-through hot key is used. The view keeps drawing
@@ -92,7 +67,8 @@ final class DrawingView: NSView {
 
             // No mouseMoved arrives while the panel ignores the mouse, so a hover that was
             // in effect at the moment of the switch would stick and hide the badge.
-            isMouseOverIndicator = false
+            badge?.isInteractionMode = isInteractionMode
+            badge?.forgetHover()
             if isInteractionMode {
                 releaseDrawingCursor()
             } else {
@@ -104,15 +80,13 @@ final class DrawingView: NSView {
             needsDisplay = true
         }
     }
-    private var indicatorRect: NSRect = .zero
-    private var isMouseOverIndicator = false
     private var mouseTrackingArea: NSTrackingArea?
 
     override var acceptsFirstResponder: Bool { true }
     override var isOpaque: Bool { false }
 
     init(frame frameRect: NSRect, indicatorBounds: NSRect, showsIndicator: Bool, tools: ToolSettings) {
-        self.indicatorBounds = indicatorBounds
+        self.badge = showsIndicator ? ModeBadge(bounds: indicatorBounds, tools: tools) : nil
         self.showsIndicator = showsIndicator
         self.tools = tools
         super.init(frame: frameRect)
@@ -146,7 +120,9 @@ final class DrawingView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        updateIndicatorHover(at: point)
+        if let region = badge?.updateHover(at: point) {
+            setNeedsDisplay(region)
+        }
         movePointer(to: point)
 
         guard tools.tool != .eraser else {
@@ -175,7 +151,9 @@ final class DrawingView: NSView {
 
     override func mouseDragged(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        updateIndicatorHover(at: point)
+        if let region = badge?.updateHover(at: point) {
+            setNeedsDisplay(region)
+        }
         movePointer(to: point)
 
         guard tools.tool != .eraser else {
@@ -215,7 +193,9 @@ final class DrawingView: NSView {
     override func mouseUp(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         movePointer(to: point)
-        updateIndicatorHover(at: point)
+        if let region = badge?.updateHover(at: point) {
+            setNeedsDisplay(region)
+        }
         shapeAnchor = nil
 
         if let currentStroke {
@@ -233,7 +213,9 @@ final class DrawingView: NSView {
     override func mouseMoved(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         movePointer(to: point)
-        updateIndicatorHover(at: point)
+        if let region = badge?.updateHover(at: point) {
+            setNeedsDisplay(region)
+        }
     }
 
     override func mouseEntered(with event: NSEvent) {
@@ -250,7 +232,7 @@ final class DrawingView: NSView {
             return
         }
 
-        addCursorRect(bounds, cursor: DrawingView.transparentCursor)
+        addCursorRect(bounds, cursor: PointerCursor.transparent)
     }
 
     override func cursorUpdate(with event: NSEvent) {
@@ -265,7 +247,7 @@ final class DrawingView: NSView {
             return
         }
 
-        DrawingView.transparentCursor.set()
+        PointerCursor.transparent.set()
     }
 
     func releaseDrawingCursor() {
@@ -304,63 +286,23 @@ final class DrawingView: NSView {
 
         // Only the pixels the pointer left and the ones it arrived at, never the view.
         if let previous = pointerLocation {
-            setNeedsDisplay(pointerRect(at: previous))
+            setNeedsDisplay(PointerCursor.rect(at: previous))
         }
 
         pointerLocation = point
 
         if let point {
-            setNeedsDisplay(pointerRect(at: point))
+            setNeedsDisplay(PointerCursor.rect(at: point))
         }
-    }
-
-    private func pointerRect(at point: NSPoint) -> NSRect {
-        NSRect(x: point.x - DrawingView.pointerSize / 2,
-               y: point.y - DrawingView.pointerSize / 2,
-               width: DrawingView.pointerSize,
-               height: DrawingView.pointerSize)
-            .insetBy(dx: -DrawingView.pointerCasingWidth, dy: -DrawingView.pointerCasingWidth)
     }
 
     private func drawPointer(in dirtyRect: NSRect) {
         guard !isInteractionMode, let point = pointerLocation,
-              dirtyRect.intersects(pointerRect(at: point)) else {
+              dirtyRect.intersects(PointerCursor.rect(at: point)) else {
             return
         }
 
-        // The laser is a pointer, so it looks like one: a dot in the current colour with a
-        // soft halo, instead of the crosshair you aim a pen with.
-        guard tools.tool != .laser else {
-            let core = DrawingView.pointerSize / 3
-            tools.color.withAlphaComponent(0.28).setFill()
-            NSBezierPath(ovalIn: NSRect(x: point.x - core, y: point.y - core,
-                                        width: core * 2, height: core * 2)).fill()
-            tools.color.setFill()
-            NSBezierPath(ovalIn: NSRect(x: point.x - core / 2, y: point.y - core / 2,
-                                        width: core, height: core)).fill()
-            return
-        }
-
-        let half = DrawingView.pointerSize / 2
-        let gap = DrawingView.pointerCentreGap
-        let crosshair = NSBezierPath()
-        crosshair.move(to: NSPoint(x: point.x - half, y: point.y))
-        crosshair.line(to: NSPoint(x: point.x - gap, y: point.y))
-        crosshair.move(to: NSPoint(x: point.x + gap, y: point.y))
-        crosshair.line(to: NSPoint(x: point.x + half, y: point.y))
-        crosshair.move(to: NSPoint(x: point.x, y: point.y - half))
-        crosshair.line(to: NSPoint(x: point.x, y: point.y - gap))
-        crosshair.move(to: NSPoint(x: point.x, y: point.y + gap))
-        crosshair.line(to: NSPoint(x: point.x, y: point.y + half))
-        crosshair.lineCapStyle = .round
-
-        // Light casing under a dark core, so it reads on a white slide and on a dark one.
-        crosshair.lineWidth = DrawingView.pointerCasingWidth
-        NSColor.white.withAlphaComponent(0.9).setStroke()
-        crosshair.stroke()
-        crosshair.lineWidth = 1
-        NSColor.black.withAlphaComponent(0.85).setStroke()
-        crosshair.stroke()
+        PointerCursor.draw(at: point, tools: tools)
     }
 
     override func keyDown(with event: NSEvent) {
@@ -444,7 +386,7 @@ final class DrawingView: NSView {
             currentStroke.path.stroke()
         }
 
-        drawActiveModeIndicator(in: dirtyRect)
+        badge?.draw(in: dirtyRect)
         drawPointer(in: dirtyRect)
     }
 
@@ -506,14 +448,11 @@ final class DrawingView: NSView {
     // anchored to the corner, so it grows leftwards: repainting only where it used to be
     // leaves the wider version half drawn. Old rect and new rect, both.
     func toolSettingsChanged() {
-        guard showsIndicator else {
+        guard let badge else {
             return
         }
 
-        let updated = activeModeIndicatorRect()
-        let region = indicatorRect == .zero ? updated : indicatorRect.union(updated)
-        setNeedsDisplay(region.insetBy(dx: -DrawingView.indicatorRepaintMargin,
-                                       dy: -DrawingView.indicatorRepaintMargin))
+        setNeedsDisplay(badge.repaintRegionAfterToolChange())
     }
 
     // Shapes are two-point figures. Holding Shift snaps a line or arrow to the nearest 45
@@ -753,99 +692,4 @@ final class DrawingView: NSView {
 
 
 
-    private func drawActiveModeIndicator(in dirtyRect: NSRect) {
-        guard showsIndicator else {
-            return
-        }
-
-        indicatorRect = activeModeIndicatorRect()
-        guard !isMouseOverIndicator, dirtyRect.intersects(indicatorRect) else {
-            return
-        }
-
-        let (mode, hint) = indicatorLines()
-
-        indicatorBackgroundColor.setFill()
-        NSBezierPath(roundedRect: indicatorRect, xRadius: 5, yRadius: 5).fill()
-
-        // Bottom line first: the view is not flipped, so the mode sits above the hint.
-        hint.draw(at: NSPoint(x: indicatorRect.minX + DrawingView.indicatorPaddingX,
-                              y: indicatorRect.minY + DrawingView.indicatorPaddingY))
-        mode.draw(at: NSPoint(x: indicatorRect.minX + DrawingView.indicatorPaddingX,
-                              y: indicatorRect.minY + DrawingView.indicatorPaddingY
-                                 + hint.size().height + DrawingView.indicatorLineGap))
-    }
-
-    // Red and solid while the overlay owns the mouse, hollow and neutral while clicks are
-    // passing through: the badge answers "where do my clicks go right now?".
-    private var indicatorText: String {
-        guard !isInteractionMode else {
-            return "◌ CLICK-THROUGH"
-        }
-
-        if tools.tool == .eraser || tools.tool == .laser {
-            return "● \(tools.tool.label)"
-        }
-
-        let temporary = tools.drawsTemporaryInk ? "TEMP " : ""
-        return "● \(temporary)\(tools.tool.label) \(Int(tools.renderWidth))"
-    }
-
-    private var indicatorBackgroundColor: NSColor {
-        isInteractionMode
-            ? NSColor.black.withAlphaComponent(0.45)
-            : NSColor.systemRed.withAlphaComponent(0.72)
-    }
-
-    // The badge says which mode you are in; without the second line it never says how to
-    // get out, which is the one thing a user who thinks they are stuck needs. Modifier
-    // glyphs keep it to a glance rather than a sentence to read mid-presentation.
-    private func indicatorLines() -> (mode: NSAttributedString, hint: NSAttributedString) {
-        let mode = NSMutableAttributedString(string: indicatorText, attributes: [
-            .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.92)
-        ])
-
-        // The leading dot is the colour swatch: the only place the active colour is shown,
-        // which is what keeps this keyboard-driven tool honest without a palette on screen.
-        if !isInteractionMode, mode.length > 0 {
-            mode.addAttribute(.foregroundColor, value: tools.color, range: NSRange(location: 0, length: 1))
-        }
-        let hintText = isInteractionMode ? DrawingView.interactionHintText : DrawingView.drawingHintText
-        let hint = NSAttributedString(string: hintText, attributes: [
-            .font: NSFont.systemFont(ofSize: 9, weight: .regular),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.65)
-        ])
-
-        return (mode, hint)
-    }
-
-    private func activeModeIndicatorRect() -> NSRect {
-        let (mode, hint) = indicatorLines()
-        let width = max(mode.size().width, hint.size().width) + DrawingView.indicatorPaddingX * 2
-        let height = mode.size().height + hint.size().height + DrawingView.indicatorLineGap
-            + DrawingView.indicatorPaddingY * 2
-
-        return NSRect(x: indicatorBounds.maxX - width - DrawingView.indicatorMargin,
-                      y: indicatorBounds.maxY - height - DrawingView.indicatorMargin,
-                      width: width,
-                      height: height)
-    }
-
-    private func updateIndicatorHover(at point: NSPoint) {
-        guard showsIndicator else {
-            return
-        }
-
-        let wasMouseOverIndicator = isMouseOverIndicator
-        let currentIndicatorRect = indicatorRect == .zero ? activeModeIndicatorRect() : indicatorRect
-        isMouseOverIndicator = currentIndicatorRect.contains(point)
-
-        if isMouseOverIndicator != wasMouseOverIndicator {
-            // Showing or hiding the badge only touches the badge's own rect; anything
-            // drawn underneath it is repainted by draw(_:) for the same rect.
-            setNeedsDisplay(currentIndicatorRect.insetBy(dx: -DrawingView.indicatorRepaintMargin,
-                                                         dy: -DrawingView.indicatorRepaintMargin))
-        }
-    }
 }
