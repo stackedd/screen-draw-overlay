@@ -4,8 +4,11 @@ ScreenDrawOverlay puts a transparent window over every screen and lets you draw 
 has no window of its own, no Dock icon, and asks for no system permissions. That last part
 is not an accident and it constrains almost every decision below.
 
-This file is for whoever touches the code next. It says what each piece owns, what must not
-be broken and why, and what has already been measured — so nobody has to rediscover it.
+This file is for whoever touches the code next: what each piece owns, what must not be
+broken, and what has already been measured. Its companion is
+[DECISIONS.md](DECISIONS.md), which says *why* each of those choices was made and what was
+tried and rejected on the way; [../CLAUDE.md](../CLAUDE.md) is the short operational version
+— commands, conventions and the "never do this" list.
 
 ## The map
 
