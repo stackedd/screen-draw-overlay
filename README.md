@@ -102,6 +102,8 @@ That builds a universal (Apple Silicon + Intel) release binary, assembles `dist/
 
 For a quick run without the bundle, `swift build -c release` and then `.build/release/ScreenDrawOverlay`.
 
+If you are going to change the code, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) first: it says what each file owns, which behaviours exist because something went wrong once, and what has already been measured — window levels, CPU cost, repaint behaviour — so none of it has to be rediscovered.
+
 ## Known limits
 
 Deliberately small. There is no toolbar or palette, no text tool, no saving or screenshot capture, and no preferences window.
