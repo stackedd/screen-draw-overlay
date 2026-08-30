@@ -75,7 +75,7 @@ While you are drawing, the keyboard belongs to the tool. No modifiers to hold �
 | `R` | Rectangle |
 | `O` | Oval |
 | `E` | Eraser — rubs out the part you pass over, as wide as the current width. One drag is one undo |
-| `Space` | Laser pointer — a glowing dot that leaves no ink. Press again for the tool you had |
+| `Space` | Laser pointer — a glow that follows the pointer and leaves no ink. It is drawn on the overlay, not on the cursor, so it is there whatever else the system is doing with the pointer. Press again for the tool you had |
 
 | Key | What it does |
 | --- | --- |

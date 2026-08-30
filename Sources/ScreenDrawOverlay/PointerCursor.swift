@@ -85,8 +85,9 @@ enum PointerCursor {
 
     private static func draw(accessory tool: DrawingTool, colour: NSColor,
                              width: CGFloat, radius: CGFloat, at centre: NSPoint) {
+        // The laser is a glow on the overlay, not a ring on the cursor. Two spots of light
+        // an inch apart, one of them the audience cannot see, is worse than one.
         guard tool != .laser else {
-            drawLaserDot(at: centre, colour: colour)
             return
         }
 
@@ -117,15 +118,5 @@ enum PointerCursor {
         colour.setFill()
         dot.fill()
         dot.stroke()
-    }
-
-    private static func drawLaserDot(at point: NSPoint, colour: NSColor) {
-        let core = ringRadius * 0.7
-        colour.withAlphaComponent(0.28).setFill()
-        NSBezierPath(ovalIn: NSRect(x: point.x - core, y: point.y - core,
-                                    width: core * 2, height: core * 2)).fill()
-        colour.setFill()
-        NSBezierPath(ovalIn: NSRect(x: point.x - core / 2, y: point.y - core / 2,
-                                    width: core, height: core)).fill()
     }
 }

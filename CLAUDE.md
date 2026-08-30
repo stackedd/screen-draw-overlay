@@ -28,6 +28,7 @@ CoreGraphics, ServiceManagement (open at login). Universal binary, macOS 11+.
       DrawingView.swift       the view: events in, three layers out
       InkPainter.swift        the ink layer's delegate
       FadingInk.swift         temporary ink, on its way out, one layer each
+      LaserDot.swift          the laser's glow, following the pointer
       Canvas.swift            the drawing: strokes, eraser, undo/redo, fading
       Stroke.swift            what a mark is made of; what each tool draws
       ToolSettings.swift      the pen in hand, shared and remembered
@@ -51,7 +52,7 @@ pointer is a cursor the window server draws for us.
 ## Commands
 
     swift build -c release        # must be warning-free
-    ./Testing/run.sh              # every suite; behaviour must be 28/28
+    ./Testing/run.sh              # every suite; behaviour must be 30/30
     ./build_app.sh                # universal, ad-hoc signed bundle in dist/
     open dist/ScreenDrawOverlay.app
 

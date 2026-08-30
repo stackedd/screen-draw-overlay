@@ -53,6 +53,10 @@ final class DrawingView: NSView {
     private let badgeLayer = CALayer()
     private let inkPainter = InkPainter()
 
+    // The laser, when it is the tool in hand. On the overlay rather than on the cursor,
+    // because the one thing a laser has to do is be there whoever owns the cursor.
+    private let laserLayer = LaserDot.makeLayer()
+
     // Temporary ink, once it is finished: one self-fading layer each, above the ink.
     private let fadingInk = FadingInk()
 
@@ -75,6 +79,9 @@ final class DrawingView: NSView {
             // The badge changes text, size and colour with the mode. It used to cost a
             // repaint of the whole view; now it is a new picture on a layer.
             refreshBadge()
+            // Click-through hands the screen back, and a laser dot sitting on top of an app
+            // the user is now driving is just something in the way.
+            showLaserIfSelected()
             if isInteractionMode {
                 releaseDrawingCursor()
             } else {
@@ -84,6 +91,7 @@ final class DrawingView: NSView {
         }
     }
     private var mouseTrackingArea: NSTrackingArea?
+    private var lastCursorReclaim = Date.distantPast
 
     override var acceptsFirstResponder: Bool { true }
     override var isOpaque: Bool { false }
@@ -103,6 +111,7 @@ final class DrawingView: NSView {
         inkLayer.frame = NSRect(origin: .zero, size: frameRect.size)
         attachLayers()
         refreshBadge()
+        refreshLaser()
     }
 
     required init?(coder: NSCoder) {
@@ -125,6 +134,7 @@ final class DrawingView: NSView {
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
         refreshBadge()
+        refreshLaser()
         // A layer keeps its pixels through a scale change, so they have to be redrawn or
         // the drawing stays at the old display's resolution.
         inkLayer.contentsScale = backingScale
@@ -138,7 +148,7 @@ final class DrawingView: NSView {
             return
         }
 
-        for sublayer in [inkLayer, badgeLayer] where sublayer.superlayer !== layer {
+        for sublayer in [inkLayer, badgeLayer, laserLayer] where sublayer.superlayer !== layer {
             layer.addSublayer(sublayer)
         }
     }
@@ -163,6 +173,37 @@ final class DrawingView: NSView {
 
     // Same story: a new picture on a tool, colour or mode change, and nothing at all on a
     // mouse move.
+    // The glow is redrawn only when the colour or the display's scale changes, and shown
+    // only while the laser is the tool and the overlay is taking the mouse.
+    private func refreshLaser() {
+        laserLayer.contentsScale = backingScale
+        laserLayer.contents = LaserDot.glow(tools.color, scale: backingScale)
+        showLaserIfSelected()
+    }
+
+    private func showLaserIfSelected() {
+        let wanted = tools.tool == .laser && !isInteractionMode
+        guard wanted else {
+            laserLayer.isHidden = true
+            return
+        }
+
+        // Put it where the pointer already is, so selecting the laser lights up under the
+        // hand rather than waiting for the next move.
+        if let window {
+            moveLaser(to: convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil))
+        }
+        laserLayer.isHidden = false
+    }
+
+    private func moveLaser(to point: NSPoint) {
+        guard !laserLayer.isHidden else {
+            return
+        }
+
+        laserLayer.position = point
+    }
+
     private func refreshBadge() {
         guard let badge else {
             return
@@ -234,10 +275,13 @@ final class DrawingView: NSView {
     override func mouseMoved(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         updateBadgeHover(at: point)
+        moveLaser(to: point)
+        reclaimCursorIfDue()
     }
 
     override func mouseEntered(with event: NSEvent) {
         applyDrawingCursor()
+        moveLaser(to: convert(event.locationInWindow, from: nil))
     }
 
     // Three ways to claim the cursor, because any one of them can be missed: the cursor
@@ -259,6 +303,27 @@ final class DrawingView: NSView {
     // Safe to call from an event callback: it only sets the cursor. Rebuilding cursor
     // rects from inside cursorUpdate re-enters AppKit's tracking machinery and throws,
     // so that lives in refreshCursorRects, which only mode changes call.
+    // Take the cursor back periodically, not only when AppKit thinks to ask. Anything that
+    // owns it for a moment - the menu bar at the top of the screen is the reliable way to
+    // see it - leaves the plain arrow behind, and cursorUpdate does not necessarily fire
+    // again on the way back in. What the user sees then is a system pointer sitting on a
+    // drawing overlay with no way to get rid of it.
+    //
+    // Not on every move: measured, setting the cursor sixty times a second costs 2.3% of a
+    // core, which is more than everything else a mouse move does put together. Eight times
+    // a second costs a tenth of that and heals inside 150ms, which nobody can see.
+    private static let cursorReclaimInterval: TimeInterval = 0.125
+
+    private func reclaimCursorIfDue() {
+        let now = Date()
+        guard now.timeIntervalSince(lastCursorReclaim) >= DrawingView.cursorReclaimInterval else {
+            return
+        }
+
+        lastCursorReclaim = now
+        applyDrawingCursor()
+    }
+
     func applyDrawingCursor() {
         guard !isInteractionMode else {
             return
@@ -280,6 +345,9 @@ final class DrawingView: NSView {
     }
 
     override func mouseExited(with event: NSEvent) {
+        // The pointer is on another screen's panel; that one lights its own laser.
+        laserLayer.isHidden = true
+
         // The pointer is on another screen's panel now. A hover left in effect here would
         // keep the badge hidden on this one until the pointer came back and crossed it
         // again, so it is forgotten on the way out.
@@ -448,6 +516,7 @@ final class DrawingView: NSView {
         // cursor rects is only forbidden from inside cursorUpdate, and this is a keypress.
         refreshCursorRects()
         applyDrawingCursor()
+        refreshLaser()
         refreshBadge()
     }
 

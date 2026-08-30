@@ -143,6 +143,21 @@
               toolPushing(120, 0) + "/" + toolPushing(-120, 0), "PEN/ERASER")
         check("wheel: the dead zone picks nothing", toolPushing(6, -4), "none")
 
+        // The laser is a light on the overlay, not a decoration on the cursor - a cursor is
+        // only ours while we own the window under the pointer, and being there is the one
+        // thing a laser has to do. It also has no business sitting on top of an app the
+        // user has just been handed back.
+        press(kVK_Space, " ")
+        let laserLit = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot())
+            .first.map { !$0.laserLayer.isHidden } ?? false
+        check("space lights the laser on the overlay", laserLit ? "yes" : "no", "yes")
+        controller.toggleInteractionMode()
+        let laserInClickThrough = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot())
+            .first.map { !$0.laserLayer.isHidden } ?? true
+        check("click-through puts the laser out", laserInClickThrough ? "still lit" : "out", "out")
+        controller.toggleInteractionMode()
+        press(kVK_Space, " ")
+
         // The eraser cuts, it does not delete. Rubbing out whole strokes made its size
         // meaningless: one touch anywhere on a line took the entire line, so a wide eraser
         // and a narrow one did exactly the same thing.

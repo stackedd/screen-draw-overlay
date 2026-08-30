@@ -149,6 +149,15 @@ The image is built through `NSImage(size:flipped:drawingHandler:)` rather than i
 so the cursor is redrawn at whatever resolution the display it lands on needs, and cached per
 tool, colour and width — a keypress, never a mouse move.
 
+**It has to be taken back, repeatedly.** Owning the cursor rect is not the same as keeping
+the cursor. Anything that owns it for a moment — the menu bar at the top of the screen is the
+reliable way to see it — leaves the plain arrow behind, and `cursorUpdate` does not
+necessarily fire again on the way back in. What the user gets is a system pointer sitting on
+a drawing overlay with no way to get rid of it, which is what was reported. The view now
+re-sets the cursor as the pointer moves, but only **eight times a second**: measured, setting
+it on every move costs 2.3% of a core, more than everything else a mouse move does put
+together, and eight times a second costs a tenth of that and heals inside 150ms.
+
 **A crash to not repeat:** the first version called `window.invalidateCursorRects(for:)` from
 inside `cursorUpdate`. That re-enters AppKit's tracking machinery and throws — `SIGABRT` the
 moment the pointer moved over the panel. Rebuilding cursor rects lives in its own method that
@@ -560,3 +569,21 @@ cached now; there are only ever sixteen.
 sectors. The laser holds the slot until there is a text tool, and keeps `Space` either way,
 which is where a momentary thing belongs. Changing what a sector means is a real cost to
 someone who has learned it, so it is one slot, once, and written down here first.
+
+## 25. The laser is a light on the overlay, not a mark on the cursor
+
+It was drawn as part of the pointer: a glowing dot composited into the cursor image. Reported
+as not working, and it is easy to see why. A cursor is only ours while we own the window under
+the pointer, and being there is the one thing a laser has to do — in the middle of a
+presentation, over anything, on whatever the audience is looking at.
+
+**Now:** a layer on the overlay that follows the pointer, with a halo that falls off to
+nothing and a hot core inside it, so it reads as light rather than as a drawn circle. It costs
+a layer move and no repaint — 1.5% of a core at sixty moves a second, against 15.2% for
+asking the overlay to repaint instead — and it does not care who owns the cursor.
+
+The cursor's laser accessory went with it. Two spots of light an inch apart, one of which the
+audience may not be able to see, is worse than one.
+
+It goes out in click-through, because a laser dot on top of an app the user has just been
+handed back is something in the way.
