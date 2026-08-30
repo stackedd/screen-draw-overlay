@@ -20,12 +20,8 @@ import Carbon
 import Foundation
 import ServiceManagement
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    private var statusItem: NSStatusItem?
-    private var drawingMenuItem: NSMenuItem?
-    private var hotKeyWarningItem: NSMenuItem?
-    private var loginItem: NSMenuItem?
-    private var interactionMenuItem: NSMenuItem?
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var menuBar: MenuBarItem?
     private var overlayWindows: [OverlayPanel] = []
     private var drawingViews: [DrawingView] = []
     private var toggleHotKey: GlobalHotKey?
@@ -58,7 +54,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Keep the app out of the Dock. The small menu bar item is enough for v0.1.
         NSApp.setActivationPolicy(.accessory)
 
-        setupStatusItem()
+        menuBar = MenuBarItem(actions: MenuBarItem.Actions(
+            toggleDrawing: { [weak self] in self?.toggleDrawingMode() },
+            toggleClickThrough: { [weak self] in self?.toggleInteractionMode() },
+            quit: { NSApp.terminate(nil) }
+        ))
 
         // A tool picked on one screen applies everywhere, and the badge that shows it
         // lives on one panel only, so every panel is told to repaint it.
@@ -117,8 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         if !unavailable.isEmpty {
             print("ScreenDrawOverlay: hotkeys unavailable: \(unavailable.joined(separator: ", "))")
-            hotKeyWarningItem?.title = "Shortcut unavailable: " + unavailable.joined(separator: " ")
-            hotKeyWarningItem?.isHidden = false
+            menuBar?.reportUnavailableShortcuts(unavailable)
         }
     }
 
@@ -144,119 +143,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func setupStatusItem() {
-        // variableLength lets the item size itself to the icon instead of a fixed square.
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-
-        let menu = NSMenu()
-        // The titles and the enabled state are driven by the current mode, so AppKit must
-        // not second-guess them.
-        menu.autoenablesItems = false
-        // Hidden unless a shortcut could not be registered; this is where the app says so.
-        let warningItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        warningItem.isEnabled = false
-        warningItem.isHidden = true
-        menu.addItem(warningItem)
-        hotKeyWarningItem = warningItem
-
-        let toggleItem = NSMenuItem(title: "Start Drawing",
-                                    action: #selector(toggleDrawingModeFromMenu),
-                                    keyEquivalent: "")
-        toggleItem.target = self
-        menu.addItem(toggleItem)
-        drawingMenuItem = toggleItem
-
-        let interactionItem = NSMenuItem(title: "Click-Through",
-                                         action: #selector(toggleInteractionModeFromMenu),
-                                         keyEquivalent: "")
-        interactionItem.target = self
-        menu.addItem(interactionItem)
-        interactionMenuItem = interactionItem
-        menu.addItem(.separator())
-
-        // Only offered where the system can do it without a helper bundle, and only for a
-        // real installed copy - an unbundled build has nothing to register.
-        if #available(macOS 13.0, *), Bundle.main.bundleIdentifier != nil {
-            let launchItem = NSMenuItem(title: "Open at Login",
-                                        action: #selector(toggleLaunchAtLogin),
-                                        keyEquivalent: "")
-            launchItem.target = self
-            menu.addItem(launchItem)
-            loginItem = launchItem
-            menu.addItem(.separator())
-        }
-
-        let quitItem = NSMenuItem(title: "Quit",
-                                  action: #selector(quit),
-                                  keyEquivalent: "q")
-        quitItem.target = self
-        menu.addItem(quitItem)
-        menu.delegate = self
-        statusItem?.menu = menu
-
-        updateStatusItemAppearance()
-    }
-
-    @objc private func toggleDrawingModeFromMenu() {
-        toggleDrawingMode()
-    }
-
-    @objc private func toggleInteractionModeFromMenu() {
-        toggleInteractionMode()
-    }
-
-    @objc private func quit() {
-        NSApp.terminate(nil)
-    }
-
-    // The login state can be changed from System Settings behind our back, so it is read
-    // when the menu opens rather than cached.
-    func menuWillOpen(_ menu: NSMenu) {
-        refreshLoginItem()
-    }
-
-    @objc private func toggleLaunchAtLogin() {
-        guard #available(macOS 13.0, *) else {
-            return
-        }
-
-        do {
-            if SMAppService.mainApp.status == .enabled {
-                try SMAppService.mainApp.unregister()
-                print("ScreenDrawOverlay: will no longer open at login")
-            } else {
-                try SMAppService.mainApp.register()
-                print("ScreenDrawOverlay: will open at login")
-            }
-        } catch {
-            // Nothing to shout about: macOS refuses this for copies in odd places, and the
-            // app works exactly the same either way.
-            print("ScreenDrawOverlay: could not change the login item - \(error.localizedDescription)")
-        }
-
-        refreshLoginItem()
-    }
-
-    private func refreshLoginItem() {
-        guard #available(macOS 13.0, *), let loginItem else {
-            return
-        }
-
-        switch SMAppService.mainApp.status {
-        case .enabled:
-            loginItem.title = "Open at Login"
-            loginItem.state = .on
-        case .requiresApproval:
-            // macOS is waiting for the user in System Settings; saying so beats a
-            // checkbox that looks broken.
-            loginItem.title = "Open at Login (approve in System Settings)"
-            loginItem.state = .mixed
-        default:
-            loginItem.title = "Open at Login"
-            loginItem.state = .off
-        }
-    }
-
     // Tap or hold, on the same shortcut. A tap toggles, as it always has. Holding it turns
     // the overlay into something you reach for the way you reach for a laser pointer:
     // press, scribble, let go, and the screen is yours again - no mode to remember to
@@ -265,7 +151,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     //
     // Momentary only applies when the press is what opened the overlay. Holding the key
     // while already drawing would otherwise have to undo the tap action mid-hold, which
-    // reads as the shortcut fighting the user.
     private func drawingHotKeyPressed() {
         let wasClosed = !isDrawingMode && overlayWindowSnapshot().isEmpty
         toggleDrawingMode()
@@ -386,7 +271,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         windows[indicatorIndex].makeKeyAndOrderFront(nil)
         startDrawingPointer()
-        updateStatusItemAppearance()
+        refreshMenuBar()
     }
 
     @objc private func screenParametersDidChange(_ notification: Notification) {
@@ -399,7 +284,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             print("ScreenDrawOverlay: display layout changed, dropping kept strokes")
             storedStrokes.removeAll()
             storedStrokesLayout.removeAll()
-            updateStatusItemAppearance()
+            refreshMenuBar()
         }
 
         guard isDrawingMode || !overlayWindowSnapshot().isEmpty else {
@@ -471,7 +356,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             print("ScreenDrawOverlay: click-through mode OFF (drawing again)")
         }
 
-        updateStatusItemAppearance()
+        refreshMenuBar()
     }
 
     // The real pointer is replaced by a fully transparent cursor over the panel, and the
@@ -488,65 +373,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func updateStatusItemAppearance() {
-        // The menu says the same thing the hot keys do: D returns to drawing or puts the
-        // overlay away, E only means anything once there is something on screen.
-        // Click-Through is a state, so it reads as a checkable item rather than a second
-        // command that would say the same thing as the first one.
-        drawingMenuItem?.title = !isDrawingMode
-            ? (storedStrokes.isEmpty ? "Start Drawing" : "Show Drawing")
-            : (isInteractionMode ? "Back to Drawing" : "Hide Overlay")
-        interactionMenuItem?.state = isInteractionMode ? .on : .off
-        interactionMenuItem?.isEnabled = isDrawingMode
-
-        guard let button = statusItem?.button else {
-            return
-        }
-
-        // The menu bar item doubles as the mode light: red while the overlay is taking
-        // the mouse, dimmed while it is only showing, plain when there is no overlay.
-        // The mode is carried by the symbol, never by a colour. Setting contentTintColor
-        // on a template image switches off the appearance-driven rendering that makes a
-        // menu bar icon light on a dark menu bar: measured, a tinted icon rendered at
-        // luminance 0.000 - black on black - while an untinted one rendered at 0.791.
-        let symbolName: String
-        let tooltip: String
-        if !isDrawingMode {
-            symbolName = "scribble"
-            tooltip = "Screen Draw Overlay - Control Option Command D to draw"
-        } else if isInteractionMode {
-            symbolName = "pencil.slash"
-            tooltip = "Click-through: drawing is showing, clicks go to the app underneath"
-        } else {
-            symbolName = "pencil.tip.crop.circle.fill"
-            tooltip = "Drawing: the overlay is taking your clicks"
-        }
-
-        button.contentTintColor = nil
-
-        if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Screen Draw Overlay") {
-            // A template image follows the menu bar's own look in both themes. An icon
-            // also takes less width than a letter, which matters on a crowded menu bar
-            // where macOS drops the items that do not fit.
-            image.isTemplate = true
-            button.image = image.withSymbolConfiguration(
-                NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-            ) ?? image
-            button.title = ""
-        } else {
-            // No symbol on this system: fall back to the letter this app shipped with,
-            // plainly, so AppKit styles it for the current appearance.
-            button.image = nil
-            button.title = "D"
-        }
-
-        button.toolTip = tooltip
+    private func refreshMenuBar() {
+        menuBar?.update(isDrawing: isDrawingMode,
+                        isClickThrough: isInteractionMode,
+                        hasKeptStrokes: !storedStrokes.isEmpty)
     }
 
-    // The panic key. Anything short of ending the process can in principle still leave
-    // the user stuck, so this quits outright, the same as Quit in the menu.
-    // applicationWillTerminate releases the overlay's mouse events and closes the panels
-    // on the way out.
+    // The panic key. Anything short of ending the process can in principle still leave the
+    // user stuck, so this quits outright, the same as Quit in the menu.
+    // applicationWillTerminate releases the overlay's mouse events and closes the panels on
+    // the way out.
     private func emergencyQuit() {
         print("ScreenDrawOverlay: emergency quit")
         NSApp.terminate(nil)
@@ -585,7 +421,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         isDrawingMode = false
         isInteractionMode = false
-        updateStatusItemAppearance()
+        refreshMenuBar()
     }
 
     private func overlayWindowSnapshot() -> [OverlayPanel] {
