@@ -271,3 +271,39 @@ already falls back to a plain `D` if a symbol will not load. macOS 11 is also th
 rather than an arbitrary one: Apple Silicon has no macOS before Big Sur, so a universal
 binary cannot target lower on the arm64 side. Open at Login (`SMAppService`) is 13+, so that
 menu item is simply absent on 11 and 12 rather than present and broken.
+
+## 19. The repaint, not the painting, is what a drag costs
+
+Performance work here started from the wrong end twice, so this entry is the map.
+
+**Measured** (2026-08-30, `Testing/experiments/repaint_paths.swift`, and
+`./Testing/run.sh cost`). Asking a full screen transparent overlay to repaint 60 times a
+second costs **15.2% of a core**, whatever the dirty rect's size. Actually painting what a
+drag puts on screen costs **0.3–0.5%**. The ratio is about thirty to one, and every idea
+that makes painting cheaper is bidding for that half point.
+
+The same repaint asked for through a `CALayer` delegate rather than `NSView.draw(_:)` costs
+**3.5%** — 4.3x less for identical output — and moving a sublayer, which is not a repaint,
+costs **1.5%**. WindowServer does not move in any of these runs, so this is our own process
+and not the compositor.
+
+**So the order of work is:** stop repainting for things that are not ink (the pointer, the
+badge), then move the ink off the `NSView` display path, and only then make painting itself
+cheaper.
+
+**Rejected on the measurement:**
+
+- **`needsToDraw(_:)` in place of `dirtyRect.intersects(_:)`.** The premise was that AppKit
+  hands `draw(_:)` a bounding box and the real dirty region is finer. For a layer-backed
+  view it is not: `getRectsBeingDrawn` returns **one** rect, and `needsToDraw` answers `true`
+  for a rectangle sitting between two far-apart invalidations, touching neither. Nothing to
+  gain.
+- **A bitmap cache of the finished strokes, as the first move.** It is a real optimisation of
+  the wrong quantity: it buys part of the half point that painting costs, at a full screen
+  bitmap per display in memory. It stays on the table only for the quadratic case below, and
+  only with a number behind it.
+
+**Confirmed on the measurement, and worth fixing in its own right:** the stroke under the
+mouse is re-stroked in full on every mouse move, so a single unbroken line is quadratic —
+the last tenth of a 5000-point line costs **5.5x** what its first tenth did. It is small in
+absolute terms until a line gets very long, which is exactly when someone notices.

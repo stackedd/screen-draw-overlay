@@ -39,14 +39,17 @@ in `Canvas`; how it appears belongs in the view.
 ## Commands
 
     swift build -c release        # must be warning-free
-    ./Testing/run.sh              # both suites; behaviour must be 19/19
+    ./Testing/run.sh              # every suite; behaviour must be 19/19
     ./build_app.sh                # universal, ad-hoc signed bundle in dist/
     open dist/ScreenDrawOverlay.app
 
 `./Testing/run.sh behaviour` drives the real app and checks the mode matrix, hide/show,
 tool keys, undo/redo and tap-versus-hold. `./Testing/run.sh rendering` paints a session
-incrementally and in one pass and compares the pixels. Read `Testing/README.md` before
-writing a new probe — two mistakes in there are easy to repeat.
+incrementally and in one pass and compares the pixels. `./Testing/run.sh cost` times the
+painting of real sessions — and measures painting only, which is the smaller half of the
+bill. `Testing/experiments/` holds the on-screen measurement of what a repaint costs; it is
+run by hand. Read `Testing/README.md` before writing a new probe — two mistakes in there are
+easy to repeat.
 
 ## Conventions
 
@@ -92,9 +95,20 @@ writing a new probe — two mistakes in there are easy to repeat.
 
 ## Current focus
 
-The app is feature-complete for v0.2 and stable. What is open is **performance**. The
-measurement to start from: each repaint of a full-screen transparent layer costs roughly
-**0.4% CPU regardless of the dirty rect's size**, so the bill is the number of repaints, not
-their area. Drawing by hand at 60 mouse moves a second costs 23.2% CPU; a fade costs 4.3%;
-idle costs 0.0%. Coalescing mouse-driven repaints to the display refresh, and reducing the
-layer's size, are the two untried directions.
+The app is feature-complete for v0.2 and stable. What is open is **performance**, and it has
+now been measured rather than guessed (`docs/ARCHITECTURE.md`, "Where the drawing bill
+actually goes"). Three numbers govern everything:
+
+- Asking this overlay to repaint 60 times a second costs **15.2% CPU**, whatever the dirty
+  rect's size. The bill is the number of repaints.
+- The same repaint asked for through a **`CALayer` delegate instead of `NSView.draw(_:)`
+  costs 3.5%** — 4.3x less, for identical output. Moving a sublayer, which is not a repaint,
+  costs 1.5%.
+- Actually painting a drag costs **0.3–0.5%**. Optimising the painting is bidding for half a
+  point out of twenty-three.
+
+So the route is: get everything that is not ink (the pointer, the badge) out of the repaint
+path and onto its own layer, then move the ink itself off `NSView.draw(_:)`, and only then
+look at painting — where the one real finding is that an unbroken stroke is redrawn in full
+on every mouse move, which is quadratic. WindowServer is not involved in any of this; it
+does not move when the overlay repaints.

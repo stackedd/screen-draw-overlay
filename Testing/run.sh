@@ -1,13 +1,15 @@
 #!/bin/bash
 #
-# Runs both suites against the current sources and prints a summary.
+# Runs the suites against the current sources and prints a summary.
 #
-#   ./Testing/run.sh              both suites
+#   ./Testing/run.sh              every suite
 #   ./Testing/run.sh behaviour    the mode and editing checks only
 #   ./Testing/run.sh rendering    the incremental-repaint comparison only
+#   ./Testing/run.sh cost         what a repaint costs to paint
 #
-# Neither suite needs a window on screen or any system permission. Both compile the app's
-# own sources, so they test the real code rather than a copy of it.
+# No suite needs a window on screen or any system permission. All of them compile the app's
+# own sources, so they test the real code rather than a copy of it. The one measurement that
+# does need a window on screen is Testing/experiments/, which is run by hand.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -37,6 +39,14 @@ if [ "$suite" = "all" ] || [ "$suite" = "rendering" ]; then
     echo "    clip boundaries, not missed paint - expanding every dirty rect makes them"
     echo "    worse, not better (docs/DECISIONS.md). What matters is that the numbers do"
     echo "    not move when you change how painting works."
+fi
+
+if [ "$suite" = "all" ] || [ "$suite" = "cost" ]; then
+    echo
+    echo "==> Cost (what a repaint costs to paint)"
+    python3 Testing/make_cost_probe.py > /dev/null
+    swift build --package-path "$TESTING_DIR/cost" -c release 2>&1 | grep -E "error:" && exit 1
+    "$TESTING_DIR/cost/.build/release/COST" | sed 's/^/    /'
 fi
 
 echo

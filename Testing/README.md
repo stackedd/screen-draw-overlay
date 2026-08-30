@@ -5,9 +5,10 @@ drives the real code and prints what happened, which is how behaviour that only 
 running AppKit app - window levels, key dispatch, cursor ownership, repaint regions - can be
 checked at all.
 
-    ./Testing/run.sh              both suites
+    ./Testing/run.sh              every suite
     ./Testing/run.sh behaviour    the mode and editing checks
     ./Testing/run.sh rendering    the repaint comparison
+    ./Testing/run.sh cost         what a repaint costs to paint
 
 **behaviour** (`probes/behaviour.swift`) drives a real AppDelegate: the mode matrix, hiding
 and showing keeping strokes with their tool attributes, the unfinished-stroke commit, tool
@@ -19,6 +20,29 @@ whether its output is unchanged line for line.
 repainting only what the view asked for, and once in a single pass - and compares the two
 bitmaps at 1x, 2x and 3x backing scale. It is how "the optimisation did not change what is
 on screen" gets proved rather than asserted.
+
+**cost** (`probes/cost.swift`) drives the same view and paints, into an offscreen bitmap at
+a Retina backing scale, every rectangle the view asks to have repainted - then times it. Four
+sweeps: one unbroken stroke of up to 5000 points, pointer moves over a canvas holding 0, 50
+and 200 strokes, a short drag over the same, and a fade tick. Two dirty-region models are run
+side by side (each rectangle painted on its own, and one paint covering all of them), because
+a layer-backed view really does get the union.
+
+It measures **painting only**. Updating the window's backing store and compositing the panel
+happen in no process this probe can see, and they are most of the bill - see
+`docs/ARCHITECTURE.md`. Read a cost number as "how much of the small half moved".
+
+## Experiments
+
+`experiments/repaint_paths.swift` is the measurement that cannot be made offscreen: what one
+repaint of a full screen transparent overlay costs, split between this process and
+WindowServer, across the ways of asking for one. It needs a real window on a real screen, so
+it is run by hand rather than by `run.sh`:
+
+    swiftc -O -o /tmp/repaint_paths Testing/experiments/repaint_paths.swift && /tmp/repaint_paths
+
+It puts a transparent panel up for about a minute. The panel sets `ignoresMouseEvents`, so it
+cannot take anyone's click while it is up.
 
 ## Writing another probe
 

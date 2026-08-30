@@ -96,6 +96,51 @@ exactly at 2x and 3x backing scale; at 1x a handful of pixels differ by 1–10/2
 boundaries, which is antialiasing at the seam and not a missed repaint — expanding every
 dirty rect makes it worse, not better.
 
+**Where the drawing bill actually goes** (2026-08-30, 1512x982 at 2x,
+`Testing/experiments/repaint_paths.swift`, a trivial paint so that only the asking is being
+measured). Per second of one core:
+
+| what is asked for | 60 a second | 120 a second |
+| --- | --- | --- |
+| nothing | 0.1% | — |
+| `NSView.setNeedsDisplay`, 40x40 dirty rect | **15.2%** | **26.1%** |
+| `NSView.setNeedsDisplay`, 400x400 dirty rect | 14.7% | — |
+| `CALayer.setNeedsDisplay`, 40x40 dirty rect | **3.5%** | **4.8%** |
+| moving a sublayer (not a repaint at all) | **1.5%** | 2.7% |
+
+Three things follow, and they reorder every performance question in this app:
+
+1. **Area still does not matter.** A hundredfold larger dirty rect costs the same. The bill
+   is the number of repaints.
+2. **The path the repaint is asked through matters enormously.** The same repaint of the
+   same full screen transparent layer is **4.3x** cheaper asked for through a `CALayer`
+   delegate than through `NSView.draw(_:)`, and 5.4x cheaper at 120 a second. Nothing about
+   what is painted changes; the cost is AppKit's view display machinery.
+3. **WindowServer is not the payer.** It sat between 48.7% and 54.2% in every run including
+   the one that repaints nothing at all. Compositing a full screen transparent surface is
+   not what this app is spending its time on.
+
+**What painting itself costs** (`./Testing/run.sh cost`, offscreen, painting only). Small,
+next to the numbers above:
+
+- A 60-point drag costs **0.054 ms an event** on an empty canvas and **0.087 ms** with 200
+  strokes already down. At 60 events a second that is 0.3–0.5% CPU. So the reported symptom
+  — it gets worse as the screen fills — is real (+61%) but it is 61% of a very small number.
+- One unbroken stroke is **quadratic**: the per-event painting cost of a 5000-point line is
+  **5.5x** higher over its last tenth than its first (0.067 ms to 0.362 ms). Confirmed, but
+  it only reaches the size of a single repaint after a few thousand points.
+- A fade tick with 50 temporary strokes costs **1.7 ms** to paint, at 15 ticks a second.
+
+Put together: of the 23.2% a drag costs, painting is roughly half a point and the repaints
+are the rest.
+
+**`needsToDraw(_:)` is not a lever here.** It looked like a free win — AppKit hands
+`draw(_:)` the bounding box of every invalid rectangle, so a pointer that invalidates where
+it left and where it arrived can union into a band across the screen. Measured: a
+layer-backed view gets **one** rect being drawn, and `needsToDraw` returns `true` for a
+rectangle that touches neither invalidation. There is no finer region to consult. The fix
+for the band is to stop the pointer invalidating at all, not to ask a better question.
+
 **Hot keys.** Two different processes can register the same shortcut and both succeed, so a
 clash with another app is silent — the app can only report the case macOS refuses outright
 (`-9878`, which is a second registration inside one process). This is also why the app quits
@@ -134,6 +179,14 @@ Two suites carry the weight:
   hold. 19 checks. Every refactor is judged by whether its output is byte-identical.
 - **Rendering** — the same session painted incrementally and in one pass, compared pixel by
   pixel at 1x, 2x and 3x.
+- **Cost** — the same view driven through real sessions with every repaint it asks for
+  painted and timed: one long unbroken stroke, pointer moves over a canvas holding 0, 50 and
+  200 strokes, a short drag over the same, and a fade tick. It measures painting only, which
+  is the point: it is how "does this get more expensive as the screen fills up?" gets an
+  answer instead of an opinion.
+
+`Testing/experiments/` holds the one measurement that needs a real window on a real screen
+— what a repaint costs and who pays for it — and is run by hand.
 
 Anything that cannot be injected without Accessibility — real key presses, real clicks,
 the wallpaper click, a second monitor — is a manual check, and the report should say so
