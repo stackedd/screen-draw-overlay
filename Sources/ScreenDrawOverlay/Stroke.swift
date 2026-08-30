@@ -187,6 +187,11 @@ struct Stroke {
     // for "look here" marks that should not pile up on the slide.
     let createdAt: Date?
 
+    // Shapes are two points and a generated path - a rectangle's outline is not its
+    // polyline - so there is nothing sensible to cut in half. The eraser takes those whole
+    // and splits the freehand ones.
+    let isShape: Bool
+
     var renderColor: NSColor {
         color.withAlphaComponent(style.alpha)
     }
@@ -233,7 +238,7 @@ struct Stroke {
     // `let` that already has a value - which would make the identity impossible to carry
     // when a stroke is rebuilt.
     init(id: UUID = UUID(), points: [NSPoint], path: NSBezierPath, color: NSColor,
-         width: CGFloat, style: StrokeStyle, createdAt: Date?) {
+         width: CGFloat, style: StrokeStyle, createdAt: Date?, isShape: Bool = false) {
         self.id = id
         self.points = points
         self.path = path
@@ -241,6 +246,127 @@ struct Stroke {
         self.width = width
         self.style = style
         self.createdAt = createdAt
+        self.isShape = isShape
+    }
+
+    // What the eraser leaves behind: the same pen, colour and life, a shorter line, and a
+    // new identity - because it is a different mark now and the history has to be able to
+    // tell the two apart.
+    func piece(of points: [NSPoint]) -> Stroke? {
+        guard points.count > 1 else {
+            return nil
+        }
+
+        let rebuilt = NSBezierPath()
+        rebuilt.lineWidth = width
+        rebuilt.lineCapStyle = style.lineCapStyle
+        rebuilt.lineJoinStyle = .round
+        rebuilt.move(to: points[0])
+        for point in points.dropFirst() {
+            rebuilt.line(to: point)
+        }
+
+        return Stroke(points: points, path: rebuilt, color: color, width: width,
+                      style: style, createdAt: createdAt, isShape: isShape)
+    }
+
+    // The lengths of this stroke that survive the eraser passing over a point. A freehand
+    // stroke is a polyline, so this is a circle against each segment in turn: a segment
+    // keeps whatever of itself lies outside the circle, and consecutive survivors join back
+    // up into one shorter stroke.
+    //
+    // Testing the segment rather than its endpoints matters. Mouse moves are dense while
+    // drawing slowly and sparse while drawing fast, and an eraser that only looked at
+    // endpoints would pass straight through a fast line without touching it.
+    func surviving(_ centre: NSPoint, radius: CGFloat) -> [[NSPoint]] {
+        guard points.count > 1 else {
+            let alone = points.first.map { hypot($0.x - centre.x, $0.y - centre.y) > radius }
+            return alone == true ? [points] : []
+        }
+
+        var runs: [[NSPoint]] = []
+        var run: [NSPoint] = []
+
+        for index in 1..<points.count {
+            let start = points[index - 1]
+            let end = points[index]
+
+            guard let (entry, exit) = Stroke.crossing(from: start, to: end,
+                                                      centre: centre, radius: radius) else {
+                if run.isEmpty {
+                    run.append(start)
+                }
+                run.append(end)
+                continue
+            }
+
+            if entry > 0 {
+                if run.isEmpty {
+                    run.append(start)
+                }
+                run.append(Stroke.point(from: start, to: end, at: entry))
+            }
+
+            if run.count > 1 {
+                runs.append(run)
+            }
+            run = exit < 1 ? [Stroke.point(from: start, to: end, at: exit)] : []
+        }
+
+        if run.count > 1 {
+            runs.append(run)
+        }
+
+        // A survivor shorter than the pen that drew it is not a mark, it is a crumb: with a
+        // round cap it renders as a dot sitting in the hole the eraser just made, which
+        // reads as dirt rather than as ink the user asked to keep.
+        return runs.filter { Stroke.length(of: $0) > width }
+    }
+
+    private static func length(of points: [NSPoint]) -> CGFloat {
+        guard points.count > 1 else {
+            return 0
+        }
+
+        return (1..<points.count).reduce(CGFloat(0)) { total, index in
+            total + hypot(points[index].x - points[index - 1].x,
+                          points[index].y - points[index - 1].y)
+        }
+    }
+
+    // Where a segment enters and leaves a circle, as fractions along it, or nil if it never
+    // does. Clamped to the segment, so a segment that starts inside enters at zero.
+    private static func crossing(from start: NSPoint, to end: NSPoint,
+                                 centre: NSPoint, radius: CGFloat) -> (CGFloat, CGFloat)? {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let fx = start.x - centre.x
+        let fy = start.y - centre.y
+
+        let a = dx * dx + dy * dy
+        guard a > 0 else {
+            return hypot(fx, fy) <= radius ? (0, 1) : nil
+        }
+
+        let b = 2 * (fx * dx + fy * dy)
+        let c = fx * fx + fy * fy - radius * radius
+        let discriminant = b * b - 4 * a * c
+        guard discriminant >= 0 else {
+            return nil
+        }
+
+        let root = sqrt(discriminant)
+        let first = (-b - root) / (2 * a)
+        let second = (-b + root) / (2 * a)
+        guard second > 0, first < 1 else {
+            return nil
+        }
+
+        return (max(0, first), min(1, second))
+    }
+
+    private static func point(from start: NSPoint, to end: NSPoint, at t: CGFloat) -> NSPoint {
+        NSPoint(x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t)
     }
 
     var hasFaded: Bool {

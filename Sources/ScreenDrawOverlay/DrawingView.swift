@@ -196,6 +196,8 @@ final class DrawingView: NSView {
         updateBadgeHover(at: point)
 
         guard tools.tool != .eraser else {
+            // One drag is one thing to take back, however many strokes it cuts through.
+            canvas.beginErase()
             erase(at: point)
             return
         }
@@ -397,6 +399,10 @@ final class DrawingView: NSView {
     }
 
     func finishStrokeInProgress() {
+        // An eraser drag is finished the same way a stroke is, and for the same reason:
+        // whenever the tool is taken away mid-drag it has to be committed, not dropped.
+        canvas.finishErase()
+
         guard let dirty = canvas.finishStroke() else {
             return
         }

@@ -51,7 +51,7 @@ pointer is a cursor the window server draws for us.
 ## Commands
 
     swift build -c release        # must be warning-free
-    ./Testing/run.sh              # every suite; behaviour must be 26/26
+    ./Testing/run.sh              # every suite; behaviour must be 28/28
     ./build_app.sh                # universal, ad-hoc signed bundle in dist/
     open dist/ScreenDrawOverlay.app
 

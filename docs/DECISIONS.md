@@ -305,8 +305,25 @@ touches what is already on screen. It keeps its points as well as its `NSBezierP
 the eraser has to answer "is this stroke near the pointer?", which a path can only answer for
 its filled area, not for the line itself.
 
-The eraser removes whole strokes rather than splitting them: on an annotation overlay, "take
-that line away" is what people mean.
+The eraser used to remove whole strokes rather than splitting them, on the grounds that "take
+that line away" is what people mean on an annotation overlay. It was wrong, and the way it was
+wrong is instructive: **it made the eraser's own size meaningless.** One touch anywhere on a
+line took the entire line, so a two point eraser and a thirty point one did exactly the same
+thing, and the width control did nothing at all.
+
+It cuts now. A freehand stroke keeps whatever of itself the eraser did not pass over, and the
+size is the width of the hole it leaves. The geometry is a circle against each segment in
+turn rather than against each point, because mouse moves are dense while drawing slowly and
+sparse while drawing fast, and an endpoint test would let a fast line straight through.
+Survivors shorter than the pen that drew them are dropped: with a round cap they render as a
+dot sitting in the hole, which reads as dirt.
+
+Shapes are still taken whole. A rectangle's outline is not its polyline, so there is nothing
+there to cut in half.
+
+**One drag is one undo.** Each mouse move that touches ink would otherwise be its own edit,
+and taking back an eraser drag would mean pressing undo a hundred times to get a line back.
+The drag records what it took away and what it left, once, on release.
 
 Undo records edits (a stroke added, or strokes removed with the indices they came from)
 rather than inferring them from the stroke list, which is what lets it put back what the

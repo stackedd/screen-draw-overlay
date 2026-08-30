@@ -27,6 +27,10 @@ final class Canvas {
     enum Edit {
         case added(Stroke)
         case removed([Removal])
+        // One eraser drag, however many strokes it cut: what it took away and what it left
+        // in their place. One edit rather than one per mouse move, or undo would give a
+        // drawing back a nibble at a time.
+        case erased(originals: [Removal], pieces: [Stroke])
 
         // Temporary ink is not something anyone can take back: it was drawn to vanish. When
         // it goes, the entries naming it go too, or undo steps over an entry that does
@@ -38,6 +42,11 @@ final class Canvas {
             case .removed(let removals):
                 let kept = removals.filter { $0.stroke.id != id }
                 return kept.isEmpty ? nil : .removed(kept)
+            case .erased(let originals, let pieces):
+                let keptOriginals = originals.filter { $0.stroke.id != id }
+                let keptPieces = pieces.filter { $0.id != id }
+                return keptOriginals.isEmpty ? nil : .erased(originals: keptOriginals,
+                                                             pieces: keptPieces)
             }
         }
 
@@ -49,6 +58,11 @@ final class Canvas {
             case .removed(let removals):
                 let kept = removals.filter { $0.stroke.createdAt == nil }
                 return kept.isEmpty ? nil : .removed(kept)
+            case .erased(let originals, let pieces):
+                let keptOriginals = originals.filter { $0.stroke.createdAt == nil }
+                let keptPieces = pieces.filter { $0.createdAt == nil }
+                return keptOriginals.isEmpty ? nil : .erased(originals: keptOriginals,
+                                                             pieces: keptPieces)
             }
         }
     }
@@ -73,6 +87,8 @@ final class Canvas {
     private var lastPoint: NSPoint?
     private var undoStack: [Edit] = []
     private var redoStack: [Edit] = []
+    private var eraseOriginals: [Removal] = []
+    private var erasePieces: [Stroke] = []
 
     var hasTemporaryInk: Bool {
         strokes.contains { $0.createdAt != nil }
@@ -90,7 +106,8 @@ final class Canvas {
 
         strokeInProgress = Stroke(points: [point], path: path, color: tools.color,
                                   width: width, style: tools.style,
-                                  createdAt: tools.drawsTemporaryInk ? Date() : nil)
+                                  createdAt: tools.drawsTemporaryInk ? Date() : nil,
+                                  isShape: tools.tool.isShape)
         shapeAnchor = tools.tool.isShape ? point : nil
         lastPoint = point
 
@@ -110,7 +127,7 @@ final class Canvas {
             let rebuilt = tools.tool.shapePath(from: anchor, to: end, width: existing.width)
             let updated = Stroke(points: [anchor, end], path: rebuilt, color: existing.color,
                                  width: existing.width, style: existing.style,
-                                 createdAt: existing.createdAt)
+                                 createdAt: existing.createdAt, isShape: true)
             strokeInProgress = updated
             lastPoint = end
 
@@ -148,30 +165,67 @@ final class Canvas {
 
     // MARK: - Erasing and history
 
-    // The eraser rubs out whole strokes: partial erasing would mean splitting paths, and
-    // on an annotation overlay "take that line away" is what people actually want.
+    // The eraser cuts, it does not delete. Rubbing out whole strokes was the first design
+    // and it made the eraser's size meaningless: one touch anywhere on a line took the whole
+    // line, so a wide eraser and a narrow one did exactly the same thing. Now a freehand
+    // stroke keeps whatever of itself the eraser did not pass over, and the size is the
+    // width of the hole it leaves.
+    //
+    // Shapes are still taken whole. A rectangle's outline is not its polyline, so there is
+    // nothing there to cut in half.
+    func beginErase() {
+        eraseOriginals = []
+        erasePieces = []
+    }
+
     func erase(at point: NSPoint, radius: CGFloat) -> [NSRect] {
-        var removed: [Removal] = []
         var dirty: [NSRect] = []
 
         for index in strokes.indices.reversed() {
             let stroke = strokes[index]
-            guard stroke.repaintBounds.insetBy(dx: -radius, dy: -radius).contains(point),
-                  stroke.distance(to: point) <= radius + stroke.width / 2 else {
+            let reach = radius + stroke.width / 2
+            guard stroke.repaintBounds.insetBy(dx: -reach, dy: -reach).contains(point),
+                  stroke.distance(to: point) <= reach else {
                 continue
             }
 
-            removed.append(Removal(index: index, stroke: stroke))
+            // A stroke this same drag already cut is not something the drag took away; the
+            // thing it took away was whatever that piece came from, and that is already
+            // recorded.
+            if let made = erasePieces.firstIndex(where: { $0.id == stroke.id }) {
+                erasePieces.remove(at: made)
+            } else {
+                eraseOriginals.append(Removal(index: index, stroke: stroke))
+            }
+
             dirty.append(stroke.repaintBounds)
             strokes.remove(at: index)
+
+            guard !stroke.isShape else {
+                continue
+            }
+
+            let survivors = stroke.surviving(point, radius: reach).compactMap { stroke.piece(of: $0) }
+            strokes.insert(contentsOf: survivors, at: index)
+            erasePieces.append(contentsOf: survivors)
         }
 
-        guard !removed.isEmpty else {
-            return []
-        }
-
-        record(.removed(removed.sorted { $0.index < $1.index }))
         return dirty
+    }
+
+    // The whole drag, as one thing anyone can take back.
+    @discardableResult
+    func finishErase() -> Bool {
+        guard !eraseOriginals.isEmpty else {
+            return false
+        }
+
+        record(.erased(originals: eraseOriginals.sorted { $0.index < $1.index },
+                       pieces: erasePieces))
+        eraseOriginals = []
+        erasePieces = []
+
+        return true
     }
 
     // Steps back to the most recent edit that can still be taken back. An entry naming a
@@ -194,6 +248,14 @@ final class Canvas {
                     strokes.insert(removal.stroke, at: min(removal.index, strokes.count))
                     dirty.append(removal.stroke.repaintBounds)
                 }
+            case .erased(let originals, let pieces):
+                let made = Set(pieces.map(\.id))
+                strokes.removeAll { made.contains($0.id) }
+                for removal in originals {
+                    strokes.insert(removal.stroke, at: min(removal.index, strokes.count))
+                    dirty.append(removal.stroke.repaintBounds)
+                }
+                dirty.append(contentsOf: pieces.map(\.repaintBounds))
             }
 
             redoStack.append(edit)
@@ -224,6 +286,12 @@ final class Canvas {
                 dirty.append(strokes[index].repaintBounds)
                 strokes.remove(at: index)
             }
+        case .erased(let originals, let pieces):
+            let taken = Set(originals.map(\.stroke.id))
+            dirty.append(contentsOf: strokes.filter { taken.contains($0.id) }.map(\.repaintBounds))
+            strokes.removeAll { taken.contains($0.id) }
+            strokes.append(contentsOf: pieces)
+            dirty.append(contentsOf: pieces.map(\.repaintBounds))
         }
 
         undoStack.append(edit)

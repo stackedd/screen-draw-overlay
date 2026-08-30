@@ -74,7 +74,7 @@ While you are drawing, the keyboard belongs to the tool. No modifiers to hold �
 | `A` | Arrow |
 | `R` | Rectangle |
 | `O` | Oval |
-| `E` | Eraser — rubs out whole strokes, one at a time |
+| `E` | Eraser — rubs out the part you pass over, as wide as the current width. One drag is one undo |
 | `Space` | Laser pointer — a glowing dot that leaves no ink. Press again for the tool you had |
 
 | Key | What it does |

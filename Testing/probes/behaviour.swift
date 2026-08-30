@@ -32,6 +32,19 @@
         if finish { v.mouseUp(with: ev(.leftMouseUp, 380)) }
     }
 
+    func rub(x: CGFloat, y: CGFloat) {
+        guard let panel = controller.overlayWindowSnapshot().first else { return }
+        let v = panel.drawingView
+        func ev(_ t: NSEvent.EventType, _ x: CGFloat) -> NSEvent {
+            NSEvent.mouseEvent(with: t, location: NSPoint(x: x, y: y), modifierFlags: [], timestamp: 0,
+                               windowNumber: panel.windowNumber, context: nil, eventNumber: 0,
+                               clickCount: 1, pressure: 1)!
+        }
+        v.mouseDown(with: ev(.leftMouseDown, x))
+        v.mouseDragged(with: ev(.leftMouseDragged, x + 4))
+        v.mouseUp(with: ev(.leftMouseUp, x + 4))
+    }
+
     var live: Int { controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot()).first?.capturedStrokes().count ?? -1 }
     var state: String { !controller.isDrawingMode ? "OFF" : (controller.isInteractionMode ? "CLICK-THROUGH" : "DRAWING") }
 
@@ -129,6 +142,21 @@
         check("wheel: right is the pen, left is the eraser",
               toolPushing(120, 0) + "/" + toolPushing(-120, 0), "PEN/ERASER")
         check("wheel: the dead zone picks nothing", toolPushing(6, -4), "none")
+
+        // The eraser cuts, it does not delete. Rubbing out whole strokes made its size
+        // meaningless: one touch anywhere on a line took the entire line, so a wide eraser
+        // and a narrow one did exactly the same thing.
+        press(kVK_ANSI_C, "c")
+        press(kVK_ANSI_P, "p")
+        stroke(y: 700)
+        press(kVK_ANSI_E, "e")
+        rub(x: 290, y: 700)
+        check("eraser cuts a line in two", "\(live)", "2")
+
+        // And a drag is one thing to take back, not one per mouse move.
+        press(kVK_ANSI_Z, "z", .command)
+        check("one eraser drag is one undo", "\(live)", "1")
+        press(kVK_ANSI_P, "p")
 
         // And the whole gesture, end to end: open the wheel where the pointer is, push the
         // pointer right, let go, and be holding the pen. Driven through track() rather than
