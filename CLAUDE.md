@@ -9,7 +9,8 @@ click-through, `⌃⌥⌘Esc` quit — plus `⌃⌥⌘Z` / `⇧⌃⌥⌘Z` to ta
 global for the same reason: a non-activating panel only gets the keyboard while this app is
 the active one, so `⌘Z` alone was a no-op whenever the user had clicked anything else.
 While the overlay is up, `⌥Z` / `⌥X` / `⌥C` hold open a wheel of tools, colours and widths:
-push the mouse at one and let go.
+push the mouse at one and let go. The tools wheel's hub is the mode — let go in the middle and
+the screen goes back to the app underneath.
 
 ## Stack
 
@@ -52,7 +53,7 @@ pointer is a cursor the window server draws for us.
 ## Commands
 
     swift build -c release        # must be warning-free
-    ./Testing/run.sh              # every suite; behaviour must be 30/30
+    ./Testing/run.sh              # every suite; behaviour must be 31/31
     ./build_app.sh                # universal, ad-hoc signed bundle in dist/
     open dist/ScreenDrawOverlay.app
 

@@ -173,23 +173,34 @@
         check("one eraser drag is one undo", "\(live)", "1")
         press(kVK_ANSI_P, "p")
 
-        // And the whole gesture, end to end: open the wheel where the pointer is, push the
-        // pointer right, let go, and be holding the pen. Driven through track() rather than
-        // by moving the mouse, which is the only way a test can reach it.
-        let panel = WheelPanel()
-        var chosen: DrawingTool?
-        panel.open(OverlayController.toolWheel) { chosen = OverlayController.toolOrder[$0] }
-        panel.track(NSPoint(x: NSEvent.mouseLocation.x + 120, y: NSEvent.mouseLocation.y))
-        panel.release()
-        check("wheel: push right, let go, holding the pen", chosen?.label ?? "none", "PEN")
+        // And the whole gesture, end to end, through the same code the shortcut runs: open
+        // the wheel where the pointer is, push, let go.
+        controller.tools.select(tool: .eraser)
+        // Pushed from the wheel's own centre, not from wherever the mouse happens to be:
+        // the wheel clamps itself to fit on screen, so opening it near an edge puts the
+        // centre somewhere other than the pointer. A test that assumed otherwise passed or
+        // failed depending on where the mouse had been left.
+        controller.openToolWheel()
+        controller.wheels.track(NSPoint(x: controller.wheels.centre.x + 120, y: controller.wheels.centre.y))
+        controller.wheels.release()
+        check("wheel: push right, let go, holding the pen",
+              controller.tools.tool.label + "/" + state, "PEN/DRAWING")
 
-        // Letting go in the middle changes nothing. It is the only way out of a wheel you
-        // opened by mistake, so it has to be exactly nothing.
-        var afterCancel: DrawingTool?
-        panel.open(OverlayController.toolWheel) { afterCancel = OverlayController.toolOrder[$0] }
-        panel.track(NSEvent.mouseLocation)
-        panel.release()
-        check("wheel: let go in the middle and nothing happens", afterCancel?.label ?? "none", "none")
+        // The hub is not a cancel. It is the way out to driving the system, which is the
+        // point of putting the mode on the same gesture as the tool: one thing to learn
+        // instead of a tool picker and a mode shortcut.
+        controller.openToolWheel()
+        controller.wheels.track(controller.wheels.centre)
+        controller.wheels.release()
+        check("wheel: let go in the middle and the system has the screen", state, "CLICK-THROUGH")
+
+        // And back, by picking a tool - which is the only way back in, so it had better be.
+        controller.openToolWheel()
+        controller.wheels.track(NSPoint(x: controller.wheels.centre.x - 120, y: controller.wheels.centre.y))
+        controller.wheels.release()
+        check("wheel: pick a tool and the overlay takes the screen back",
+              controller.tools.tool.label + "/" + state, "ERASER/DRAWING")
+        controller.tools.select(tool: .pen)
 
         // The pointer is the system arrow with a ring around its tip. Three points have
         // to be the same one - the hot spot, the middle of the ring and where the ink
@@ -218,3 +229,4 @@
                 }
             }
         }
+

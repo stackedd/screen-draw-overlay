@@ -534,10 +534,23 @@ a tool you use while presenting and a tool you stop presenting to use.
 
 **Hold, push, let go.** `⌥Z` opens the tools, `⌥X` the colours, `⌥C` the widths. The wheel
 appears where the pointer already is. Letting go picks whatever the pointer is pushing
-towards; letting go in the dead zone in the middle picks nothing, which is the only way out
-of a wheel opened by mistake and so has to be exactly nothing. Sector zero is due right and
-they run clockwise, which puts the two that need no thought — the pen and the eraser — a
-flick right and a flick left.
+towards. Sector zero is due right and they run clockwise, which puts the two that need no
+thought — the pen and the eraser — a flick right and a flick left.
+
+**The hub of the tools wheel is the mode.** Letting go in the middle hands the screen back to
+whatever is underneath; pushing at a tool takes it again and puts that tool in your hand. So
+one gesture carries both, and there is no separate mode shortcut to remember alongside a tool
+picker — which is the whole point, and why the hub says `CLICK-THROUGH` rather than `CANCEL`.
+`⌃⌥⌘E` still does the same thing and is left registered as a way back that does not depend on
+the wheel; it is one line to remove when the wheel has been lived with for a while.
+
+The colour and width wheels keep a plain cancel in the middle. Reaching for a colour and
+landing in the centre should not move the mode.
+
+**Each wheel shows its own thing.** The colour sectors are swatches in the colour, not a
+tinted icon. The width sectors are bars of exactly the line they will draw, not the same icon
+six times with a number underneath. A menu that makes you read is a menu you cannot use
+without looking.
 
 **Three decisions worth the words:**
 

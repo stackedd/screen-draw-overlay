@@ -19,11 +19,15 @@ struct Wheel {
         // Set where the sector *is* the colour - the colour wheel - and left nil where the
         // glyph should read as an icon rather than a swatch.
         let tint: NSColor?
+        // Set where the sector is a thickness. A line of that thickness says what it is;
+        // the same icon six times over with a number under it makes you read.
+        let rule: CGFloat?
 
-        init(label: String, symbol: String, tint: NSColor? = nil) {
+        init(label: String, symbol: String, tint: NSColor? = nil, rule: CGFloat? = nil) {
             self.label = label
             self.symbol = symbol
             self.tint = tint
+            self.rule = rule
         }
     }
 
@@ -36,6 +40,15 @@ struct Wheel {
     static var extent: CGFloat { (outerRadius + margin) * 2 }
 
     let items: [Item]
+
+    // What the hub says, and therefore what letting go in the middle does. On the tools
+    // wheel it is not a cancel at all: it is the way out to driving the system.
+    let centreLabel: String
+
+    init(items: [Item], centreLabel: String = "CANCEL") {
+        self.items = items
+        self.centreLabel = centreLabel
+    }
 
     // Sector zero points right and they run clockwise, so the two that need no thought -
     // the pen and the eraser - are a flick right and a flick left.
@@ -98,12 +111,13 @@ struct Wheel {
         hub.lineWidth = 1
         hub.stroke()
 
-        let title = highlighted.map { items[$0].label } ?? "CANCEL"
+        let title = highlighted.map { items[$0].label } ?? centreLabel
         let colour = highlighted == nil
             ? NSColor.white.withAlphaComponent(0.45)
             : NSColor.white
         let text = NSAttributedString(string: title, attributes: [
-            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+            // The hub is a circle, so a long word has to come down to fit inside it.
+            .font: NSFont.systemFont(ofSize: title.count > 9 ? 11 : 13, weight: .semibold),
             .foregroundColor: colour,
             .kern: 0.4
         ])
@@ -171,6 +185,21 @@ struct Wheel {
             swatch.stroke()
             label.draw(at: NSPoint(x: seat.x - labelSize.width / 2,
                                    y: seat.y - radius + 7 - labelSize.height - 3))
+            return
+        }
+
+        // A thickness draws itself: a bar of exactly the line it will put on the screen.
+        if let rule = item.rule {
+            let bar = NSBezierPath()
+            let half: CGFloat = 17
+            bar.move(to: NSPoint(x: seat.x - half, y: seat.y + 7))
+            bar.line(to: NSPoint(x: seat.x + half, y: seat.y + 7))
+            bar.lineWidth = min(rule, 20)
+            bar.lineCapStyle = .round
+            ink.setStroke()
+            bar.stroke()
+            label.draw(at: NSPoint(x: seat.x - labelSize.width / 2,
+                                   y: seat.y + 7 - min(rule, 20) / 2 - labelSize.height - 4))
             return
         }
 

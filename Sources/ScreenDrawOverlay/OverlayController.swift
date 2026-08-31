@@ -38,14 +38,14 @@ final class OverlayController {
         Wheel.Item(label: "RECT", symbol: "rectangle"),
         Wheel.Item(label: "OVAL", symbol: "circle"),
         Wheel.Item(label: "LASER", symbol: "dot.circle.and.hand.point.up.left.fill")
-    ])
+    ], centreLabel: "CLICK-THROUGH")
 
     private static let colourWheel = Wheel(items: zip(
         ["RED", "ORANGE", "YELLOW", "GREEN", "BLUE", "WHITE"], ToolSettings.colors
     ).map { Wheel.Item(label: $0.0, symbol: "circle.fill", tint: $0.1) })
 
     private static let widthWheel = Wheel(items: ToolSettings.widths.map {
-        Wheel.Item(label: "\(Int($0))", symbol: "line.3.horizontal.decrease")
+        Wheel.Item(label: "\(Int($0))", symbol: "", rule: $0)
     })
 
     private let wheels = WheelPanel()
@@ -101,23 +101,45 @@ final class OverlayController {
     // out of the way the rest of the time.
     private func startWheels() {
         shortcuts.registerWheels(Shortcuts.WheelActions(
-            tools: { [weak self] in
-                self?.wheels.open(OverlayController.toolWheel) { [weak self] index in
-                    self?.tools.select(tool: OverlayController.toolOrder[index])
-                }
-            },
-            colours: { [weak self] in
-                self?.wheels.open(OverlayController.colourWheel) { [weak self] index in
-                    self?.tools.selectColor(index)
-                }
-            },
-            widths: { [weak self] in
-                self?.wheels.open(OverlayController.widthWheel) { [weak self] index in
-                    self?.tools.selectWidth(index)
-                }
-            },
+            tools: { [weak self] in self?.openToolWheel() },
+            colours: { [weak self] in self?.openColourWheel() },
+            widths: { [weak self] in self?.openWidthWheel() },
             released: { [weak self] in self?.wheels.release() }
         ))
+    }
+
+    // The tools wheel carries the mode as well as the tool, which is the whole shape of the
+    // thing: push at a tool and you are drawing with it, let go in the middle and the screen
+    // belongs to whatever is underneath. Two states and one gesture, instead of a tool
+    // picker and a mode shortcut to remember separately.
+    private func openToolWheel() {
+        wheels.open(OverlayController.toolWheel) { [weak self] index in
+            guard let self else {
+                return
+            }
+
+            guard let index else {
+                self.setInteractionMode(true)
+                return
+            }
+
+            self.setInteractionMode(false)
+            self.tools.select(tool: OverlayController.toolOrder[index])
+        }
+    }
+
+    // The other two only change what is in hand, so their hub is a plain cancel: reaching
+    // for a colour and landing in the middle should not move the mode.
+    private func openColourWheel() {
+        wheels.open(OverlayController.colourWheel) { [weak self] index in
+            index.map { self?.tools.selectColor($0) }
+        }
+    }
+
+    private func openWidthWheel() {
+        wheels.open(OverlayController.widthWheel) { [weak self] index in
+            index.map { self?.tools.selectWidth($0) }
+        }
     }
 
     private func stopWheels() {

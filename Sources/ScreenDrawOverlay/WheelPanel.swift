@@ -36,7 +36,7 @@ final class WheelPanel {
     private let panel: NSPanel
     private var poll: Timer?
     private var centre: NSPoint = .zero
-    private var pick: ((Int) -> Void)?
+    private var pick: ((Int?) -> Void)?
 
     var isOpen: Bool { poll != nil }
 
@@ -65,7 +65,9 @@ final class WheelPanel {
 
     // Opens centred on the pointer, or as close to it as fits: a wheel half off the screen
     // would put half its sectors somewhere the pointer cannot reach.
-    func open(_ wheel: Wheel, pick: @escaping (Int) -> Void) {
+    // The pick is handed nil for the hub rather than nothing at all, because the hub is not
+    // always a cancel: on the tools wheel it is the way out to driving the system.
+    func open(_ wheel: Wheel, pick: @escaping (Int?) -> Void) {
         close()
 
         let pointer = NSEvent.mouseLocation
@@ -101,12 +103,10 @@ final class WheelPanel {
     // zone in the middle is how the user says never mind.
     func release() {
         let chosen = view.highlighted
+        let answer = pick
         close()
-
-        if let chosen {
-            pick?(chosen)
-        }
         pick = nil
+        answer?(chosen)
     }
 
     func close() {

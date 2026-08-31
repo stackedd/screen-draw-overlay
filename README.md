@@ -50,14 +50,16 @@ These work anywhere, whatever app you are in:
 | `Control + Option + Command + Escape` | Panic key: quits the app outright, from any state |
 
 And while the overlay is up, three wheels. Hold the key, push the mouse at what you want, let
-go — the sectors are forty-five degrees wide, so there is nothing to aim at. Letting go in the
-middle changes nothing.
+go — the sectors are forty-five degrees wide, so there is nothing to aim at.
 
 | Shortcut | Wheel |
 | --- | --- |
-| `Option + Z` | Tools — pen right, eraser left, the rest around |
+| `Option + Z` | Tools — pen right, eraser left, the rest around. **Let go in the middle and the screen goes back to the app underneath**; push at a tool and the overlay takes it again |
 | `Option + X` | Colours |
-| `Option + C` | Widths |
+| `Option + C` | Widths — each sector is a bar of the line it draws |
+
+The tools wheel is the quickest way between drawing and not drawing: one key, one flick. You
+never have to leave what you are doing to change either the tool or the mode.
 
 Undo is on that list rather than only on `Command + Z` for a reason: the overlay is a
 non-activating panel, so it only receives ordinary keystrokes while ScreenDrawOverlay is the

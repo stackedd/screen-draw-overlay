@@ -32,6 +32,17 @@ It measures **painting only**. Updating the window's backing store and compositi
 happen in no process this probe can see, and they are most of the bill - see
 `docs/ARCHITECTURE.md`. Read a cost number as "how much of the small half moved".
 
+## Looking at it
+
+`probes/wheel.swift` renders the wheels to a PNG. It is not a pass or a fail, so it is not in
+`run.sh`; it exists because the suites cannot catch what goes wrong with a picture - blurry
+text, a swatch the same colour as the plate under it, a label too long for the hub it has to
+fit inside. The badge taught that twice.
+
+    python3 Testing/make_probe.py wheel WHEEL \
+      && swift build --package-path .build/testing/wheel -c release \
+      && OUT=/tmp/wheel.png .build/testing/wheel/.build/release/WHEEL
+
 ## On a real screen
 
 Two measurements need a window on screen, so neither is in `run.sh`.
