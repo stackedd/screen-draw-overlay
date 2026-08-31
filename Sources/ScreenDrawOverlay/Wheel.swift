@@ -22,12 +22,17 @@ struct Wheel {
         // Set where the sector is a thickness. A line of that thickness says what it is;
         // the same icon six times over with a number under it makes you read.
         let rule: CGFloat?
+        // Set where the sector is an area rather than a line - the eraser's size. A bar is
+        // the wrong picture for a hole.
+        let disc: CGFloat?
 
-        init(label: String, symbol: String, tint: NSColor? = nil, rule: CGFloat? = nil) {
+        init(label: String, symbol: String, tint: NSColor? = nil,
+             rule: CGFloat? = nil, disc: CGFloat? = nil) {
             self.label = label
             self.symbol = symbol
             self.tint = tint
             self.rule = rule
+            self.disc = disc
         }
     }
 
@@ -41,8 +46,9 @@ struct Wheel {
 
     let items: [Item]
 
-    // What the hub says, and therefore what letting go in the middle does. On the tools
-    // wheel it is not a cancel at all: it is the way out to driving the system.
+    // What the hub says when nothing is picked, and therefore what letting go in the middle
+    // does. The tools wheel overrides it as it opens, because what the middle does there
+    // depends on what the overlay is doing at the time.
     let centreLabel: String
 
     init(items: [Item], centreLabel: String = "CANCEL") {
@@ -85,7 +91,8 @@ struct Wheel {
 
     // MARK: - Painting
 
-    func draw(in context: CGContext, bounds: NSRect, highlighted: Int?) {
+    func draw(in context: CGContext, bounds: NSRect, highlighted: Int?,
+              centreLabel override: String? = nil) {
         guard !items.isEmpty else {
             return
         }
@@ -111,7 +118,7 @@ struct Wheel {
         hub.lineWidth = 1
         hub.stroke()
 
-        let title = highlighted.map { items[$0].label } ?? centreLabel
+        let title = highlighted.map { items[$0].label } ?? (override ?? centreLabel)
         let colour = highlighted == nil
             ? NSColor.white.withAlphaComponent(0.45)
             : NSColor.white
@@ -185,6 +192,20 @@ struct Wheel {
             swatch.stroke()
             label.draw(at: NSPoint(x: seat.x - labelSize.width / 2,
                                    y: seat.y - radius + 7 - labelSize.height - 3))
+            return
+        }
+
+        // The eraser's size is a hole, so it is drawn as one: a ring of what it takes out,
+        // scaled down to fit the sector but honest about which is bigger.
+        if let disc = item.disc {
+            let radius = disc
+            let ring = NSBezierPath(ovalIn: NSRect(x: seat.x - radius, y: seat.y - radius + 6,
+                                                   width: radius * 2, height: radius * 2))
+            ring.lineWidth = 2
+            ink.setStroke()
+            ring.stroke()
+            label.draw(at: NSPoint(x: seat.x - labelSize.width / 2,
+                                   y: seat.y + 6 - radius - labelSize.height - 3))
             return
         }
 

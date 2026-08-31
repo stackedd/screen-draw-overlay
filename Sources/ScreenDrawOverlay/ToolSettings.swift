@@ -123,6 +123,12 @@ final class ToolSettings {
         onChange?()
     }
 
+    // Hands back the last tool that actually drew. Picking a colour with the eraser in hand
+    // is asking to draw again, and there is nothing else it could reasonably mean.
+    func putTheEraserDown() {
+        select(tool: lastDrawingTool)
+    }
+
     // Space is a switch, not a one-way trip: it drops the laser and hands back whatever
     // was in hand before.
     func toggleLaser() {
@@ -135,9 +141,14 @@ final class ToolSettings {
         onChange?()
     }
 
-    // How close the pointer has to be to a stroke to rub it out. Tied to the pen width so
-    // a fat pen gets a fat eraser, with a floor that keeps it usable at 2pt.
+    // How much the eraser takes out. It used to be max(12, width), which meant five of the
+    // six widths gave the same eraser - the size control did nothing for four steps out of
+    // five, which is its own version of the fault the eraser itself had.
+    static func eraserRadius(at index: Int) -> CGFloat {
+        6 + widths[min(max(index, 0), widths.count - 1)] * 2
+    }
+
     var eraserRadius: CGFloat {
-        max(12, ToolSettings.widths[widthIndex])
+        ToolSettings.eraserRadius(at: widthIndex)
     }
 }

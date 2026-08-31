@@ -5,8 +5,9 @@ it — over a presentation, a document, anything. No window of its own, no Dock 
 **no system permissions of any kind**.
 
 **`⌥Z` is the whole interface.** Hold it, push the mouse at what you want, let go. A tool
-opens the overlay and hands it to you; the middle gives the screen back to the app underneath;
-`HIDE` puts the overlay away, keeping the drawing. While the overlay is up, `⌥X` and `⌥C` do
+opens the overlay and hands it to you; the middle is the way out, one step at a time — first
+the screen goes back to the app underneath, then the overlay goes away with the drawing kept.
+The hub says which step it is about to take. While the overlay is up, `⌥X` and `⌥C` do
 the same for colour and width. `⌃⌥⌘Z` / `⇧⌃⌥⌘Z` take a mistake back and `⌃⌥⌘Esc` quits — those
 are global for the same reason the wheel is: a non-activating panel only gets the keyboard
 while this app is the active one, so plain `⌘Z` was a no-op whenever the user had clicked
@@ -54,7 +55,7 @@ pointer is a cursor the window server draws for us.
 
     swift build -c release        # must be warning-free
     ./build_app.sh                # also compiles x86_64 - it catches what the line above misses
-    ./Testing/run.sh              # every suite; behaviour must be 39/39
+    ./Testing/run.sh              # every suite; behaviour must be 44/44
     open dist/ScreenDrawOverlay.app
 
 `./Testing/run.sh behaviour` drives the real app and checks the mode matrix, hide/show,

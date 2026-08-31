@@ -49,8 +49,8 @@ Three states, and every transition is deliberate:
   everything, including the keyboard.
 
 One key moves between all three. `⌥Z` holds open a wheel of tools: push at one and the
-overlay opens, takes the screen and hands you that tool; let go in the middle and the screen
-goes back to the app underneath; push at `HIDE` and the overlay goes away with the drawing
+overlay opens, takes the screen and hands you that tool; let go in the middle to leave, one
+step at a time — the screen back to the app underneath, then the overlay away with the drawing
 kept. `⌥X` and `⌥C` do the same for colour and width while the overlay is up. `⌃⌥⌘Esc` quits
 the process outright, and `⌃⌥⌘Z` / `⇧⌃⌥⌘Z` undo and redo — global because the panels are
 non-activating, so `⌘Z` only reaches them while this app is the active one.

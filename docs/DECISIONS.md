@@ -618,8 +618,15 @@ them did:
 
 - push at a tool — the overlay opens if it was not open, takes the screen, and hands you that
   tool;
-- let go in the middle — the screen goes back to whatever is underneath (what `⌃⌥⌘E` did);
-- push at **HIDE** — the overlay goes away, keeping the drawing (what `⌃⌥⌘D` did).
+- let go in the middle — you leave, one step at a time. From drawing, the screen goes back to
+  the app underneath (what `⌃⌥⌘E` did). From there, again, and the overlay goes away with the
+  drawing kept (what `⌃⌥⌘D` did).
+
+**Leaving is the hub's job, not a sector's.** HIDE had a sector for a day and it was wrong
+twice over: it spent one of eight tool slots on something that is not a tool, and it made two
+different ways out of a wheel whose middle already meant "out". One direction, two steps, and
+the hub says which step it is about to take - `CLICK-THROUGH`, then `HIDE`. The eighth sector
+went back to the laser.
 
 The point is not that it is fewer keys. It is that there is one thing to learn and it is
 visible while you are using it: the wheel says what its middle does, and it says HIDE, so
@@ -642,3 +649,30 @@ matters.
 
 `⌃⌥⌘Esc` is untouched, and so is undo. The panic key still ends the process from any state,
 which is the guarantee everything else is allowed to lean on.
+
+## 27. Every wheel and every cursor shows what the tool in hand means by it
+
+The principle was written down and then not applied, which the first version of the wheels
+showed plainly: with the eraser in hand, the width wheel offered six horizontal bars - the
+picture of a *line*, for a tool that does not draw one - and the colour wheel opened to offer
+six colours to a tool that has no colour.
+
+- **Width, for the tool in hand.** The pen's sectors are lines of what it will draw. The
+  marker's are the same lines four times wider, which is what it will actually put down. The
+  eraser's are rings of the hole it will take out, scaled into the sector but scaled rather
+  than clamped, so the six still read in order.
+- **Colour, with the eraser in hand,** is taken as what it plainly is - wanting to draw again
+  - and hands back the last tool that did, in the colour just chosen. A key that quietly does
+  nothing is worse than one that does the obvious thing.
+- **The eraser's size actually varies.** It was `max(12, width)`, which gave the same eraser
+  for five of the six widths: the size control did nothing for four steps out of five, which
+  is the same fault the eraser itself had before it started cutting. It is `6 + width * 2`
+  now — 20 to 68 points across.
+- **The cursors are the tools.** A pen is a pen, a nib and a barrel held at forty-five degrees
+  with its point on the hot spot, and it gets visibly fatter as the pen does. A marker is a
+  chisel. An eraser is a ring the size of the hole. The four tools that place a corner share
+  one clean crosshair, because they do the same thing with the mouse and a crosshair with a
+  little picture beside it was two cursors in one place.
+
+`Testing/probes/cursor.swift` and `probes/wheel.swift` render all of it, because none of this
+is visible from a passing test.

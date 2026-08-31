@@ -23,11 +23,9 @@ final class OverlayController {
     // the two that need no thought are a flick right for the pen and a flick left for the
     // eraser.
     //
-    // Seven tools and a way out. The eighth sector puts the overlay away, keeping the
-    // drawing, because with ⌃⌥⌘D gone the wheel is the only thing that opens or closes one.
-    // The laser lives on Space, which is where a momentary thing belongs.
-    private static let toolOrder: [DrawingTool?] = [.pen, .highlighter, .line, .arrow,
-                                                    .eraser, .rectangle, .ellipse, nil]
+    // Eight tools. Getting out is not one of them: that is what the hub is for.
+    private static let toolOrder: [DrawingTool] = [.pen, .highlighter, .line, .arrow,
+                                                   .eraser, .rectangle, .ellipse, .laser]
 
     private static let toolWheel = Wheel(items: [
         Wheel.Item(label: "PEN", symbol: "pencil.tip"),
@@ -37,16 +35,34 @@ final class OverlayController {
         Wheel.Item(label: "ERASER", symbol: "eraser"),
         Wheel.Item(label: "RECT", symbol: "rectangle"),
         Wheel.Item(label: "OVAL", symbol: "circle"),
-        Wheel.Item(label: "HIDE", symbol: "eye.slash")
+        Wheel.Item(label: "LASER", symbol: "dot.circle.and.hand.point.up.left.fill")
     ], centreLabel: "CLICK-THROUGH")
 
     private static let colourWheel = Wheel(items: zip(
         ["RED", "ORANGE", "YELLOW", "GREEN", "BLUE", "WHITE"], ToolSettings.colors
     ).map { Wheel.Item(label: $0.0, symbol: "circle.fill", tint: $0.1) })
 
-    private static let widthWheel = Wheel(items: ToolSettings.widths.map {
-        Wheel.Item(label: "\(Int($0))", symbol: "", rule: $0)
-    })
+    // Size means different things to different tools, so the wheel shows what it means to
+    // the one in hand: the line a pen will draw, the wider line a marker will, and the hole
+    // an eraser will take out. Every tool brings its own context; a wheel of identical bars
+    // with numbers under them is the version that does not.
+    private static func widthWheel(for tool: DrawingTool) -> Wheel {
+        Wheel(items: ToolSettings.widths.indices.map { index in
+            guard tool != .eraser else {
+                // Scaled into the space a sector has rather than drawn true size - the
+                // biggest eraser is nearly seventy points across - but scaled, not clamped,
+                // so the six of them still read in order.
+                let radius = ToolSettings.eraserRadius(at: index)
+                let smallest = ToolSettings.eraserRadius(at: 0)
+                let largest = ToolSettings.eraserRadius(at: ToolSettings.widths.count - 1)
+                let shown = 6 + (radius - smallest) / (largest - smallest) * 13
+                return Wheel.Item(label: "\(Int(radius * 2))", symbol: "", disc: shown)
+            }
+
+            let drawn = ToolSettings.widths[index] * tool.style.widthMultiplier
+            return Wheel.Item(label: "\(Int(drawn))", symbol: "", rule: drawn)
+        })
+    }
 
     private let wheels = WheelPanel()
     private let shortcuts = Shortcuts()
@@ -108,27 +124,27 @@ final class OverlayController {
     // thing: push at a tool and you are drawing with it, let go in the middle and the screen
     // belongs to whatever is underneath. Two states and one gesture, instead of a tool
     // picker and a mode shortcut to remember separately.
+    // The hub is the way out, and what "out" means depends on where you already are: drawing
+    // gives the screen back to the app underneath, and doing it again from there puts the
+    // overlay away with the drawing kept. One direction, two steps, and the hub says which
+    // one it is about to take - which is why the label is decided here rather than built
+    // into the wheel.
+    private var hubLabel: String {
+        guard isDrawingMode else {
+            return "NOTHING TO DO"
+        }
+
+        return isInteractionMode ? "HIDE" : "CLICK-THROUGH"
+    }
+
     private func openToolWheel() {
-        wheels.open(OverlayController.toolWheel) { [weak self] index in
+        wheels.open(OverlayController.toolWheel, centreLabel: hubLabel) { [weak self] index in
             guard let self else {
                 return
             }
 
-            // The hub hands the screen back to whatever is underneath. With the overlay
-            // already down there is nothing to hand back, so it does nothing at all rather
-            // than opening one just to make it ignore the mouse.
             guard let index else {
-                if self.isDrawingMode {
-                    self.setInteractionMode(true)
-                }
-                return
-            }
-
-            // The eighth sector puts the overlay away, keeping the drawing.
-            guard let tool = OverlayController.toolOrder[index] else {
-                if self.isDrawingMode {
-                    self.hideOverlay(reason: "hidden from the wheel")
-                }
+                self.leaveByTheHub()
                 return
             }
 
@@ -138,20 +154,44 @@ final class OverlayController {
                 self.enterDrawingMode()
             }
             self.setInteractionMode(false)
-            self.tools.select(tool: tool)
+            self.tools.select(tool: OverlayController.toolOrder[index])
+        }
+    }
+
+    private func leaveByTheHub() {
+        guard isDrawingMode else {
+            return
+        }
+
+        if isInteractionMode {
+            hideOverlay(reason: "hidden from the wheel")
+        } else {
+            setInteractionMode(true)
         }
     }
 
     // The other two only change what is in hand, so their hub is a plain cancel: reaching
     // for a colour and landing in the middle should not move the mode.
+    // Colour means nothing to the eraser, so reaching for one there is taken as what it
+    // plainly is - wanting to draw again - and hands back the last tool that did, in the
+    // colour just chosen. A key that quietly does nothing is worse than one that does the
+    // obvious thing.
     private func openColourWheel() {
-        wheels.open(OverlayController.colourWheel) { [weak self] index in
-            index.map { self?.tools.selectColor($0) }
+        wheels.open(OverlayController.colourWheel,
+                    centreLabel: tools.tool == .eraser ? "KEEP ERASING" : "CANCEL") { [weak self] index in
+            guard let self, let index else {
+                return
+            }
+
+            self.tools.selectColor(index)
+            if self.tools.tool == .eraser {
+                self.tools.putTheEraserDown()
+            }
         }
     }
 
     private func openWidthWheel() {
-        wheels.open(OverlayController.widthWheel) { [weak self] index in
+        wheels.open(OverlayController.widthWheel(for: tools.tool)) { [weak self] index in
             index.map { self?.tools.selectWidth($0) }
         }
     }

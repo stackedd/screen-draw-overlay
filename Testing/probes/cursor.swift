@@ -15,12 +15,14 @@ let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 
 let tools = ToolSettings()
-let shown: [(DrawingTool, Int)] = [
-    (.pen, 0), (.pen, 4), (.highlighter, 2), (.line, 3),
-    (.arrow, 0), (.rectangle, 4), (.ellipse, 1), (.eraser, 0)
+// Width included, because size is meant to show: a fat pen has to look fat and a big eraser
+// has to look big, or the size control is invisible again.
+let shown: [(DrawingTool, Int, Int)] = [
+    (.pen, 0, 0), (.pen, 0, 3), (.pen, 4, 5), (.highlighter, 2, 1),
+    (.eraser, 0, 0), (.eraser, 0, 5), (.line, 3, 2), (.rectangle, 4, 2)
 ]
 
-let cell = 78.0
+let cell = 96.0
 let scale: CGFloat = 2
 let width = cell * Double(shown.count)
 let height = cell * 2 + 26
@@ -43,6 +45,7 @@ NSRect(x: 0, y: cell * 2, width: width, height: 26).fill()
 for (index, entry) in shown.enumerated() {
     tools.select(tool: entry.0)
     tools.selectColor(entry.1)
+    tools.selectWidth(entry.2)
     let cursor = PointerCursor.cursor(for: tools)
     let size = cursor.image.size
     let x = Double(index) * cell + cell / 2
@@ -63,10 +66,11 @@ for (index, entry) in shown.enumerated() {
                                      width: size.width, height: size.height))
     }
 
-    NSAttributedString(string: entry.0.label, attributes: [
+    NSAttributedString(string: entry.0.label + " " + String(Int(ToolSettings.widths[entry.2])),
+                       attributes: [
         .font: NSFont.monospacedSystemFont(ofSize: 9, weight: .medium),
         .foregroundColor: NSColor.white
-    ]).draw(at: NSPoint(x: x - 20, y: cell * 2 + 8))
+    ]).draw(at: NSPoint(x: x - 26, y: cell * 2 + 8))
 }
 NSGraphicsContext.restoreGraphicsState()
 

@@ -164,13 +164,44 @@
         // nothing, because that is the only way to change your mind.
         let wheel = OverlayController.toolWheel
         func toolPushing(_ x: CGFloat, _ y: CGFloat) -> String {
-            guard let sector = wheel.selection(for: NSPoint(x: x, y: y)),
-                  let tool = OverlayController.toolOrder[sector] else { return "none" }
-            return tool.label
+            guard let sector = wheel.selection(for: NSPoint(x: x, y: y)) else { return "none" }
+            return OverlayController.toolOrder[sector].label
         }
         check("wheel: right is the pen, left is the eraser",
               toolPushing(120, 0) + "/" + toolPushing(-120, 0), "PEN/ERASER")
         check("wheel: the dead zone picks nothing", toolPushing(6, -4), "none")
+
+        // The strongest thing that can be said about the eraser without looking at it: rub
+        // a dense canvas about a bit, take every drag back, and exactly as much ink has to
+        // come back as went away. It catches bookkeeping the counts cannot - a piece
+        // recorded twice, an original not recorded, a tail quietly dropped.
+        press(kVK_ANSI_C, "c")
+        press(kVK_ANSI_P, "p")
+        for row in 0..<6 {
+            stroke(y: 300 + CGFloat(row) * 24)
+        }
+        func inkOnScreen() -> CGFloat {
+            let views = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot())
+            guard let canvas = views.first?.canvas else { return 0 }
+            return canvas.strokes.reduce(0) { $0 + Stroke.totalLength(of: $1.outline()) }
+        }
+        let inkBefore = inkOnScreen()
+        press(kVK_ANSI_E, "e")
+        let rubs = [(NSPoint(x: 240, y: 260), NSPoint(x: 300, y: 460)),
+                    (NSPoint(x: 360, y: 460), NSPoint(x: 300, y: 260)),
+                    (NSPoint(x: 200, y: 380), NSPoint(x: 400, y: 372))]
+        for rub in rubs {
+            rubAcross(from: rub.0, to: rub.1)
+        }
+        check("rubbing a full canvas takes ink away", inkOnScreen() < inkBefore ? "yes" : "no", "yes")
+        for _ in rubs {
+            press(kVK_ANSI_Z, "z", .command)
+        }
+        let back = inkOnScreen()
+        check("and taking every drag back puts all of it back",
+              abs(back - inkBefore) < 0.5 ? "yes" : "no: \(Int(back)) of \(Int(inkBefore))", "yes")
+        press(kVK_ANSI_C, "c")
+        press(kVK_ANSI_P, "p")
 
         // Shapes are erased like everything else. Their `points` are only the two corners
         // the drag was defined by, so measuring to those measured to a rectangle's diagonal
@@ -299,7 +330,27 @@
             pictures.insert(painted(controller.tools))
         }
         check("every tool's cursor points from its own hot spot", centred ? "yes" : "no", "yes")
-        check("every tool draws a different cursor", "\(pictures.count)", "7")
+
+        // Four pictures from seven tools, on purpose: a pen, a marker, an eraser, and one
+        // crosshair shared by the four that place a corner. Those four do the same thing
+        // with the mouse, and a crosshair with a little picture beside it was two cursors
+        // in one place - which is what "the pens should be pens" was about.
+        check("the tools that draw differently look different", "\(pictures.count)", "4")
+
+        // And size shows, which is the whole reason for drawing a tool rather than an arrow.
+        controller.tools.select(tool: .pen)
+        controller.tools.selectWidth(0)
+        let thin = PointerCursor.cursor(for: controller.tools).image.size.width
+        controller.tools.selectWidth(5)
+        let thick = PointerCursor.cursor(for: controller.tools).image.size.width
+        check("a fat pen has a fatter cursor", thick > thin ? "yes" : "no", "yes")
+        controller.tools.select(tool: .eraser)
+        controller.tools.selectWidth(0)
+        let small = PointerCursor.cursor(for: controller.tools).image.size.width
+        controller.tools.selectWidth(5)
+        let big = PointerCursor.cursor(for: controller.tools).image.size.width
+        check("and a big eraser a bigger one", big > small ? "yes" : "no", "yes")
+        controller.tools.selectWidth(2)
 
         // And the colour is in it, or the pen you are holding is a guess.
         controller.tools.select(tool: .pen)
@@ -322,13 +373,18 @@
         check("the wheel opens an overlay that was not there",
               controller.tools.tool.label + "/" + state, "PEN/DRAWING")
 
+        // The hub is the way out and it goes one step at a time: drawing hands the screen
+        // back, and doing it again from there puts the overlay away with the drawing kept.
         stroke(y: 300)
         let beforeHiding = live
         controller.openToolWheel()
-        controller.wheels.track(NSPoint(x: controller.wheels.centre.x + 92,
-                                        y: controller.wheels.centre.y + 92))
+        controller.wheels.track(controller.wheels.centre)
         controller.wheels.release()
-        check("the wheel puts it away again", state, "OFF")
+        check("the hub hands the screen back first", state, "CLICK-THROUGH")
+        controller.openToolWheel()
+        controller.wheels.track(controller.wheels.centre)
+        controller.wheels.release()
+        check("and the second time puts it away", state, "OFF")
         controller.toggleDrawingMode()
         check("and hiding kept the drawing", "\(live)", "\(beforeHiding)")
 

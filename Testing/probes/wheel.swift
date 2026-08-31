@@ -18,9 +18,9 @@ let side = Wheel.extent
 let scale: CGFloat = 2
 let panels: [(String, Wheel, Int?)] = [
     ("tools, nothing picked", OverlayController.toolWheel, nil),
-    ("tools, eraser", OverlayController.toolWheel, 4),
     ("colours, blue", OverlayController.colourWheel, 4),
-    ("widths, 6", OverlayController.widthWheel, 3)
+    ("widths, pen", OverlayController.widthWheel(for: .pen), 3),
+    ("widths, eraser", OverlayController.widthWheel(for: .eraser), 3)
 ]
 
 let sheet = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(side * CGFloat(panels.count) * scale),

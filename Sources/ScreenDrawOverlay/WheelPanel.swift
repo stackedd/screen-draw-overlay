@@ -16,6 +16,7 @@ final class WheelPanel {
     private final class WheelView: NSView {
         var wheel: Wheel?
         var highlighted: Int?
+        var centreLabel: String?
 
         override var isOpaque: Bool { false }
 
@@ -24,7 +25,8 @@ final class WheelPanel {
                 return
             }
 
-            wheel.draw(in: context, bounds: bounds, highlighted: highlighted)
+            wheel.draw(in: context, bounds: bounds, highlighted: highlighted,
+                       centreLabel: centreLabel)
         }
     }
 
@@ -67,7 +69,7 @@ final class WheelPanel {
     // would put half its sectors somewhere the pointer cannot reach.
     // The pick is handed nil for the hub rather than nothing at all, because the hub is not
     // always a cancel: on the tools wheel it is the way out to driving the system.
-    func open(_ wheel: Wheel, pick: @escaping (Int?) -> Void) {
+    func open(_ wheel: Wheel, centreLabel: String? = nil, pick: @escaping (Int?) -> Void) {
         close()
 
         let pointer = NSEvent.mouseLocation
@@ -81,6 +83,7 @@ final class WheelPanel {
         }
 
         view.wheel = wheel
+        view.centreLabel = centreLabel
         view.highlighted = nil
         view.needsDisplay = true
         self.pick = pick

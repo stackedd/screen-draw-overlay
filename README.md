@@ -46,11 +46,13 @@ want, and let go. The sectors are forty-five degrees wide, so there is nothing t
 | Push at | What happens |
 | --- | --- |
 | a tool | The overlay opens if it was not open, takes the screen, and hands you that tool |
-| the middle | The screen goes back to the app underneath — click, scroll, type, with your drawing still on it |
-| `HIDE` | The overlay goes away and keeps the drawing; the next tool you pick brings it back |
+| the middle | You leave, one step at a time. First the screen goes back to the app underneath — click, scroll, type, with your drawing still on it. Do it again and the overlay goes away, keeping the drawing. The hub tells you which one is next |
 
-Two more wheels, while the overlay is up: `Option + X` for colour and `Option + C` for width,
-where each sector is a bar of the line it draws.
+Two more wheels, while the overlay is up: `Option + X` for colour and `Option + C` for width.
+Each shows what the tool in your hand means by it — the width wheel draws the line a pen will
+put down, the wider line a marker will, or the hole an eraser will take out. Reaching for a
+colour with the eraser in hand hands you your pen back in that colour, because that is plainly
+what you meant.
 
 And three shortcuts that work from anywhere, whatever has focus:
 
