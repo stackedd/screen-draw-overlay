@@ -102,7 +102,7 @@ While you are **drawing**, the overlay takes the mouse and the keyboard: your st
 
 You can always tell which state you are in, and which tool you are holding: the corner badge reads `PEN 4` — the tool, its width, and a dot in the current colour beside it — or `CLICK-THROUGH` when your clicks pass through. A red stripe down its left edge means the overlay is taking your clicks; it disappears in click-through, when it is not. Its second line names the shortcuts that apply right now (`⌃⌥⌘E click · ⌃⌥⌘D hide · ⌃⌥⌘Z undo` while drawing). There is no palette on screen on purpose: a tool that occupies screen space is not one you leave running.
 
-The pointer stays the ordinary arrow — it just gains a ring around its tip in the colour you are drawing with, sized to the eraser when you are erasing. That is deliberate. The app used to hide the system pointer and draw its own crosshair, which works right up until something else takes the cursor back (the menu bar will do it), and then you have two pointers and no way to get rid of one. One cursor cannot double.
+Each tool has its own pointer, in the colour you are drawing with: the pen is a nib, the highlighter a chisel, the shape tools a fine crosshair with the shape they make beside it, and the eraser a ring exactly the size of the hole it will leave. The laser has no cursor at all — its glow is drawn on the overlay, where the audience can see it, and two marks an inch apart would be worse than one. If something else takes the cursor for a moment you get the ordinary arrow back, which is a thing you can see rather than a bug; the overlay takes it again as soon as you move.
 
 The menu bar icon turns red while the overlay is taking clicks and becomes a dimmed struck-through pen in click-through.
 

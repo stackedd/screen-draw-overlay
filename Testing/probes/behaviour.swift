@@ -265,14 +265,49 @@
               controller.tools.tool.label + "/" + state, "ERASER/DRAWING")
         controller.tools.select(tool: .pen)
 
-        // The pointer is the system arrow with a ring around its tip. Three points have
-        // to be the same one - the hot spot, the middle of the ring and where the ink
-        // lands - or the stroke appears offset from the arrow the user is aiming with.
-        let cursor = PointerCursor.cursor(for: controller.tools)
-        let aimed = cursor.hotSpot.x == cursor.image.size.width / 2
-            && cursor.hotSpot.y == cursor.image.size.height / 2
-            && cursor.image.size.width > NSCursor.arrow.image.size.width
-        check("cursor is the arrow with its tip on the ink", aimed ? "yes" : "no", "yes")
+        // Each tool draws its own pointer, in the colour in hand. Two things have to hold
+        // and neither is visible from a screenshot: the hot spot has to be the middle of
+        // the image - which is the point the tool works from and the point the ink lands on
+        // - and the tools have to actually differ, or "per tool" is a claim and not a fact.
+        // Compared by painting them, not by asking for their data: these images draw
+        // through a handler, and tiffRepresentation hands back a blank of the right size
+        // rather than running it - which made a first version of this check believe four
+        // different tools drew the same cursor.
+        func painted(_ tools: ToolSettings) -> Data {
+            let cursor = PointerCursor.cursor(for: tools)
+            let side = 64
+            let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side,
+                                       bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                       isPlanar: false, colorSpaceName: .deviceRGB,
+                                       bytesPerRow: 0, bitsPerPixel: 0)!
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+            cursor.image.draw(in: NSRect(x: 0, y: 0, width: side, height: side))
+            NSGraphicsContext.restoreGraphicsState()
+            return Data(bytes: rep.bitmapData!, count: rep.bytesPerRow * side)
+        }
+
+        var pictures: Set<Data> = []
+        var centred = true
+        for tool in [DrawingTool.pen, .highlighter, .line, .arrow, .rectangle, .ellipse, .eraser] {
+            controller.tools.select(tool: tool)
+            let cursor = PointerCursor.cursor(for: controller.tools)
+            centred = centred
+                && cursor.hotSpot.x == cursor.image.size.width / 2
+                && cursor.hotSpot.y == cursor.image.size.height / 2
+            pictures.insert(painted(controller.tools))
+        }
+        check("every tool's cursor points from its own hot spot", centred ? "yes" : "no", "yes")
+        check("every tool draws a different cursor", "\(pictures.count)", "7")
+
+        // And the colour is in it, or the pen you are holding is a guess.
+        controller.tools.select(tool: .pen)
+        controller.tools.selectColor(0)
+        let red = painted(controller.tools)
+        controller.tools.selectColor(4)
+        let blue = painted(controller.tools)
+        check("the cursor carries the colour", red == blue ? "same" : "different", "different")
+        controller.tools.selectColor(0)
 
         // hold to draw: a long press puts it away on release, a tap does not
         controller.toggleDrawingMode()

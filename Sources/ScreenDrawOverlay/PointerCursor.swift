@@ -1,29 +1,36 @@
-// The pointer the user sees while drawing: the system arrow, with an accessory around its
-// tip, handed to the window server as a single NSCursor.
+// The pointer the user sees while drawing: one cursor per tool, in the colour in hand.
 //
-// This is a deliberate reversal. The app used to hand the panel a fully transparent cursor
-// and paint its own crosshair underneath, so that a presenting app which hides the pointer
-// could not take it away. The trouble is that it only holds while we own the window under
-// the pointer: the moment something else takes the cursor - the menu bar is the reliable way
-// to see it - the real arrow comes back and never leaves, and from then on there are two
-// pointers on screen, ours and the system's. A transparent cursor has no failure mode
-// between "invisible" and "doubled".
+// The history here is worth keeping, because it is a loop that has been walked twice.
 //
-// One cursor cannot double. The arrow is always there, drawn by the window server at its own
-// rate and costing this process nothing, and what says "you are in drawing mode, with this
-// tool, in this colour" is the ring around its tip. Losing cursor ownership now degrades to
-// a plain arrow instead of to a bug.
+// **Tried:** `NSCursor.crosshair`, and `NSCursor.hide()` with `CGDisplayShowCursor`. Hiding
+// is per application and only applies while that application is active, so a background
+// `.accessory` app hides nothing; that attempt put two pointers on screen at once.
 //
-// The hot spot is the centre of the ring, which is also the arrow's own tip and the point
-// the ink lands on. Those three being the same point is the whole design; the behaviour
-// suite checks it.
+// **Tried:** a fully transparent cursor with the app painting its own crosshair underneath.
+// It works only while we own the window under the pointer, and the moment something else
+// takes the cursor - the menu bar does it reliably - the real arrow is back for good with
+// our crosshair still painted beside it. No failure mode between invisible and doubled.
+//
+// **Tried:** the system arrow with a coloured ring composited around its tip. Safe, and
+// nobody liked it: an arrow is what you get when nothing is happening, so an overlay that
+// is taking every click on the screen looked exactly like one that was not.
+//
+// **Now:** each tool draws its own pointer, in the colour it will draw with, with the point
+// that matters on the hot spot. A pen is a nib, a highlighter is a chisel, a shape tool is a
+// crosshair with the shape it makes beside it, the eraser is a ring the size of the hole it
+// leaves, and the laser has none at all because its glow is on the overlay and two marks are
+// worse than one. Losing cursor ownership degrades to the plain system arrow, which is a
+// thing the user can see and understand rather than a bug.
+//
+// Everything is drawn light-cased over a dark core, or the reverse, so it reads on a white
+// slide and a black one. The hot spot is the centre of the image in every case, which the
+// behaviour suite checks: hot spot, the point the tool works from, and the point the ink
+// lands on all have to be the same point.
 
 import AppKit
 
 enum PointerCursor {
-    // Big enough to see around the arrow, small enough not to sit on the content.
-    private static let ringRadius: CGFloat = 11
-    private static let casingWidth: CGFloat = 3
+    private static let casing: CGFloat = 3
 
     private struct Key: Hashable {
         let tool: DrawingTool
@@ -32,8 +39,8 @@ enum PointerCursor {
         let eraserRadius: CGFloat
     }
 
-    // Cursors are rebuilt only when the tool, colour or width changes, which is a keypress,
-    // not a mouse move.
+    // Rebuilt only when the tool, colour or width changes, which is a keypress, never a
+    // mouse move.
     private static var cache: [Key: NSCursor] = [:]
 
     static func cursor(for tools: ToolSettings) -> NSCursor {
@@ -50,73 +57,150 @@ enum PointerCursor {
         return made
     }
 
+    // How far the drawing reaches from the hot spot, which decides the size of the square it
+    // is drawn in. The hot spot is always the middle of that square.
+    private static func reach(of tool: DrawingTool, eraserRadius: CGFloat) -> CGFloat {
+        switch tool {
+        case .eraser: return eraserRadius + casing
+        case .laser: return 6
+        case .pen, .highlighter: return 30
+        default: return 26
+        }
+    }
+
     private static func make(tool: DrawingTool, colour: NSColor,
                              width: CGFloat, eraserRadius: CGFloat) -> NSCursor {
-        let arrow = NSCursor.arrow
-        let arrowImage = arrow.image
-        let arrowSize = arrowImage.size
-        // NSCursor's hot spot is measured from the top left of its image.
-        let hotSpot = arrow.hotSpot
-
-        // The eraser's ring is the size of what it will rub out, which is worth showing.
-        let radius = tool == .eraser ? eraserRadius : ringRadius
-
-        // Square, and big enough for the ring and for however far the arrow hangs off its
-        // own tip in each direction.
-        let reach = max(radius + casingWidth,
-                        max(hotSpot.x, arrowSize.width - hotSpot.x),
-                        max(hotSpot.y, arrowSize.height - hotSpot.y))
-        let side = ceil(reach) * 2 + 2
+        let side = ceil(reach(of: tool, eraserRadius: eraserRadius)) * 2
         let centre = NSPoint(x: side / 2, y: side / 2)
 
         // Drawn through a handler rather than into a bitmap, so the cursor is redrawn at
         // whatever resolution the display it lands on needs.
         let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { _ in
-            draw(accessory: tool, colour: colour, width: width, radius: radius, at: centre)
-            // The arrow last, on top, with its own tip on the centre.
-            arrowImage.draw(at: NSPoint(x: centre.x - hotSpot.x,
-                                        y: centre.y - arrowSize.height + hotSpot.y),
-                            from: .zero, operation: .sourceOver, fraction: 1)
+            draw(tool, colour: colour, width: width, eraserRadius: eraserRadius, at: centre)
             return true
         }
 
         return NSCursor(image: image, hotSpot: centre)
     }
 
-    private static func draw(accessory tool: DrawingTool, colour: NSColor,
-                             width: CGFloat, radius: CGFloat, at centre: NSPoint) {
-        // The laser is a glow on the overlay, not a ring on the cursor. Two spots of light
-        // an inch apart, one of them the audience cannot see, is worse than one.
-        guard tool != .laser else {
-            return
+    private static func draw(_ tool: DrawingTool, colour: NSColor,
+                             width: CGFloat, eraserRadius: CGFloat, at tip: NSPoint) {
+        switch tool {
+        case .laser:
+            // Nothing. The glow on the overlay is the pointer, and it is there whoever owns
+            // the cursor - which a cursor cannot promise.
+            break
+        case .eraser:
+            drawEraser(at: tip, radius: eraserRadius)
+        case .pen:
+            drawNib(at: tip, colour: colour, width: width, chisel: false)
+        case .highlighter:
+            drawNib(at: tip, colour: colour, width: width, chisel: true)
+        default:
+            drawCrosshair(at: tip, colour: colour)
+            drawShapeGlyph(tool, at: NSPoint(x: tip.x + 15, y: tip.y + 15), colour: colour)
         }
+    }
 
+    // A nib, point down-left, with the point on the hot spot. The barrel goes up and right,
+    // away from what is being drawn, so the ink appears in front of the hand rather than
+    // under the cursor.
+    private static func drawNib(at tip: NSPoint, colour: NSColor, width: CGFloat, chisel: Bool) {
+        let spread: CGFloat = chisel ? 8 : 5
+        let length: CGFloat = chisel ? 17 : 15
+
+        let nib = NSBezierPath()
+        nib.move(to: tip)
+        nib.line(to: NSPoint(x: tip.x + spread, y: tip.y + length))
+        nib.line(to: NSPoint(x: tip.x + length, y: tip.y + spread))
+        nib.close()
+
+        // The barrel: a stub of the pen behind the nib, thick enough to read at a glance and
+        // scaled a little by the width in hand.
+        let barrel = NSBezierPath()
+        let start = NSPoint(x: tip.x + (spread + length) / 2, y: tip.y + (spread + length) / 2)
+        barrel.move(to: start)
+        barrel.line(to: NSPoint(x: start.x + 11, y: start.y + 11))
+        barrel.lineWidth = min(max(width, 4), 11) + 3
+        barrel.lineCapStyle = .round
+
+        NSColor.white.withAlphaComponent(0.95).setStroke()
+        nib.lineWidth = casing
+        nib.lineJoinStyle = .round
+        nib.stroke()
+        barrel.stroke()
+
+        colour.withAlphaComponent(chisel ? 0.6 : 1).setFill()
+        nib.fill()
+        barrel.lineWidth = min(max(width, 4), 11)
+        colour.withAlphaComponent(chisel ? 0.6 : 1).setStroke()
+        barrel.stroke()
+    }
+
+    // A ring the size of what it will rub out. It is the only cursor that changes size, and
+    // it does so because the size is the whole point of it.
+    private static func drawEraser(at centre: NSPoint, radius: CGFloat) {
         let ring = NSBezierPath(ovalIn: NSRect(x: centre.x - radius, y: centre.y - radius,
                                                width: radius * 2, height: radius * 2))
-
-        // Light casing under a dark core, so it reads on a white slide and on a dark one.
-        ring.lineWidth = casingWidth
-        NSColor.white.withAlphaComponent(0.9).setStroke()
+        ring.lineWidth = casing
+        NSColor.white.withAlphaComponent(0.95).setStroke()
         ring.stroke()
         ring.lineWidth = 1.5
-        // The eraser takes ink away rather than adding it, so it is not shown in the pen's
-        // colour - that would read as "about to draw in red".
-        (tool == .eraser ? NSColor.black.withAlphaComponent(0.8) : colour).setStroke()
+        NSColor.black.withAlphaComponent(0.85).setStroke()
         ring.stroke()
+    }
 
-        guard tool != .eraser else {
-            return
+    // For the tools that place a corner: a fine cross with a gap in the middle, so the
+    // exact point stays visible.
+    private static func drawCrosshair(at centre: NSPoint, colour: NSColor) {
+        let arm: CGFloat = 11
+        let gap: CGFloat = 3.5
+
+        let cross = NSBezierPath()
+        for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
+            cross.move(to: NSPoint(x: centre.x + CGFloat(dx) * gap, y: centre.y + CGFloat(dy) * gap))
+            cross.line(to: NSPoint(x: centre.x + CGFloat(dx) * arm, y: centre.y + CGFloat(dy) * arm))
         }
+        cross.lineCapStyle = .round
 
-        // A nib the size of the line about to be drawn, on the spot it will land. Clamped,
-        // because a 24pt highlighter would otherwise fill the ring.
-        let nib = min(max(width, 3), radius * 1.1)
-        NSColor.white.withAlphaComponent(0.85).setStroke()
-        let dot = NSBezierPath(ovalIn: NSRect(x: centre.x - nib / 2, y: centre.y - nib / 2,
-                                              width: nib, height: nib))
-        dot.lineWidth = 1
-        colour.setFill()
-        dot.fill()
-        dot.stroke()
+        cross.lineWidth = casing
+        NSColor.white.withAlphaComponent(0.95).setStroke()
+        cross.stroke()
+        cross.lineWidth = 1.2
+        NSColor.black.withAlphaComponent(0.85).setStroke()
+        cross.stroke()
+    }
+
+    // The shape the tool makes, small, beside the cross. Every tool brings its own context;
+    // this is the cheapest possible version of that.
+    private static func drawShapeGlyph(_ tool: DrawingTool, at seat: NSPoint, colour: NSColor) {
+        let size: CGFloat = 9
+        let box = NSRect(x: seat.x - size / 2, y: seat.y - size / 2, width: size, height: size)
+
+        let glyph = NSBezierPath()
+        switch tool {
+        case .rectangle:
+            glyph.appendRect(box)
+        case .ellipse:
+            glyph.appendOval(in: box)
+        case .arrow:
+            glyph.move(to: NSPoint(x: box.minX, y: box.minY))
+            glyph.line(to: NSPoint(x: box.maxX, y: box.maxY))
+            glyph.move(to: NSPoint(x: box.maxX - size * 0.55, y: box.maxY))
+            glyph.line(to: NSPoint(x: box.maxX, y: box.maxY))
+            glyph.line(to: NSPoint(x: box.maxX, y: box.maxY - size * 0.55))
+        default:
+            glyph.move(to: NSPoint(x: box.minX, y: box.minY))
+            glyph.line(to: NSPoint(x: box.maxX, y: box.maxY))
+        }
+        glyph.lineJoinStyle = .round
+        glyph.lineCapStyle = .round
+
+        glyph.lineWidth = casing
+        NSColor.white.withAlphaComponent(0.95).setStroke()
+        glyph.stroke()
+        glyph.lineWidth = 1.6
+        colour.setStroke()
+        glyph.stroke()
     }
 }

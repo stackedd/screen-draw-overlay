@@ -114,49 +114,39 @@ This needed `GlobalHotKey` to carry the release half of the keypress
 (`kEventHotKeyReleased`). If a system ever fails to deliver it, the hold degrades to a tap —
 the old behaviour, not a broken one.
 
-## 6. The pointer is the system arrow with a ring around its tip
+## 6. Each tool draws its own pointer
 
-**Tried:** `NSCursor.crosshair`. Invisible over a Keynote slideshow — though see below, that
-test was run while the overlay itself was at window level 3 and underneath Keynote, so it may
-never have been the cursor's fault at all.
+This has been walked round twice, so the whole loop is here.
 
-**Tried:** `NSCursor.unhide()` + `CGDisplayShowCursor`, then `NSCursor.hide()`. Both
-ineffective for the same reason: cursor hiding is per application and only applies while that
-application is active, so a background `.accessory` app hides and unhides nothing. The second
-attempt put **two pointers** on screen during a presentation.
+**Tried:** `NSCursor.crosshair`, then `NSCursor.hide()` with `CGDisplayShowCursor`. Hiding is
+per application and only applies while that application is active, so a background
+`.accessory` app hides nothing; the attempt put two pointers on screen during a presentation.
 
-**Chosen, and then reversed:** a fully transparent cursor (a 16x16 empty `NSImage`) with the
-app painting its own crosshair underneath. It worked as long as we owned the window under the
-pointer — and that is the flaw. The moment something else takes the cursor, and the menu bar
-does it reliably, the real arrow comes back and stays, and from then on there are two
-pointers: the system's and ours. A transparent cursor has no failure mode between *invisible*
-and *doubled*.
+**Tried:** a fully transparent cursor with the app painting its own crosshair underneath. It
+holds only while we own the window under the pointer, and the moment something else takes the
+cursor — the menu bar does it reliably — the real arrow is back for good with our crosshair
+still painted beside it. There is no failure mode between invisible and doubled.
 
-**Now:** one cursor that cannot double. The system arrow, composited with a ring around its
-tip, handed over as a single `NSCursor`. The ring carries the tool and its colour; the eraser
-gets a ring the size of what it will rub out; the laser gets its glowing dot. Losing cursor
-ownership now degrades to a plain arrow instead of to a bug.
+**Tried:** the system arrow with a coloured ring composited around its tip. Safe, and nobody
+liked it: an arrow is what you get when nothing is happening, so an overlay taking every click
+on the screen looked exactly like one that was not.
 
-Three points have to be the same point — the cursor's hot spot, the middle of the ring, and
-where the ink lands — or a stroke appears offset from the arrow the user is aiming with. The
-behaviour suite checks it.
+**Now:** each tool draws its own pointer in the colour it will draw with. A pen is a nib, a
+highlighter is a chisel, the shape tools are a fine crosshair with the shape they make beside
+it, the eraser is a ring the size of the hole it leaves — the only cursor that changes size,
+because its size is the whole point of it — and the laser has none at all, since its glow is
+on the overlay and two marks are worse than one. Losing cursor ownership degrades to the plain
+system arrow: something a user can see and understand, rather than a bug.
 
-**It is also free.** The window server draws the cursor, so following the mouse costs this
-process nothing: moving the pointer over a canvas of 200 strokes went 22.5% of a core (paint
-it) to 1.6% (move a layer) to **0.5%**, which is what an idle overlay costs anyway.
+Everything is drawn light-cased over a dark core so it reads on a white slide and a black one,
+which is checked by rendering the set over both (`Testing/probes/cursor.swift`).
 
-The image is built through `NSImage(size:flipped:drawingHandler:)` rather than into a bitmap,
-so the cursor is redrawn at whatever resolution the display it lands on needs, and cached per
-tool, colour and width — a keypress, never a mouse move.
-
-**It has to be taken back, repeatedly.** Owning the cursor rect is not the same as keeping
-the cursor. Anything that owns it for a moment — the menu bar at the top of the screen is the
-reliable way to see it — leaves the plain arrow behind, and `cursorUpdate` does not
-necessarily fire again on the way back in. What the user gets is a system pointer sitting on
-a drawing overlay with no way to get rid of it, which is what was reported. The view now
-re-sets the cursor as the pointer moves, but only **eight times a second**: measured, setting
-it on every move costs 2.3% of a core, more than everything else a mouse move does put
-together, and eight times a second costs a tenth of that and heals inside 150ms.
+**It has to be taken back, repeatedly.** Owning the cursor rect is not the same as keeping the
+cursor. Anything that owns it for a moment leaves the plain arrow behind, and `cursorUpdate`
+does not necessarily fire again on the way back in. The view re-sets the cursor as the pointer
+moves, but only **eight times a second**: measured, setting it on every move costs 2.3% of a
+core, more than everything else a mouse move does put together, and eight times a second costs
+a tenth of that and heals inside 150ms.
 
 **A crash to not repeat:** the first version called `window.invalidateCursorRects(for:)` from
 inside `cursorUpdate`. That re-enters AppKit's tracking machinery and throws — `SIGABRT` the
@@ -164,10 +154,9 @@ moment the pointer moved over the panel. Rebuilding cursor rects lives in its ow
 only mode and tool changes call.
 
 **Unverified:** whether a presenting app that hides the pointer can hide this one too. The
-original note says a Keynote slideshow did, but that was measured with the overlay at level 3,
-underneath Keynote, where Keynote owned the window under the pointer and set the cursor. At
-level 101 we own it. If it turns out otherwise, the fallback is in the history: paint the ring
-on a layer and accept that it lags the arrow by a frame.
+original note said a Keynote slideshow did, but that was measured with the overlay at window
+level 3, underneath Keynote, where Keynote owned the window under the pointer. At level 101 we
+own it.
 
 ## 7. Repainting is incremental
 

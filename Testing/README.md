@@ -34,7 +34,10 @@ happen in no process this probe can see, and they are most of the bill - see
 
 ## Looking at it
 
-`probes/eraser.swift` and `probes/wheel.swift` render to a PNG.
+`probes/cursor.swift`, `probes/eraser.swift` and `probes/wheel.swift` render to a PNG.
+
+The cursor one draws every tool over a light background and a dark one. The suite can check
+that the hot spot is where the ink lands; it cannot tell whether a pen looks like a pen.
 
 The eraser one exists because counting strokes proves it cut something and cannot show that
 the hole is the size of the eraser, that a shape comes apart the way a line does, or that no
