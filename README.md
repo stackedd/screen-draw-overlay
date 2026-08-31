@@ -51,8 +51,9 @@ want, and let go. The sectors are forty-five degrees wide, so there is nothing t
 Two more wheels, while the overlay is up: `Option + X` for colour and `Option + C` for width.
 Each shows what the tool in your hand means by it — the width wheel draws the line a pen will
 put down, the wider line a marker will, or the hole an eraser will take out. Reaching for a
-colour with the eraser in hand hands you your pen back in that colour, because that is plainly
-what you meant.
+colour with the eraser in hand does nothing but say so on the badge: an eraser has no colour,
+and changing the tool in your hand to answer a question you did not ask is worse than saying
+no.
 
 And three shortcuts that work from anywhere, whatever has focus:
 
@@ -79,7 +80,7 @@ While you are drawing, the keyboard belongs to the tool. No modifiers to hold �
 | `R` | Rectangle |
 | `O` | Oval |
 | `E` | Eraser — rubs out the part you pass over, as wide as the current width. One drag is one undo |
-| `Space` | Laser pointer — a glow that follows the pointer, with a short trail behind it so a gesture reads on a screen share, and leaves no ink. It is drawn on the overlay, not on the cursor, so it is there whatever else the system is doing with the pointer. Press again for the tool you had |
+| `Space` | Laser pointer — a glow that follows the pointer. Hold the button and it draws a beam that fades away in half a second, so a gesture reads on a screen share without leaving anything behind. It is drawn on the overlay, not on the cursor, so it is there whatever else the system is doing with the pointer. Press again for the tool you had |
 
 | Key | What it does |
 | --- | --- |

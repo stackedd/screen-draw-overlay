@@ -241,26 +241,37 @@
             .first.map { !$0.laserLayer.isHidden } ?? true
         check("click-through puts the laser out", laserInClickThrough ? "still lit" : "out", "out")
 
-        // The trail is the half of a laser a watching room actually reads - a dot that
-        // leaves nothing behind is not a gesture. Marked in real time, because the marks
-        // are deliberately throttled and a tight loop would only ever earn one of them.
+        // Holding the button with the laser in hand draws a beam that goes away by itself.
+        // It used to be a trail of little dots dropped as the pointer passed, pressed or
+        // not, which looked like beads and was drawing something nobody had asked for.
+        // Back to drawing, with the laser still in hand - Space is a toggle, and pressing
+        // it again here would quietly put the pen back and test the pen.
         controller.toggleInteractionMode()
+        let permanentBefore = live
+        stroke(y: 640)
         if let view = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot()).first {
-            view.clearTrail()
-            for step in 0...11 {
-                view.markTrail(at: NSPoint(x: 300 + CGFloat(step) * 8, y: 400))
-                RunLoop.current.run(until: Date().addingTimeInterval(0.035))
-            }
-            check("the laser leaves a trail behind it",
-                  view.laserTrail.count > 6 ? "yes" : "no: \(view.laserTrail.count)", "yes")
-
-            RunLoop.current.run(until: Date().addingTimeInterval(LaserDot.trailLife + 0.2))
-            view.markTrail(at: NSPoint(x: 520, y: 400))
-            check("and the trail takes itself away",
-                  view.laserTrail.count <= 1 ? "yes" : "no: \(view.laserTrail.count)", "yes")
+            let beams = view.canvas.strokes.filter { $0.createdAt != nil }
+            check("the laser draws a beam while the button is down",
+                  beams.count == 1 ? "yes" : "no: \(beams.count)", "yes")
+            check("and the beam is gone in well under a second",
+                  (beams.first?.life ?? 99) < 1 ? "yes" : "no", "yes")
         }
-        controller.toggleInteractionMode()
+        check("and it leaves no permanent ink", "\(live)", "\(permanentBefore)")
         press(kVK_Space, " ")
+
+        // Colour means nothing to the eraser, so the colour wheel does not open for it and
+        // the badge says why. Handing the pen back instead was tried and was worse: it
+        // answered a question nobody asked and changed the tool in your hand.
+        controller.tools.select(tool: .eraser)
+        controller.openColourWheel()
+        check("the colour wheel does not open for the eraser",
+              controller.wheels.isOpen ? "opened" : "no", "no")
+        check("and the eraser is still in hand", controller.tools.tool.label, "ERASER")
+        if let badge = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot())
+            .first?.badge {
+            check("the badge says why", badge.notice ?? "nothing", "THE ERASER HAS NO COLOUR")
+        }
+        controller.tools.select(tool: .pen)
 
         // The eraser cuts, it does not delete. Rubbing out whole strokes made its size
         // meaningless: one touch anywhere on a line took the entire line, so a wide eraser

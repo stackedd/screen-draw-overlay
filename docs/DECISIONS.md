@@ -145,8 +145,11 @@ which is checked by rendering the set over both (`Testing/probes/cursor.swift`).
 cursor rect is a window that shows the system arrow: opening a wheel put the arrow there, and
 closing it did not necessarily take it away, because the pointer had not moved and so nothing
 asked for a cursor again. That is the arrow people saw after picking a size and going back to
-drawing. The wheel is handed the tool's cursor when it opens, and the overlay takes it back
-when it closes.
+drawing. The wheel is handed the tool's cursor when it opens, and asked for one again *after* a pick
+has been applied and *before* the panel goes away - otherwise there is a moment with no window
+under the pointer that has an opinion, and what shows in that moment is the system arrow. That
+moment is the flash of an arrow people saw between letting go of the wheel and the new tool
+appearing.
 
 **It has to be taken back, repeatedly.** Owning the cursor rect is not the same as keeping the
 cursor. Anything that owns it for a moment leaves the plain arrow behind, and `cursorUpdate`
@@ -620,19 +623,21 @@ audience may not be able to see, is worse than one.
 It goes out in click-through, because a laser dot on top of an app the user has just been
 handed back is something in the way.
 
-**And it leaves a trail**, which is the half of a laser that a watching room actually reads.
-A dot that leaves nothing behind is a dot; the trail is what makes a gesture legible to
-someone looking at a screen share rather than at the hand making it. A mark is dropped at most
-every thirtieth of a second and only once the pointer has moved, and each one is handed the
-rest of its life as an opacity animation - the same trick the fading ink uses. About fifteen
-are alive at a time, none of them is a repaint, and the whole thing costs about 2.6% of a core
-while the pointer is being swept.
+**What it leaves behind is drawn by holding the button**, not by passing over. The first
+version dropped a little dot every thirtieth of a second as the pointer moved, pressed or
+not; it looked like beads, it drew things nobody had asked for, and it cost more than the
+laser itself. Holding the button now draws an ordinary stroke that happens to live half a
+second - the fading-ink machinery doing its job, with the life carried on the stroke rather
+than fixed at three seconds for everything. It is smooth, because it is a stroke, and it
+costs what drawing costs, only while the button is down. Following the pointer with nothing
+held is **1.3% of a core**.
 
-**How it went wrong the first two times**, because the pattern is worth recognising: it was a
-decoration on the cursor (invisible whenever something else owned the cursor), then a layer
-moved by `mouseMoved` (which only reaches the key window, so it froze the moment the user had
-clicked another app). Both times the fix was the same one the wheel already needed - poll the
-pointer.
+**How it went wrong three times**, because the pattern is worth recognising: a decoration on
+the cursor (invisible whenever something else owned the cursor), then a layer moved by
+`mouseMoved` (which only reaches the key window, so it froze the moment the user had clicked
+another app), then a trail of dots dropped whether or not anyone had pressed anything. The
+first two were fixed by the answer the wheel already needed - poll the pointer - and the
+third by not inventing a mechanism where one already existed.
 
 ## 26. The wheel is the whole interface
 
@@ -684,9 +689,11 @@ six colours to a tool that has no colour.
   marker's are the same lines four times wider, which is what it will actually put down. The
   eraser's are rings of the hole it will take out, scaled into the sector but scaled rather
   than clamped, so the six still read in order.
-- **Colour, with the eraser in hand,** is taken as what it plainly is - wanting to draw again
-  - and hands back the last tool that did, in the colour just chosen. A key that quietly does
-  nothing is worse than one that does the obvious thing.
+- **Colour, with the eraser in hand,** does not open a wheel. Handing the pen back instead was
+  tried for a day and was worse: it answered a question nobody had asked and changed the tool
+  in your hand while you were still using the one you had. The badge says `THE ERASER HAS NO
+  COLOUR` for a second and a half instead — which is what the badge is for, being the only
+  place on screen this app can say anything at all.
 - **The eraser's size actually varies.** It was `max(12, width)`, which gave the same eraser
   for five of the six widths: the size control did nothing for four steps out of five, which
   is the same fault the eraser itself had before it started cutting. It is `6 + width * 2`

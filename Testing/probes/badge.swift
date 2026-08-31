@@ -34,6 +34,11 @@ one = made { tools, _ in tools.select(tool: .eraser) }
 samples.append(("eraser", one.0, one.1))
 one = made { _, badge in badge.isInteractionMode = true }
 samples.append(("click-through", one.0, one.1))
+one = made { tools, badge in
+    tools.select(tool: .eraser)
+    badge.notice = "THE ERASER HAS NO COLOUR"
+}
+samples.append(("saying something", one.0, one.1))
 
 let width = 620.0, rowHeight = 62.0
 let sheet = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(width * scale),

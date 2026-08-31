@@ -81,20 +81,6 @@ print("  followed the pointer: \(laser.position != before) (\(before) -> \(laser
 print("  where the pointer is, in the view: "
       + "\(view.convert(panel.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil))")
 
-// The trail is the half of a laser that a room watching a screen actually reads.
-print("  trail marks alive before moving: \(view.laserTrail.count)")
-// Spaced in real time, because the marks are deliberately throttled: a tight loop would
-// only ever earn one of them.
-for step in 0...11 {
-    let point = NSPoint(x: middle.x + CGFloat(step) * 7, y: middle.y + sin(Double(step) / 3) * 40)
-    view.markTrail(at: point)
-    settle(0.035)
-}
-print("  after sweeping the pointer for \(Int(0.035 * 12 * 1000))ms: \(view.laserTrail.count)")
-settle(LaserDot.trailLife + 0.2)
-view.markTrail(at: middle)
-print("  and after their life runs out: \(view.laserTrail.count) (one is the new mark)")
-
 print("")
 print("=== the wheel and the cursor ===")
 tools.select(tool: .pen)

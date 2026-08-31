@@ -85,6 +85,9 @@ final class OverlayController {
     func start() -> [String] {
         // The pointer does not move when a wheel closes, so nothing would ask the overlay
         // for its cursor again.
+        wheels.cursorNow = { [weak self] in
+            self?.toolCursor ?? .arrow
+        }
         wheels.onClose = { [weak self] in
             self?.drawingViews.forEach {
                 $0.refreshCursorRects()
@@ -183,22 +186,18 @@ final class OverlayController {
 
     // The other two only change what is in hand, so their hub is a plain cancel: reaching
     // for a colour and landing in the middle should not move the mode.
-    // Colour means nothing to the eraser, so reaching for one there is taken as what it
-    // plainly is - wanting to draw again - and hands back the last tool that did, in the
-    // colour just chosen. A key that quietly does nothing is worse than one that does the
-    // obvious thing.
+    // Colour means nothing to the eraser, so the colour wheel does not open for it. Handing
+    // back the pen instead was tried and was worse: it answered a question nobody asked and
+    // put a different tool in your hand than the one you were holding. The badge says why
+    // instead - it is the only place on screen this app can say anything.
     private func openColourWheel() {
-        wheels.open(OverlayController.colourWheel,
-                    centreLabel: tools.tool == .eraser ? "KEEP ERASING" : "CANCEL",
-                    cursor: toolCursor) { [weak self] index in
-            guard let self, let index else {
-                return
-            }
+        guard tools.tool != .eraser else {
+            drawingViews.forEach { $0.flash("THE ERASER HAS NO COLOUR") }
+            return
+        }
 
-            self.tools.selectColor(index)
-            if self.tools.tool == .eraser {
-                self.tools.putTheEraserDown()
-            }
+        wheels.open(OverlayController.colourWheel, cursor: toolCursor) { [weak self] index in
+            index.map { self?.tools.selectColor($0) }
         }
     }
 

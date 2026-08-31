@@ -83,13 +83,13 @@ final class FadingInk {
         layer.actions = ["contents": NSNull(), "position": NSNull(), "bounds": NSNull()]
 
         let age = Date().timeIntervalSince(createdAt)
-        let remaining = Stroke.fadeDuration - age
+        let remaining = stroke.life - age
         guard remaining > 0 else {
             return nil
         }
 
         let animation = CAKeyframeAnimation(keyPath: "opacity")
-        let holdEnds = Stroke.fadeDuration * Stroke.fadeHold
+        let holdEnds = stroke.life * Stroke.fadeHold
         animation.values = [1, 1, 0]
         animation.keyTimes = [0, NSNumber(value: max(0, min(1, (holdEnds - age) / remaining))), 1]
         animation.duration = remaining

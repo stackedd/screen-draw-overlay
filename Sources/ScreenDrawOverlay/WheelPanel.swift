@@ -126,14 +126,33 @@ final class WheelPanel {
     func release() {
         let chosen = view.highlighted
         let answer = pick
-        close()
         pick = nil
+        poll?.invalidate()
+        poll = nil
+
+        // The choice first, so that whatever it changed - the tool, and with it the cursor -
+        // has already happened by the time this window goes away.
         answer?(chosen)
+
+        if let cursor = cursorNow?() {
+            view.cursor = cursor
+            panel.invalidateCursorRects(for: view)
+            cursor.set()
+        }
+
+        panel.orderOut(nil)
+        onClose?()
     }
 
     // Whoever opened the wheel gets told when it has gone, because the overlay underneath
     // has to take the cursor back: the pointer has not moved, so nothing else will ask it to.
     var onClose: (() -> Void)?
+
+    // What the cursor should be right now. Asked for *after* a pick has been applied, so
+    // the wheel can put the newly chosen tool's cursor on before it disappears - otherwise
+    // there is a moment with no window under the pointer that has an opinion, and what
+    // shows in that moment is the system arrow.
+    var cursorNow: (() -> NSCursor)?
 
     func close() {
         let wasOpen = poll != nil

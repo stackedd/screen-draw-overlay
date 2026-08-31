@@ -105,10 +105,12 @@ final class Canvas {
         path.lineJoinStyle = .round
         path.move(to: point)
 
+        let life = tools.drawnInkLife
         strokeInProgress = Stroke(points: [point], path: path, color: tools.color,
                                   width: width, style: tools.style,
-                                  createdAt: tools.drawsTemporaryInk ? Date() : nil,
-                                  isShape: tools.tool.isShape)
+                                  createdAt: life == nil ? nil : Date(),
+                                  isShape: tools.tool.isShape,
+                                  life: life ?? Stroke.fadeDuration)
         shapeAnchor = tools.tool.isShape ? point : nil
         lastPoint = point
 
@@ -128,7 +130,8 @@ final class Canvas {
             let rebuilt = tools.tool.shapePath(from: anchor, to: end, width: existing.width)
             let updated = Stroke(points: [anchor, end], path: rebuilt, color: existing.color,
                                  width: existing.width, style: existing.style,
-                                 createdAt: existing.createdAt, isShape: true)
+                                 createdAt: existing.createdAt, isShape: true,
+                                 life: existing.life)
             strokeInProgress = updated
             lastPoint = end
 

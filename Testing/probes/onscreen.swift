@@ -130,9 +130,9 @@ for count in [3, 10, 50] {
 }
 view.clear()
 
-// The laser, with the tool in hand and the pointer sweeping: a poll, a layer move and a
-// trail of marks that fade themselves out. None of it is a repaint, and the claim is that
-// it costs about what moving a layer costs.
+// The laser, with the tool in hand and the pointer sweeping: a poll and a layer move, and
+// no repaint at all. What it draws when the button is held is an ordinary stroke and is
+// measured by the rows above.
 print("")
 print("  and the laser, pointer sweeping, for \(Int(seconds))s")
 view.clear()
@@ -149,7 +149,7 @@ let laserSweep = Timer(timeInterval: 1.0 / 60, repeats: true) { _ in
 RunLoop.current.add(laserSweep, forMode: .common)
 RunLoop.current.run(until: laserBegan.addingTimeInterval(seconds))
 laserSweep.invalidate()
-print(String(format: "  %-46@ %5d           %5.1f%%", "laser with its trail" as NSString, 0,
+print(String(format: "  %-46@ %5d           %5.1f%%", "laser, following the pointer" as NSString, 0,
              (cpuSeconds() - laserBefore) / Date().timeIntervalSince(laserBegan) * 100))
 tools.select(tool: .pen)
 

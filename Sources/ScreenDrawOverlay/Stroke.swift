@@ -31,9 +31,23 @@ enum DrawingTool: Hashable {
         self == .line || self == .arrow || self == .rectangle || self == .ellipse
     }
 
-    // Tools that leave nothing behind. The laser is a pointer, not a pen.
+    // Tools that put something on the canvas when dragged. The laser does - a beam that
+    // fades in half a second - which is what makes it read as pointing rather than as a
+    // dot sliding about.
     var marksTheCanvas: Bool {
+        self != .eraser
+    }
+
+    // Tools worth coming back to. The eraser and the laser are picked up for a moment, so
+    // neither is what the app hands you next time.
+    var isKeptInHand: Bool {
         self != .eraser && self != .laser
+    }
+
+    // How long what it draws lasts. Only the laser is different, and it is different by a
+    // lot: a beam is gone before you have finished the sentence.
+    var inkLife: TimeInterval {
+        self == .laser ? 0.55 : Stroke.fadeDuration
     }
 
     // Stable across releases, unlike a case's position, so a stored preference survives
@@ -186,6 +200,10 @@ struct Stroke {
     // nil for ink that stays. Set for a temporary stroke, which is what a presenter wants
     // for "look here" marks that should not pile up on the slide.
     let createdAt: Date?
+    // How long this one lives once it is finished. Temporary ink gets three seconds; the
+    // laser gets a fraction of that, which is what makes it read as a beam rather than as
+    // something drawn.
+    let life: TimeInterval
 
     // Shapes are two points and a generated path - a rectangle's outline is not its
     // polyline - so there is nothing sensible to cut in half. The eraser takes those whole
@@ -238,7 +256,8 @@ struct Stroke {
     // `let` that already has a value - which would make the identity impossible to carry
     // when a stroke is rebuilt.
     init(id: UUID = UUID(), points: [NSPoint], path: NSBezierPath, color: NSColor,
-         width: CGFloat, style: StrokeStyle, createdAt: Date?, isShape: Bool = false) {
+         width: CGFloat, style: StrokeStyle, createdAt: Date?, isShape: Bool = false,
+         life: TimeInterval = Stroke.fadeDuration) {
         self.id = id
         self.points = points
         self.path = path
@@ -247,6 +266,7 @@ struct Stroke {
         self.style = style
         self.createdAt = createdAt
         self.isShape = isShape
+        self.life = life
     }
 
     // What the eraser leaves behind: the same pen, colour and life, a shorter line, and a
@@ -267,7 +287,7 @@ struct Stroke {
         }
 
         return Stroke(points: points, path: rebuilt, color: color, width: width,
-                      style: style, createdAt: createdAt, isShape: isShape)
+                      style: style, createdAt: createdAt, isShape: isShape, life: life)
     }
 
     // The stroke as polylines - what anything that walks it rather than paints it needs.
@@ -438,6 +458,6 @@ struct Stroke {
             return false
         }
 
-        return Date().timeIntervalSince(createdAt) >= Stroke.fadeDuration
+        return Date().timeIntervalSince(createdAt) >= life
     }
 }

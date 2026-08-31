@@ -45,7 +45,7 @@ final class ToolSettings {
         // The eraser and the laser are things you pick up for a moment, not a pen to
         // start the day with, so they are never what comes back.
         if let name = defaults.string(forKey: Key.tool),
-           let stored = DrawingTool(persistedName: name), stored.marksTheCanvas {
+           let stored = DrawingTool(persistedName: name), stored.isKeptInHand {
             tool = stored
             lastDrawingTool = stored
         }
@@ -74,9 +74,20 @@ final class ToolSettings {
         ToolSettings.colors[colorIndex]
     }
 
-    // The width a stroke is actually drawn with, multiplier included.
+    // The width a stroke is actually drawn with, multiplier included. The laser is a beam,
+    // so it has one width of its own rather than six.
     var renderWidth: CGFloat {
-        ToolSettings.widths[widthIndex] * style.widthMultiplier
+        tool == .laser ? 6 : ToolSettings.widths[widthIndex] * style.widthMultiplier
+    }
+
+    // Ink that goes away by itself: the laser always, and anything else when temporary ink
+    // is switched on.
+    var drawnInkLife: TimeInterval? {
+        guard tool == .laser else {
+            return drawsTemporaryInk ? Stroke.fadeDuration : nil
+        }
+
+        return tool.inkLife
     }
 
     func selectColor(_ index: Int) {
@@ -116,17 +127,11 @@ final class ToolSettings {
         }
 
         tool = newTool
-        if newTool.marksTheCanvas {
+        if newTool.isKeptInHand {
             lastDrawingTool = newTool
         }
         persist()
         onChange?()
-    }
-
-    // Hands back the last tool that actually drew. Picking a colour with the eraser in hand
-    // is asking to draw again, and there is nothing else it could reasonably mean.
-    func putTheEraserDown() {
-        select(tool: lastDrawingTool)
     }
 
     // Space is a switch, not a one-way trip: it drops the laser and hands back whatever

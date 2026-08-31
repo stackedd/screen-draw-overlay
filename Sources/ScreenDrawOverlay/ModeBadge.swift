@@ -52,6 +52,11 @@ final class ModeBadge {
 
     var isInteractionMode = false
 
+    // Something to say for a second or two, in place of the shortcut line. The badge is the
+    // only place on screen this app can say anything, so anything it needs to say goes
+    // here rather than into a dialog nobody asked for.
+    var notice: String?
+
     // Hidden while the pointer is over it, so the user can draw in that corner.
     private(set) var isHovered = false
 
@@ -213,10 +218,13 @@ final class ModeBadge {
             .kern: 0.3
         ])
 
-        let hint = NSAttributedString(string: isInteractionMode ? ModeBadge.interactionHint : ModeBadge.drawingHint,
+        let hint = NSAttributedString(string: notice ?? (isInteractionMode ? ModeBadge.interactionHint
+                                                                            : ModeBadge.drawingHint),
                                       attributes: [
-            .font: NSFont.systemFont(ofSize: 10, weight: .medium),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.78)
+            .font: NSFont.systemFont(ofSize: 10, weight: notice == nil ? .medium : .semibold),
+            .foregroundColor: notice == nil
+                ? NSColor.white.withAlphaComponent(0.78)
+                : NSColor.systemYellow
         ])
 
         return (mode, hint)

@@ -57,11 +57,6 @@ final class DrawingView: NSView {
     // because the one thing a laser has to do is be there whoever owns the cursor.
     private let laserLayer = LaserDot.makeLayer()
     private var laserPoll: Timer?
-    // The trail behind it: a mark dropped every so often, each fading itself out and taking
-    // itself off. Bounded by its own life - about fifteen of them at a time - and none of
-    // them is a repaint.
-    private var laserTrail: [(layer: CALayer, until: Date)] = []
-    private var lastTrailMark: (at: NSPoint, when: Date)?
 
     // Temporary ink, once it is finished: one self-fading layer each, above the ink.
     private let fadingInk = FadingInk()
@@ -98,6 +93,7 @@ final class DrawingView: NSView {
     }
     private var mouseTrackingArea: NSTrackingArea?
     private var lastCursorReclaim = Date.distantPast
+    private var noticeTimer: Timer?
 
     override var acceptsFirstResponder: Bool { true }
     override var isOpaque: Bool { false }
@@ -127,6 +123,7 @@ final class DrawingView: NSView {
     deinit {
         fadeTimer?.invalidate()
         laserPoll?.invalidate()
+        noticeTimer?.invalidate()
     }
 
     // AppKit can hand the view a new backing layer when it changes windows, and both
@@ -225,7 +222,6 @@ final class DrawingView: NSView {
     private func stopLaserPoll() {
         laserPoll?.invalidate()
         laserPoll = nil
-        clearTrail()
     }
 
     private func followPointerWithLaser() {
@@ -233,61 +229,7 @@ final class DrawingView: NSView {
             return
         }
 
-        let point = convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
-        moveLaser(to: point)
-        markTrail(at: point)
-    }
-
-    // One mark, at most every thirtieth of a second and only once the hand has actually
-    // moved, handed the rest of its life as an opacity animation. Core Animation takes it
-    // down; nothing here runs per frame and nothing is repainted.
-    private func markTrail(at point: NSPoint) {
-        let now = Date()
-        laserTrail.removeAll { mark in
-            guard mark.until <= now else {
-                return false
-            }
-
-            mark.layer.removeFromSuperlayer()
-            return true
-        }
-
-        if let last = lastTrailMark {
-            guard now.timeIntervalSince(last.when) >= LaserDot.trailInterval,
-                  hypot(point.x - last.at.x, point.y - last.at.y) >= LaserDot.trailStep else {
-                return
-            }
-        }
-        lastTrailMark = (point, now)
-
-        guard let picture = LaserDot.trailMark(tools.color, scale: backingScale) else {
-            return
-        }
-
-        let mark = CALayer()
-        mark.bounds = NSRect(x: 0, y: 0, width: LaserDot.trailExtent, height: LaserDot.trailExtent)
-        mark.actions = ["position": NSNull(), "contents": NSNull(), "bounds": NSNull()]
-        mark.contentsScale = backingScale
-        mark.contents = picture
-        mark.position = point
-
-        let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = 1
-        fade.toValue = 0
-        fade.duration = LaserDot.trailLife
-        fade.fillMode = .forwards
-        fade.isRemovedOnCompletion = false
-        mark.opacity = 0
-        mark.add(fade, forKey: "fade")
-
-        inkLayer.superlayer?.insertSublayer(mark, below: laserLayer)
-        laserTrail.append((mark, now.addingTimeInterval(LaserDot.trailLife)))
-    }
-
-    private func clearTrail() {
-        laserTrail.forEach { $0.layer.removeFromSuperlayer() }
-        laserTrail.removeAll()
-        lastTrailMark = nil
+        moveLaser(to: convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil))
     }
 
     private func moveLaser(to point: NSPoint) {
@@ -456,6 +398,27 @@ final class DrawingView: NSView {
 
         badge.forgetHover()
         badgeLayer.isHidden = false
+    }
+
+    // Says something on the badge for a moment and then takes it back. The badge is the
+    // only place this app can say anything at all - there is no dialog and there is not
+    // going to be one - so a tool that cannot do what was just asked of it says so here.
+    func flash(_ message: String) {
+        guard let badge else {
+            return
+        }
+
+        noticeTimer?.invalidate()
+        badge.notice = message
+        refreshBadge()
+
+        let timer = Timer(timeInterval: 1.6, repeats: false) { [weak self] _ in
+            self?.badge?.notice = nil
+            self?.refreshBadge()
+            self?.noticeTimer = nil
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        noticeTimer = timer
     }
 
     // The badge hides itself while the pointer is over it, so that corner stays drawable.
