@@ -56,6 +56,12 @@ fit inside. The badge taught that twice.
       && swift build --package-path .build/testing/wheel -c release \
       && OUT=/tmp/wheel.png .build/testing/wheel/.build/release/WHEEL
 
+`probes/diagnose.swift` is the other kind of by-hand tool: it puts a real overlay up and asks
+it what state it is actually in - is the laser layer attached, does it have a picture in it,
+does the app's own cursor match the tool's, does the wheel hand the cursor back. It was
+written because two faults kept being reported that every offscreen test passed, and it is
+what showed both of them were between the app and the screen rather than inside the app.
+
 ## On a real screen
 
 Two measurements need a window on screen, so neither is in `run.sh`.

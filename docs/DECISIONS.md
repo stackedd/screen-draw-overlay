@@ -141,10 +141,19 @@ system arrow: something a user can see and understand, rather than a bug.
 Everything is drawn light-cased over a dark core so it reads on a white slide and a black one,
 which is checked by rendering the set over both (`Testing/probes/cursor.swift`).
 
+**The wheel has to wear it too.** The wheel panel sits above the overlay, and a window with no
+cursor rect is a window that shows the system arrow: opening a wheel put the arrow there, and
+closing it did not necessarily take it away, because the pointer had not moved and so nothing
+asked for a cursor again. That is the arrow people saw after picking a size and going back to
+drawing. The wheel is handed the tool's cursor when it opens, and the overlay takes it back
+when it closes.
+
 **It has to be taken back, repeatedly.** Owning the cursor rect is not the same as keeping the
 cursor. Anything that owns it for a moment leaves the plain arrow behind, and `cursorUpdate`
 does not necessarily fire again on the way back in. The view re-sets the cursor as the pointer
-moves, but only **eight times a second**: measured, setting it on every move costs 2.3% of a
+moves - and while it is being dragged, which delivers `mouseDragged` and never `mouseMoved`,
+so a whole stroke could otherwise be drawn under a system arrow - but only **eight times a
+second**: measured, setting it on every move costs 2.3% of a
 core, more than everything else a mouse move does put together, and eight times a second costs
 a tenth of that and heals inside 150ms.
 
@@ -610,6 +619,20 @@ audience may not be able to see, is worse than one.
 
 It goes out in click-through, because a laser dot on top of an app the user has just been
 handed back is something in the way.
+
+**And it leaves a trail**, which is the half of a laser that a watching room actually reads.
+A dot that leaves nothing behind is a dot; the trail is what makes a gesture legible to
+someone looking at a screen share rather than at the hand making it. A mark is dropped at most
+every thirtieth of a second and only once the pointer has moved, and each one is handed the
+rest of its life as an opacity animation - the same trick the fading ink uses. About fifteen
+are alive at a time, none of them is a repaint, and the whole thing costs about 2.6% of a core
+while the pointer is being swept.
+
+**How it went wrong the first two times**, because the pattern is worth recognising: it was a
+decoration on the cursor (invisible whenever something else owned the cursor), then a layer
+moved by `mouseMoved` (which only reaches the key window, so it froze the moment the user had
+clicked another app). Both times the fix was the same one the wheel already needed - poll the
+pointer.
 
 ## 26. The wheel is the whole interface
 

@@ -240,6 +240,25 @@
         let laserInClickThrough = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot())
             .first.map { !$0.laserLayer.isHidden } ?? true
         check("click-through puts the laser out", laserInClickThrough ? "still lit" : "out", "out")
+
+        // The trail is the half of a laser a watching room actually reads - a dot that
+        // leaves nothing behind is not a gesture. Marked in real time, because the marks
+        // are deliberately throttled and a tight loop would only ever earn one of them.
+        controller.toggleInteractionMode()
+        if let view = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot()).first {
+            view.clearTrail()
+            for step in 0...11 {
+                view.markTrail(at: NSPoint(x: 300 + CGFloat(step) * 8, y: 400))
+                RunLoop.current.run(until: Date().addingTimeInterval(0.035))
+            }
+            check("the laser leaves a trail behind it",
+                  view.laserTrail.count > 6 ? "yes" : "no: \(view.laserTrail.count)", "yes")
+
+            RunLoop.current.run(until: Date().addingTimeInterval(LaserDot.trailLife + 0.2))
+            view.markTrail(at: NSPoint(x: 520, y: 400))
+            check("and the trail takes itself away",
+                  view.laserTrail.count <= 1 ? "yes" : "no: \(view.laserTrail.count)", "yes")
+        }
         controller.toggleInteractionMode()
         press(kVK_Space, " ")
 

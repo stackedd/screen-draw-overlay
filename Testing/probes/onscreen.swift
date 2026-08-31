@@ -130,6 +130,29 @@ for count in [3, 10, 50] {
 }
 view.clear()
 
+// The laser, with the tool in hand and the pointer sweeping: a poll, a layer move and a
+// trail of marks that fade themselves out. None of it is a repaint, and the claim is that
+// it costs about what moving a layer costs.
+print("")
+print("  and the laser, pointer sweeping, for \(Int(seconds))s")
+view.clear()
+tools.select(tool: .laser)
+RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+let laserStart = NSEvent.mouseLocation
+let laserBefore = cpuSeconds()
+let laserBegan = Date()
+let laserSweep = Timer(timeInterval: 1.0 / 60, repeats: true) { _ in
+    let turn = Date().timeIntervalSince(laserBegan) * 2 * Double.pi
+    CGWarpMouseCursorPosition(CGPoint(x: laserStart.x + cos(turn) * 220,
+                                      y: bounds.maxY - (laserStart.y + sin(turn) * 130)))
+}
+RunLoop.current.add(laserSweep, forMode: .common)
+RunLoop.current.run(until: laserBegan.addingTimeInterval(seconds))
+laserSweep.invalidate()
+print(String(format: "  %-46@ %5d           %5.1f%%", "laser with its trail" as NSString, 0,
+             (cpuSeconds() - laserBefore) / Date().timeIntervalSince(laserBegan) * 100))
+tools.select(tool: .pen)
+
 // The wheel, driven the way a hand drives it: open it and sweep the pointer round. It
 // reads the pointer by polling rather than by taking events, which is what makes this
 // measurable at all - warping the cursor moves it without generating anything to deliver.

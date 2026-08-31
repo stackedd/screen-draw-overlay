@@ -65,6 +65,8 @@ final class OverlayController {
     }
 
     private let wheels = WheelPanel()
+    // The cursor the wheel should wear, so it does not hand the pointer back as an arrow.
+    private var toolCursor: NSCursor { PointerCursor.cursor(for: tools) }
     private let shortcuts = Shortcuts()
     private var menuBar: MenuBarItem?
     private var overlayWindows: [OverlayPanel] = []
@@ -81,6 +83,15 @@ final class OverlayController {
     // stay for the life of the app; the panels come and go.
     @discardableResult
     func start() -> [String] {
+        // The pointer does not move when a wheel closes, so nothing would ask the overlay
+        // for its cursor again.
+        wheels.onClose = { [weak self] in
+            self?.drawingViews.forEach {
+                $0.refreshCursorRects()
+                $0.applyDrawingCursor()
+            }
+        }
+
         menuBar = MenuBarItem(actions: MenuBarItem.Actions(
             toggleDrawing: { [weak self] in self?.toggleDrawingMode() },
             toggleClickThrough: { [weak self] in self?.toggleInteractionMode() },
@@ -138,7 +149,7 @@ final class OverlayController {
     }
 
     private func openToolWheel() {
-        wheels.open(OverlayController.toolWheel, centreLabel: hubLabel) { [weak self] index in
+        wheels.open(OverlayController.toolWheel, centreLabel: hubLabel, cursor: toolCursor) { [weak self] index in
             guard let self else {
                 return
             }
@@ -178,7 +189,8 @@ final class OverlayController {
     // obvious thing.
     private func openColourWheel() {
         wheels.open(OverlayController.colourWheel,
-                    centreLabel: tools.tool == .eraser ? "KEEP ERASING" : "CANCEL") { [weak self] index in
+                    centreLabel: tools.tool == .eraser ? "KEEP ERASING" : "CANCEL",
+                    cursor: toolCursor) { [weak self] index in
             guard let self, let index else {
                 return
             }
@@ -191,7 +203,8 @@ final class OverlayController {
     }
 
     private func openWidthWheel() {
-        wheels.open(OverlayController.widthWheel(for: tools.tool)) { [weak self] index in
+        wheels.open(OverlayController.widthWheel(for: tools.tool),
+                    cursor: toolCursor) { [weak self] index in
             index.map { self?.tools.selectWidth($0) }
         }
     }

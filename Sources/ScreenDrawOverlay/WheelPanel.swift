@@ -18,7 +18,22 @@ final class WheelPanel {
         var highlighted: Int?
         var centreLabel: String?
 
+        // The wheel sits above the overlay, so while it is up it is the window under the
+        // pointer - and a window with no cursor rect is a window that shows the system
+        // arrow. That is the arrow people were seeing after picking a size: the wheel put
+        // it there and closing the wheel did not necessarily take it away again.
+        var cursor: NSCursor = .arrow
+
         override var isOpaque: Bool { false }
+
+        override func resetCursorRects() {
+            super.resetCursorRects()
+            addCursorRect(bounds, cursor: cursor)
+        }
+
+        override func cursorUpdate(with event: NSEvent) {
+            cursor.set()
+        }
 
         override func draw(_ dirtyRect: NSRect) {
             guard let wheel, let context = NSGraphicsContext.current?.cgContext else {
@@ -69,7 +84,8 @@ final class WheelPanel {
     // would put half its sectors somewhere the pointer cannot reach.
     // The pick is handed nil for the hub rather than nothing at all, because the hub is not
     // always a cancel: on the tools wheel it is the way out to driving the system.
-    func open(_ wheel: Wheel, centreLabel: String? = nil, pick: @escaping (Int?) -> Void) {
+    func open(_ wheel: Wheel, centreLabel: String? = nil, cursor: NSCursor = .arrow,
+              pick: @escaping (Int?) -> Void) {
         close()
 
         let pointer = NSEvent.mouseLocation
@@ -83,6 +99,7 @@ final class WheelPanel {
         }
 
         view.wheel = wheel
+        view.cursor = cursor
         view.centreLabel = centreLabel
         view.highlighted = nil
         view.needsDisplay = true
@@ -91,6 +108,8 @@ final class WheelPanel {
 
         panel.setFrameOrigin(origin)
         panel.orderFrontRegardless()
+        panel.invalidateCursorRects(for: view)
+        cursor.set()
 
         // Read where the pointer already is, rather than waiting a frame to find out.
         track(NSEvent.mouseLocation)
@@ -112,10 +131,19 @@ final class WheelPanel {
         answer?(chosen)
     }
 
+    // Whoever opened the wheel gets told when it has gone, because the overlay underneath
+    // has to take the cursor back: the pointer has not moved, so nothing else will ask it to.
+    var onClose: (() -> Void)?
+
     func close() {
+        let wasOpen = poll != nil
         poll?.invalidate()
         poll = nil
         panel.orderOut(nil)
+
+        if wasOpen {
+            onClose?()
+        }
     }
 
     // Where the pointer is, in screen coordinates. Taken as an argument rather than read

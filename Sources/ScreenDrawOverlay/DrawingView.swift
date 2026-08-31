@@ -57,6 +57,11 @@ final class DrawingView: NSView {
     // because the one thing a laser has to do is be there whoever owns the cursor.
     private let laserLayer = LaserDot.makeLayer()
     private var laserPoll: Timer?
+    // The trail behind it: a mark dropped every so often, each fading itself out and taking
+    // itself off. Bounded by its own life - about fifteen of them at a time - and none of
+    // them is a repaint.
+    private var laserTrail: [(layer: CALayer, until: Date)] = []
+    private var lastTrailMark: (at: NSPoint, when: Date)?
 
     // Temporary ink, once it is finished: one self-fading layer each, above the ink.
     private let fadingInk = FadingInk()
@@ -220,6 +225,7 @@ final class DrawingView: NSView {
     private func stopLaserPoll() {
         laserPoll?.invalidate()
         laserPoll = nil
+        clearTrail()
     }
 
     private func followPointerWithLaser() {
@@ -227,7 +233,61 @@ final class DrawingView: NSView {
             return
         }
 
-        moveLaser(to: convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil))
+        let point = convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
+        moveLaser(to: point)
+        markTrail(at: point)
+    }
+
+    // One mark, at most every thirtieth of a second and only once the hand has actually
+    // moved, handed the rest of its life as an opacity animation. Core Animation takes it
+    // down; nothing here runs per frame and nothing is repainted.
+    private func markTrail(at point: NSPoint) {
+        let now = Date()
+        laserTrail.removeAll { mark in
+            guard mark.until <= now else {
+                return false
+            }
+
+            mark.layer.removeFromSuperlayer()
+            return true
+        }
+
+        if let last = lastTrailMark {
+            guard now.timeIntervalSince(last.when) >= LaserDot.trailInterval,
+                  hypot(point.x - last.at.x, point.y - last.at.y) >= LaserDot.trailStep else {
+                return
+            }
+        }
+        lastTrailMark = (point, now)
+
+        guard let picture = LaserDot.trailMark(tools.color, scale: backingScale) else {
+            return
+        }
+
+        let mark = CALayer()
+        mark.bounds = NSRect(x: 0, y: 0, width: LaserDot.trailExtent, height: LaserDot.trailExtent)
+        mark.actions = ["position": NSNull(), "contents": NSNull(), "bounds": NSNull()]
+        mark.contentsScale = backingScale
+        mark.contents = picture
+        mark.position = point
+
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 1
+        fade.toValue = 0
+        fade.duration = LaserDot.trailLife
+        fade.fillMode = .forwards
+        fade.isRemovedOnCompletion = false
+        mark.opacity = 0
+        mark.add(fade, forKey: "fade")
+
+        inkLayer.superlayer?.insertSublayer(mark, below: laserLayer)
+        laserTrail.append((mark, now.addingTimeInterval(LaserDot.trailLife)))
+    }
+
+    private func clearTrail() {
+        laserTrail.forEach { $0.layer.removeFromSuperlayer() }
+        laserTrail.removeAll()
+        lastTrailMark = nil
     }
 
     private func moveLaser(to point: NSPoint) {
@@ -289,9 +349,14 @@ final class DrawingView: NSView {
         updateBadgeHover(at: point)
 
         guard tools.tool != .eraser else {
+            reclaimCursorIfDue()
             erase(at: point)
             return
         }
+
+        // A drag delivers mouseDragged, never mouseMoved, so the cursor has to be taken
+        // back from here as well or a whole stroke can be drawn under a system arrow.
+        reclaimCursorIfDue()
 
         if let dirty = canvas.extendStroke(to: point,
                                            shiftHeld: event.modifierFlags.contains(.shift),
