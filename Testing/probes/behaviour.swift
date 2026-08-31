@@ -164,8 +164,9 @@
         // nothing, because that is the only way to change your mind.
         let wheel = OverlayController.toolWheel
         func toolPushing(_ x: CGFloat, _ y: CGFloat) -> String {
-            guard let sector = wheel.selection(for: NSPoint(x: x, y: y)) else { return "none" }
-            return OverlayController.toolOrder[sector].label
+            guard let sector = wheel.selection(for: NSPoint(x: x, y: y)),
+                  let tool = OverlayController.toolOrder[sector] else { return "none" }
+            return tool.label
         }
         check("wheel: right is the pen, left is the eraser",
               toolPushing(120, 0) + "/" + toolPushing(-120, 0), "PEN/ERASER")
@@ -309,22 +310,30 @@
         check("the cursor carries the colour", red == blue ? "same" : "different", "different")
         controller.tools.selectColor(0)
 
-        // hold to draw: a long press puts it away on release, a tap does not
+        // The wheel is the only way in now, so it has to be able to open an overlay that
+        // is not there - and the eighth sector has to be able to put it away again, keeping
+        // the drawing, which is what ⌃⌥⌘D used to do.
         controller.toggleDrawingMode()
-        fireHotKey(id: 1)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-            self.fireHotKey(id: 1, release: true)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                check("hold then release hides", self.state, "OFF")
-                self.fireHotKey(id: 1)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    self.fireHotKey(id: 1, release: true)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        check("tap stays open", self.state, "DRAWING")
-                        print("REG summary: \(pass) passed, \(fail) failed")
-                        self.fireHotKey(id: 2)
-                    }
-                }
-            }
-        }
+        check("hidden to start with", state, "OFF")
+        controller.openToolWheel()
+        controller.wheels.track(NSPoint(x: controller.wheels.centre.x + 120,
+                                        y: controller.wheels.centre.y))
+        controller.wheels.release()
+        check("the wheel opens an overlay that was not there",
+              controller.tools.tool.label + "/" + state, "PEN/DRAWING")
+
+        stroke(y: 300)
+        let beforeHiding = live
+        controller.openToolWheel()
+        controller.wheels.track(NSPoint(x: controller.wheels.centre.x + 92,
+                                        y: controller.wheels.centre.y + 92))
+        controller.wheels.release()
+        check("the wheel puts it away again", state, "OFF")
+        controller.toggleDrawingMode()
+        check("and hiding kept the drawing", "\(live)", "\(beforeHiding)")
+
+        print("REG summary: \(pass) passed, \(fail) failed")
+        // Quits through the panic key rather than NSApp.terminate, so the shortcut that has
+        // to work from any state is exercised on every run.
+        fireHotKey(id: 2)
 

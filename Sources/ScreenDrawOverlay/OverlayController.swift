@@ -23,11 +23,11 @@ final class OverlayController {
     // the two that need no thought are a flick right for the pen and a flick left for the
     // eraser.
     //
-    // The eighth tool is the laser for now and will be the text tool when there is one;
-    // the laser keeps Space either way, which is where a momentary thing belongs. Changing
-    // a sector's meaning later is a real cost, so it is one slot and it is written down.
-    private static let toolOrder: [DrawingTool] = [.pen, .highlighter, .line, .arrow,
-                                                   .eraser, .rectangle, .ellipse, .laser]
+    // Seven tools and a way out. The eighth sector puts the overlay away, keeping the
+    // drawing, because with ⌃⌥⌘D gone the wheel is the only thing that opens or closes one.
+    // The laser lives on Space, which is where a momentary thing belongs.
+    private static let toolOrder: [DrawingTool?] = [.pen, .highlighter, .line, .arrow,
+                                                    .eraser, .rectangle, .ellipse, nil]
 
     private static let toolWheel = Wheel(items: [
         Wheel.Item(label: "PEN", symbol: "pencil.tip"),
@@ -37,7 +37,7 @@ final class OverlayController {
         Wheel.Item(label: "ERASER", symbol: "eraser"),
         Wheel.Item(label: "RECT", symbol: "rectangle"),
         Wheel.Item(label: "OVAL", symbol: "circle"),
-        Wheel.Item(label: "LASER", symbol: "dot.circle.and.hand.point.up.left.fill")
+        Wheel.Item(label: "HIDE", symbol: "eye.slash")
     ], centreLabel: "CLICK-THROUGH")
 
     private static let colourWheel = Wheel(items: zip(
@@ -56,9 +56,7 @@ final class OverlayController {
     private var isDrawingMode = false
     private var isInteractionMode = false
     private var overlayScreenLayout: [String] = []
-    private static let holdToDrawThreshold: TimeInterval = 0.4
 
-    private var drawingHotKeyPressedAt: Date?
     private var keptDrawings: [String: Canvas.Kept] = [:]
     private let tools = ToolSettings()
     private var keptDrawingsLayout: [String] = []
@@ -85,9 +83,8 @@ final class OverlayController {
                                                object: nil)
 
         return shortcuts.register(Shortcuts.Actions(
-            drawPressed: { [weak self] in self?.drawingHotKeyPressed() },
-            drawReleased: { [weak self] in self?.drawingHotKeyReleased() },
-            toggleClickThrough: { [weak self] in self?.toggleInteractionMode() },
+            toolWheel: { [weak self] in self?.openToolWheel() },
+            wheelReleased: { [weak self] in self?.wheels.release() },
             quit: {
                 print("ScreenDrawOverlay: emergency quit")
                 NSApp.terminate(nil)
@@ -101,7 +98,6 @@ final class OverlayController {
     // out of the way the rest of the time.
     private func startWheels() {
         shortcuts.registerWheels(Shortcuts.WheelActions(
-            tools: { [weak self] in self?.openToolWheel() },
             colours: { [weak self] in self?.openColourWheel() },
             widths: { [weak self] in self?.openWidthWheel() },
             released: { [weak self] in self?.wheels.release() }
@@ -118,13 +114,31 @@ final class OverlayController {
                 return
             }
 
+            // The hub hands the screen back to whatever is underneath. With the overlay
+            // already down there is nothing to hand back, so it does nothing at all rather
+            // than opening one just to make it ignore the mouse.
             guard let index else {
-                self.setInteractionMode(true)
+                if self.isDrawingMode {
+                    self.setInteractionMode(true)
+                }
                 return
             }
 
+            // The eighth sector puts the overlay away, keeping the drawing.
+            guard let tool = OverlayController.toolOrder[index] else {
+                if self.isDrawingMode {
+                    self.hideOverlay(reason: "hidden from the wheel")
+                }
+                return
+            }
+
+            // Picking a tool means drawing with it, whatever the overlay was doing before -
+            // including not existing.
+            if !isDrawingMode {
+                self.enterDrawingMode()
+            }
             self.setInteractionMode(false)
-            self.tools.select(tool: OverlayController.toolOrder[index])
+            self.tools.select(tool: tool)
         }
     }
 
@@ -175,42 +189,6 @@ final class OverlayController {
         } else {
             window.drawingView.undo()
         }
-    }
-
-    // Tap or hold, on the same shortcut. A tap toggles, as it always has. Holding it turns
-    // the overlay into something you reach for the way you reach for a laser pointer:
-    // press, scribble, let go, and the screen is yours again - no mode to remember to
-    // leave. That is the difference between a tool you switch on and a tool you can leave
-    // running in the background all day.
-    //
-    // Momentary only applies when the press is what opened the overlay. Holding the key
-    // while already drawing would otherwise have to undo the tap action mid-hold, which
-    // reads as the shortcut fighting you.
-    func drawingHotKeyPressed() {
-        let wasClosed = !isDrawingMode && overlayWindowSnapshot().isEmpty
-        toggleDrawingMode()
-        drawingHotKeyPressedAt = wasClosed ? Date() : nil
-    }
-
-    func drawingHotKeyReleased() {
-        guard let pressedAt = drawingHotKeyPressedAt else {
-            return
-        }
-
-        drawingHotKeyPressedAt = nil
-
-        // A tap is a toggle and leaves the overlay up; only a deliberate hold puts it away.
-        guard Date().timeIntervalSince(pressedAt) >= OverlayController.holdToDrawThreshold else {
-            return
-        }
-
-        // If the user stepped into click-through during the hold they meant to stay, so
-        // the release leaves that alone.
-        guard isDrawingMode, !isInteractionMode else {
-            return
-        }
-
-        hideOverlay(reason: "drawing hot key released")
     }
 
     // Three states - off, drawing, click-through - and D always means "get me back to

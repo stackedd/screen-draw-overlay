@@ -43,23 +43,23 @@ drawing rules be tested without a window on screen.
 
 Three states, and every transition is deliberate:
 
-- **Off** — no panels. `⌃⌥⌘D` opens.
+- **Off** — no panels. Picking a tool from the wheel opens one.
 - **Drawing** — panels take the mouse and the keyboard. Nothing underneath can be clicked.
 - **Click-through** — panels stay visible but ignore the mouse; the app underneath gets
   everything, including the keyboard.
 
-`⌃⌥⌘D` toggles off/drawing and brings click-through back to drawing — it never throws a
-drawing away. Held down rather than tapped, it is momentary: draw while held, gone on
-release. `⌃⌥⌘E` flips drawing and click-through. `⌃⌥⌘Esc` quits the process outright.
-`⌃⌥⌘Z` and `⇧⌃⌥⌘Z` undo and redo, and are global because the panels are non-activating:
-`⌘Z` only reaches them while this app is the active one.
+One key moves between all three. `⌥Z` holds open a wheel of tools: push at one and the
+overlay opens, takes the screen and hands you that tool; let go in the middle and the screen
+goes back to the app underneath; push at `HIDE` and the overlay goes away with the drawing
+kept. `⌥X` and `⌥C` do the same for colour and width while the overlay is up. `⌃⌥⌘Esc` quits
+the process outright, and `⌃⌥⌘Z` / `⇧⌃⌥⌘Z` undo and redo — global because the panels are
+non-activating, so `⌘Z` only reaches them while this app is the active one.
 
-While the overlay is up, three more are live: `⌥Z`, `⌥X` and `⌥C` hold open a wheel of tools,
-colours and widths. They are registered on entry and unregistered on exit, because `⌥Z` types
-something and a tool picker has no business owning it when there is no canvas.
+`⌥Z` is registered for the life of the app rather than with the overlay, because it is the
+only thing that opens one. The menu bar item is the way in if it is ever taken.
 
 **Hiding is not erasing.** Leaving drawing mode lifts the strokes out of the panels and
-files them by display, together with the undo history; the next `⌃⌥⌘D` puts both back. `C` (or Delete) is the only thing
+files them by display, together with the undo history; the next tool picked from the wheel puts both back. `C` (or Delete) is the only thing
 that erases, and even that is undoable.
 
 ## Invariants
@@ -75,7 +75,7 @@ These exist because something went wrong once. Do not remove them without readin
    that still eats clicks is the worst failure this app can have.
 3. **`overlayWindowSnapshot()` re-scans `NSApp.windows`.** It is insurance against a panel
    that is on screen but has fallen out of our own arrays. It filters to `isVisible`,
-   because closed panels linger in `NSApp.windows` and counting them made `⌃⌥⌘D` hide an
+   because closed panels linger in `NSApp.windows` and counting them made hiding close an
    overlay that was already gone — taking the drawing with it.
 4. **`⌃⌥⌘Esc` ends the process.** Anything less can, in principle, still leave someone
    stuck. It is the one recovery that cannot fail.

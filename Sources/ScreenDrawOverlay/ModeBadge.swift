@@ -6,8 +6,9 @@
 // at a glance: which mode they are in, which tool and colour is in hand, and, on its second
 // line, the shortcuts that get them out. That last line is a safety feature, not decoration:
 // it is the only thing on screen telling someone whose clicks have stopped working what to
-// press. Undo is on that line too, because the shortcut that always works is the global one
-// and there is nowhere else to learn it.
+// press - which is now one key and one flick, so the line names the wheel and what its middle
+// does. Undo is on it too, because the shortcut that always works is the global one and there
+// is nowhere else to learn it.
 //
 // It draws nothing while the pointer is over it, so the corner it occupies stays drawable.
 //
@@ -25,8 +26,8 @@ import AppKit
 
 final class ModeBadge {
     // What the second line says. Escape is not on it: it no longer leaves drawing mode.
-    private static let drawingHint = "⌃⌥⌘E click · ⌃⌥⌘D hide · ⌃⌥⌘Z undo"
-    private static let interactionHint = "⌃⌥⌘E draw · ⌃⌥⌘Z undo · ⌃⌥⌘Esc quit"
+    private static let drawingHint = "⌥Z wheel · middle hands it back · ⌃⌥⌘Z undo"
+    private static let interactionHint = "⌥Z wheel · pick a tool to draw · ⌃⌥⌘Esc quit"
 
     private static let paddingX: CGFloat = 11
     private static let paddingY: CGFloat = 8

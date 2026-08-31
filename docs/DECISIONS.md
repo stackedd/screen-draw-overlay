@@ -610,3 +610,35 @@ audience may not be able to see, is worse than one.
 
 It goes out in click-through, because a laser dot on top of an app the user has just been
 handed back is something in the way.
+
+## 26. The wheel is the whole interface
+
+`⌃⌥⌘D` and `⌃⌥⌘E` are gone. One key opens a wheel, and the wheel does everything the two of
+them did:
+
+- push at a tool — the overlay opens if it was not open, takes the screen, and hands you that
+  tool;
+- let go in the middle — the screen goes back to whatever is underneath (what `⌃⌥⌘E` did);
+- push at **HIDE** — the overlay goes away, keeping the drawing (what `⌃⌥⌘D` did).
+
+The point is not that it is fewer keys. It is that there is one thing to learn and it is
+visible while you are using it: the wheel says what its middle does, and it says HIDE, so
+nobody has to remember a combination that is written down somewhere else.
+
+**`⌥Z` is registered for the life of the app**, not with the overlay, because it is now the
+only thing that opens one. That costs `⌥Z` system-wide - it types a character otherwise - and
+it is the strongest argument yet for the settings window and custom shortcuts. The menu bar
+item stays as the way in if `⌥Z` is ever taken by something else; it always was, and now it
+matters.
+
+**What went with them:**
+
+- **Hold-to-draw** (entry 5). Holding `⌃⌥⌘D` gave a momentary overlay - press, scribble, let
+  go, gone - and there is nowhere for it on a wheel, because on a wheel letting go is how you
+  choose. It was liked and it is a real loss. If it comes back it will be as its own key.
+- **The laser's sector.** Nine tools do not fit in eight, and the eighth is now the way out.
+  The laser keeps `Space`, which is where a momentary thing belongs anyway. A text tool will
+  need a ninth sector rather than someone else's.
+
+`⌃⌥⌘Esc` is untouched, and so is undo. The panic key still ends the process from any state,
+which is the guarantee everything else is allowed to lean on.

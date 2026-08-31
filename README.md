@@ -40,31 +40,31 @@ To have it start with your Mac, use **Open at Login** in the menu bar item (macO
 
 ## Shortcuts
 
-These work anywhere, whatever app you are in:
+**One key does almost everything.** Hold `Option + Z` anywhere, push the mouse at what you
+want, and let go. The sectors are forty-five degrees wide, so there is nothing to aim at.
+
+| Push at | What happens |
+| --- | --- |
+| a tool | The overlay opens if it was not open, takes the screen, and hands you that tool |
+| the middle | The screen goes back to the app underneath — click, scroll, type, with your drawing still on it |
+| `HIDE` | The overlay goes away and keeps the drawing; the next tool you pick brings it back |
+
+Two more wheels, while the overlay is up: `Option + X` for colour and `Option + C` for width,
+where each sector is a bar of the line it draws.
+
+And three shortcuts that work from anywhere, whatever has focus:
 
 | Shortcut | What it does |
 | --- | --- |
-| `Control + Option + Command + D` | Tap: start drawing · back to drawing from click-through · hide the overlay, keeping what you drew. **Hold: draw only while you hold it**, and it puts itself away when you let go |
-| `Control + Option + Command + E` | Switch between drawing and click-through |
 | `Control + Option + Command + Z` | Undo · add `Shift` to redo |
 | `Control + Option + Command + Escape` | Panic key: quits the app outright, from any state |
 
-And while the overlay is up, three wheels. Hold the key, push the mouse at what you want, let
-go — the sectors are forty-five degrees wide, so there is nothing to aim at.
-
-| Shortcut | Wheel |
-| --- | --- |
-| `Option + Z` | Tools — pen right, eraser left, the rest around. **Let go in the middle and the screen goes back to the app underneath**; push at a tool and the overlay takes it again |
-| `Option + X` | Colours |
-| `Option + C` | Widths — each sector is a bar of the line it draws |
-
-The tools wheel is the quickest way between drawing and not drawing: one key, one flick. You
-never have to leave what you are doing to change either the tool or the mode.
-
 Undo is on that list rather than only on `Command + Z` for a reason: the overlay is a
 non-activating panel, so it only receives ordinary keystrokes while ScreenDrawOverlay is the
-active app. Click anything in another app and `Command + Z` stops reaching it, with nothing
-on screen to tell you so. The global one always works.
+active app. Click anything in another app and `Command + Z` stops reaching it, with nothing on
+screen to tell you so. The global one always works.
+
+If `Option + Z` is ever taken by another app, the menu bar item does the same job.
 
 While you are drawing, the keyboard belongs to the tool. No modifiers to hold — your other hand is on the mouse:
 
@@ -100,7 +100,7 @@ While you are **drawing**, the overlay takes the mouse and the keyboard: your st
 
 **While drawing, the keyboard belongs to the tool.** The keys above do their thing and everything else — including `Escape` — is swallowed and does nothing. If you need to type, or need `Escape` to reach the app underneath (leaving a slideshow, for instance), switch to click-through with `Control + Option + Command + E` first.
 
-You can always tell which state you are in, and which tool you are holding: the corner badge reads `PEN 4` — the tool, its width, and a dot in the current colour beside it — or `CLICK-THROUGH` when your clicks pass through. A red stripe down its left edge means the overlay is taking your clicks; it disappears in click-through, when it is not. Its second line names the shortcuts that apply right now (`⌃⌥⌘E click · ⌃⌥⌘D hide · ⌃⌥⌘Z undo` while drawing). There is no palette on screen on purpose: a tool that occupies screen space is not one you leave running.
+You can always tell which state you are in, and which tool you are holding: the corner badge reads `PEN 4` — the tool, its width, and a dot in the current colour beside it — or `CLICK-THROUGH` when your clicks pass through. A red stripe down its left edge means the overlay is taking your clicks; it disappears in click-through, when it is not. Its second line names what to do right now (`⌥Z wheel · middle hands it back · ⌃⌥⌘Z undo` while drawing) — which matters, because it is the only thing on screen telling someone whose clicks have stopped working what to press. There is no palette on screen on purpose: a tool that occupies screen space is not one you leave running.
 
 Each tool has its own pointer, in the colour you are drawing with: the pen is a nib, the highlighter a chisel, the shape tools a fine crosshair with the shape they make beside it, and the eraser a ring exactly the size of the hole it will leave. The laser has no cursor at all — its glow is drawn on the overlay, where the audience can see it, and two marks an inch apart would be worse than one. If something else takes the cursor for a moment you get the ordinary arrow back, which is a thing you can see rather than a bug; the overlay takes it again as soon as you move.
 

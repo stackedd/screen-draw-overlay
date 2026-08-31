@@ -4,13 +4,13 @@ A macOS menu bar app that puts a transparent overlay over every screen and lets 
 it — over a presentation, a document, anything. No window of its own, no Dock icon, and
 **no system permissions of any kind**.
 
-Three global shortcuts run it — `⌃⌥⌘D` draw (tap to toggle, hold for momentary), `⌃⌥⌘E`
-click-through, `⌃⌥⌘Esc` quit — plus `⌃⌥⌘Z` / `⇧⌃⌥⌘Z` to take a mistake back, which are
-global for the same reason: a non-activating panel only gets the keyboard while this app is
-the active one, so `⌘Z` alone was a no-op whenever the user had clicked anything else.
-While the overlay is up, `⌥Z` / `⌥X` / `⌥C` hold open a wheel of tools, colours and widths:
-push the mouse at one and let go. The tools wheel's hub is the mode — let go in the middle and
-the screen goes back to the app underneath.
+**`⌥Z` is the whole interface.** Hold it, push the mouse at what you want, let go. A tool
+opens the overlay and hands it to you; the middle gives the screen back to the app underneath;
+`HIDE` puts the overlay away, keeping the drawing. While the overlay is up, `⌥X` and `⌥C` do
+the same for colour and width. `⌃⌥⌘Z` / `⇧⌃⌥⌘Z` take a mistake back and `⌃⌥⌘Esc` quits — those
+are global for the same reason the wheel is: a non-activating panel only gets the keyboard
+while this app is the active one, so plain `⌘Z` was a no-op whenever the user had clicked
+anything else. The menu bar item is the way in if `⌥Z` is ever taken by another app.
 
 ## Stack
 
@@ -54,7 +54,7 @@ pointer is a cursor the window server draws for us.
 
     swift build -c release        # must be warning-free
     ./build_app.sh                # also compiles x86_64 - it catches what the line above misses
-    ./Testing/run.sh              # every suite; behaviour must be 37/37
+    ./Testing/run.sh              # every suite; behaviour must be 39/39
     open dist/ScreenDrawOverlay.app
 
 `./Testing/run.sh behaviour` drives the real app and checks the mode matrix, hide/show,
@@ -95,9 +95,9 @@ easy to repeat.
    and still eating clicks is the worst thing this app can do to someone.
 3. **Never remove the `NSApp.windows` re-scan** in `overlayWindowSnapshot()`. It finds
    panels that are on screen but have fallen out of our own arrays. It filters on
-   `isVisible` — closed panels linger, and counting them once made `⌃⌥⌘D` destroy a drawing.
+   `isVisible` — closed panels linger, and counting them once made hiding destroy a drawing.
 4. **Never make `⌃⌥⌘Esc` anything less than quitting the process.** It is the panic key;
-   the guarantee is that it always works.
+   the guarantee is that it always works, and everything else leans on it.
 5. **Never repaint the whole drawing on a mouse move.** Invalidate the rect you changed.
    Repainting everything cost 26x more, and the suite fails on `fullInkInvalidations > 0`.
    Better still, do not repaint at all: **the badge is a layer and the pointer is a real
@@ -112,8 +112,8 @@ easy to repeat.
    longer drives the fade, which Core Animation does; it only drops ink that has expired.
 9. **Never make drawing mode interact with anything** — no key should escape it, no click
    should reach what is underneath. Interaction is what click-through is for.
-10. **Never let hiding erase.** `⌃⌥⌘D` keeps the strokes **and the undo history**; `C` is
-    the only thing that erases, and even that is undoable.
+10. **Never let hiding erase.** The wheel's `HIDE` keeps the strokes **and the undo
+    history**; `C` is the only thing that erases, and even that is undoable.
 11. **Never let an edit point at a position.** Undo names strokes by `id`. `removeLast()`
     took back the wrong line whenever temporary ink faded out from under the history.
 
