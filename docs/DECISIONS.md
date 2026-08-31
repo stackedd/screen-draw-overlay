@@ -335,6 +335,11 @@ segment that dropped a point; on the last segment of a stroke it left a one-poin
 one-point run is discarded - so the entire tail of a line past the hole vanished. It looked
 exactly like an eraser that sometimes deletes too much.
 
+**The rendering suite's stroke count moved with this**, from 5 to 7. Its session rubs the
+eraser across a straight line, which used to be a shape and so was removed whole; now it is cut
+and leaves two pieces. `differingBytes` stayed at 0 at every scale, which is the number that
+suite exists to hold - the count is a description of the session, not a result.
+
 **One drag is one undo.** Each mouse move that touches ink would otherwise be its own edit,
 and taking back an eraser drag would mean pressing undo a hundred times to get a line back.
 The drag records what it took away and what it left, once, on release.

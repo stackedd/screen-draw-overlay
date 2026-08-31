@@ -21,6 +21,10 @@ repainting only what the view asked for, and once in a single pass - and compare
 bitmaps at 1x, 2x and 3x backing scale. It is how "the optimisation did not change what is
 on screen" gets proved rather than asserted.
 
+`differingBytes` and `fullInkInvalidations` are the results; `strokes` only describes the
+session and moves whenever the session's own behaviour changes - it went 5 to 7 when the
+eraser started cutting shapes instead of removing them.
+
 **cost** (`probes/cost.swift`) drives the same view and paints, into an offscreen bitmap at
 a Retina backing scale, every rectangle the view asks to have repainted - then times it. Four
 sweeps: one unbroken stroke of up to 5000 points, pointer moves over a canvas holding 0, 50
