@@ -328,10 +328,17 @@ struct Stroke {
             return 0
         }
 
-        return (1..<points.count).reduce(CGFloat(0)) { total, index in
-            total + hypot(points[index].x - points[index - 1].x,
-                          points[index].y - points[index - 1].y)
+        // Written out rather than reduced: the one-expression version made the type checker
+        // give up on the x86_64 slice of the universal build, which swift build alone does
+        // not compile and so does not catch.
+        var total: CGFloat = 0
+        for index in 1..<points.count {
+            let dx = points[index].x - points[index - 1].x
+            let dy = points[index].y - points[index - 1].y
+            total += hypot(dx, dy)
         }
+
+        return total
     }
 
     // Where a segment enters and leaves a circle, as fractions along it, or nil if it never

@@ -170,7 +170,7 @@ CGWarpMouseCursorPosition(CGPoint(x: start.x, y: bounds.maxY - start.y))
 RunLoop.current.run(until: Date().addingTimeInterval(0.3))
 
 var picked = -1
-wheelPanel.open(OverlayController.toolWheel) { picked = $0 }
+wheelPanel.open(OverlayController.toolWheel) { picked = $0 ?? -1 }
 
 // Held open with the pointer still, which is what it is doing while someone decides.
 let restingBefore = cpuSeconds()
