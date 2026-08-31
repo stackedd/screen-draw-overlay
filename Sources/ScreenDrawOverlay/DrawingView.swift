@@ -188,12 +188,12 @@ final class DrawingView: NSView {
             return
         }
 
-        // Put it where the pointer already is, so selecting the laser lights up under the
-        // hand rather than waiting for the next move.
+        // Shown first, then placed: moveLaser does nothing while the layer is hidden, so
+        // the other order lit it up wherever it had been left rather than under the hand.
+        laserLayer.isHidden = false
         if let window {
             moveLaser(to: convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil))
         }
-        laserLayer.isHidden = false
     }
 
     private func moveLaser(to point: NSPoint) {

@@ -151,6 +151,17 @@
         let laserLit = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot())
             .first.map { !$0.laserLayer.isHidden } ?? false
         check("space lights the laser on the overlay", laserLit ? "yes" : "no", "yes")
+
+        // And it lights up under the hand, not wherever it was last left. It showed the
+        // layer before placing it once, and moving a hidden layer does nothing.
+        let underHand = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot())
+            .first.map { view -> Bool in
+                guard let window = view.window else { return false }
+                let pointer = view.convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
+                return hypot(view.laserLayer.position.x - pointer.x,
+                             view.laserLayer.position.y - pointer.y) < 1
+            } ?? false
+        check("the laser lights up under the pointer", underHand ? "yes" : "no", "yes")
         controller.toggleInteractionMode()
         let laserInClickThrough = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot())
             .first.map { !$0.laserLayer.isHidden } ?? true
