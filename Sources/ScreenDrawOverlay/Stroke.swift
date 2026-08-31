@@ -270,6 +270,53 @@ struct Stroke {
                       style: style, createdAt: createdAt, isShape: isShape)
     }
 
+    // The stroke as polylines - what anything that walks it rather than paints it needs.
+    //
+    // A freehand stroke is already one. A shape is a path, and its `points` are only the two
+    // corners the drag was defined by: measuring to those means measuring to a rectangle's
+    // diagonal instead of its outline, which is why the eraser sometimes did nothing over a
+    // shape and sometimes took the whole thing. Flattened, a shape erases like everything
+    // else - and what is left of it is no longer a shape, which is correct: you rubbed a
+    // piece out of it.
+    func outline() -> [[NSPoint]] {
+        guard isShape else {
+            return [points]
+        }
+
+        var runs: [[NSPoint]] = []
+        var run: [NSPoint] = []
+        let flat = path.flattened
+        var corners = [NSPoint](repeating: .zero, count: 3)
+
+        for index in 0..<flat.elementCount {
+            switch flat.element(at: index, associatedPoints: &corners) {
+            case .moveTo:
+                if run.count > 1 {
+                    runs.append(run)
+                }
+                run = [corners[0]]
+            case .lineTo:
+                run.append(corners[0])
+            case .closePath:
+                if let first = run.first {
+                    run.append(first)
+                }
+                if run.count > 1 {
+                    runs.append(run)
+                }
+                run = []
+            default:
+                break
+            }
+        }
+
+        if run.count > 1 {
+            runs.append(run)
+        }
+
+        return runs
+    }
+
     // The lengths of this stroke that survive the eraser passing over a point. A freehand
     // stroke is a polyline, so this is a circle against each segment in turn: a segment
     // keeps whatever of itself lies outside the circle, and consecutive survivors join back
@@ -278,7 +325,8 @@ struct Stroke {
     // Testing the segment rather than its endpoints matters. Mouse moves are dense while
     // drawing slowly and sparse while drawing fast, and an eraser that only looked at
     // endpoints would pass straight through a fast line without touching it.
-    func surviving(_ centre: NSPoint, radius: CGFloat) -> [[NSPoint]] {
+    static func surviving(_ points: [NSPoint], centre: NSPoint, radius: CGFloat,
+                          shorterThan crumb: CGFloat) -> [[NSPoint]] {
         guard points.count > 1 else {
             let alone = points.first.map { hypot($0.x - centre.x, $0.y - centre.y) > radius }
             return alone == true ? [points] : []
@@ -291,8 +339,8 @@ struct Stroke {
             let start = points[index - 1]
             let end = points[index]
 
-            guard let (entry, exit) = Stroke.crossing(from: start, to: end,
-                                                      centre: centre, radius: radius) else {
+            guard let (entry, exit) = crossing(from: start, to: end,
+                                               centre: centre, radius: radius) else {
                 if run.isEmpty {
                     run.append(start)
                 }
@@ -304,13 +352,18 @@ struct Stroke {
                 if run.isEmpty {
                     run.append(start)
                 }
-                run.append(Stroke.point(from: start, to: end, at: entry))
+                run.append(point(from: start, to: end, at: entry))
             }
 
             if run.count > 1 {
                 runs.append(run)
             }
-            run = exit < 1 ? [Stroke.point(from: start, to: end, at: exit)] : []
+            // The rest of *this* segment survives too, so the new run starts with both the
+            // point where the circle lets go and the segment's own end. Recording only the
+            // exit lost the segment's end point - and where the exit fell on the last
+            // segment of all, it left a one-point run, which is dropped, which is how a
+            // whole tail of a line could disappear.
+            run = exit < 1 ? [point(from: start, to: end, at: exit), end] : []
         }
 
         if run.count > 1 {
@@ -320,7 +373,11 @@ struct Stroke {
         // A survivor shorter than the pen that drew it is not a mark, it is a crumb: with a
         // round cap it renders as a dot sitting in the hole the eraser just made, which
         // reads as dirt rather than as ink the user asked to keep.
-        return runs.filter { Stroke.length(of: $0) > width }
+        return runs.filter { length(of: $0) > crumb }
+    }
+
+    static func totalLength(of runs: [[NSPoint]]) -> CGFloat {
+        runs.reduce(0) { $0 + length(of: $1) }
     }
 
     private static func length(of points: [NSPoint]) -> CGFloat {

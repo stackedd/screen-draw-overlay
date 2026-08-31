@@ -327,8 +327,24 @@ sparse while drawing fast, and an endpoint test would let a fast line straight t
 Survivors shorter than the pen that drew them are dropped: with a round cap they render as a
 dot sitting in the hole, which reads as dirt.
 
-Shapes are still taken whole. A rectangle's outline is not its polyline, so there is nothing
-there to cut in half.
+**Shapes are cut too**, and getting there took a second pass. A shape's `points` are only the
+two corners its drag was defined by, so measuring the eraser against them measured against a
+rectangle's *diagonal* rather than its outline: over most of a shape the eraser did nothing,
+and where it did reach it took the whole thing. That is the "sometimes it erases, sometimes it
+does nothing, sometimes it destroys it" that was reported. Shapes are flattened into polylines
+now and cut like anything else. What is left is no longer a shape, which is right - a piece
+was rubbed out of it.
+
+**And it rubs along the way, not just where the events land.** A mouse move can jump a hundred
+points when the hand is quick, and cutting a circle only at each sample skipped whatever lay
+between two of them. Overlapping circles along the segment cover it, which reuses the one
+piece of geometry that is already tested instead of inventing a capsule.
+
+**One bug worth naming**, because it hid inside a correct-looking algorithm: when a segment
+*left* the circle, only the exit point was recorded, not the segment's own end. On a middle
+segment that dropped a point; on the last segment of a stroke it left a one-point run, and a
+one-point run is discarded - so the entire tail of a line past the hole vanished. It looked
+exactly like an eraser that sometimes deletes too much.
 
 **One drag is one undo.** Each mouse move that touches ink would otherwise be its own edit,
 and taking back an eraser drag would mean pressing undo a hundred times to get a line back.

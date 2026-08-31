@@ -89,6 +89,7 @@ final class Canvas {
     private var redoStack: [Edit] = []
     private var eraseOriginals: [Removal] = []
     private var erasePieces: [Stroke] = []
+    private var lastErasePoint: NSPoint?
 
     var hasTemporaryInk: Bool {
         strokes.contains { $0.createdAt != nil }
@@ -173,25 +174,50 @@ final class Canvas {
     //
     // Shapes are still taken whole. A rectangle's outline is not its polyline, so there is
     // nothing there to cut in half.
-    func beginErase() {
+    func beginErase(at point: NSPoint) {
         eraseOriginals = []
         erasePieces = []
+        lastErasePoint = point
     }
 
+    // Rubs out along the way, not just at the sample. A mouse move can jump a hundred points
+    // when the hand is quick, and an eraser that only cut a circle where each event landed
+    // skipped whatever lay between two of them - which is the "sometimes it does nothing"
+    // that was reported. Overlapping circles along the segment cover the gap, and reuse the
+    // one piece of geometry that is already tested rather than inventing a capsule.
     func erase(at point: NSPoint, radius: CGFloat) -> [NSRect] {
+        let from = lastErasePoint ?? point
+        lastErasePoint = point
+
         var dirty: [NSRect] = []
+        let swept = NSRect(x: min(from.x, point.x), y: min(from.y, point.y),
+                           width: abs(point.x - from.x), height: abs(point.y - from.y))
 
         for index in strokes.indices.reversed() {
             let stroke = strokes[index]
             let reach = radius + stroke.width / 2
-            guard stroke.repaintBounds.insetBy(dx: -reach, dy: -reach).contains(point),
-                  stroke.distance(to: point) <= reach else {
+            guard stroke.repaintBounds.insetBy(dx: -reach, dy: -reach)
+                .intersects(swept.insetBy(dx: -reach, dy: -reach)) else {
+                continue
+            }
+
+            let before = stroke.outline()
+            var survivors = before
+            for centre in Canvas.samples(from: from, to: point, every: reach / 2) {
+                survivors = survivors.flatMap {
+                    Stroke.surviving($0, centre: centre, radius: reach, shorterThan: stroke.width)
+                }
+            }
+
+            // Nothing was touched if nothing got shorter. Comparing what is left to what
+            // there was is also the hit test, so there is only one piece of geometry
+            // deciding whether the eraser reached a stroke and what it did to it.
+            guard Stroke.totalLength(of: survivors) < Stroke.totalLength(of: before) else {
                 continue
             }
 
             // A stroke this same drag already cut is not something the drag took away; the
-            // thing it took away was whatever that piece came from, and that is already
-            // recorded.
+            // thing it took away was whatever that piece came from, and that is recorded.
             if let made = erasePieces.firstIndex(where: { $0.id == stroke.id }) {
                 erasePieces.remove(at: made)
             } else {
@@ -201,16 +227,28 @@ final class Canvas {
             dirty.append(stroke.repaintBounds)
             strokes.remove(at: index)
 
-            guard !stroke.isShape else {
-                continue
-            }
-
-            let survivors = stroke.surviving(point, radius: reach).compactMap { stroke.piece(of: $0) }
-            strokes.insert(contentsOf: survivors, at: index)
-            erasePieces.append(contentsOf: survivors)
+            let pieces = survivors.compactMap { stroke.piece(of: $0) }
+            strokes.insert(contentsOf: pieces, at: index)
+            erasePieces.append(contentsOf: pieces)
+            dirty.append(contentsOf: pieces.map(\.repaintBounds))
         }
 
         return dirty
+    }
+
+    // Centres along the way from one eraser sample to the next, close enough together that
+    // their circles overlap.
+    private static func samples(from: NSPoint, to: NSPoint, every step: CGFloat) -> [NSPoint] {
+        let distance = hypot(to.x - from.x, to.y - from.y)
+        guard distance > step, step > 0 else {
+            return [to]
+        }
+
+        let count = Int((distance / step).rounded(.up))
+        return (0...count).map { index in
+            let t = CGFloat(index) / CGFloat(count)
+            return NSPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t)
+        }
     }
 
     // The whole drag, as one thing anyone can take back.
@@ -224,6 +262,7 @@ final class Canvas {
                        pieces: erasePieces))
         eraseOriginals = []
         erasePieces = []
+        lastErasePoint = nil
 
         return true
     }

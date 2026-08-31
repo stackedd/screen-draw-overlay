@@ -45,6 +45,34 @@
         v.mouseUp(with: ev(.leftMouseUp, x + 4))
     }
 
+    // One mouse event that jumps a long way, which is what a quick hand actually produces.
+    func rubAcross(from: NSPoint, to: NSPoint) {
+        guard let panel = controller.overlayWindowSnapshot().first else { return }
+        let v = panel.drawingView
+        func ev(_ t: NSEvent.EventType, _ p: NSPoint) -> NSEvent {
+            NSEvent.mouseEvent(with: t, location: p, modifierFlags: [], timestamp: 0,
+                               windowNumber: panel.windowNumber, context: nil, eventNumber: 0,
+                               clickCount: 1, pressure: 1)!
+        }
+        v.mouseDown(with: ev(.leftMouseDown, from))
+        v.mouseDragged(with: ev(.leftMouseDragged, to))
+        v.mouseUp(with: ev(.leftMouseUp, to))
+    }
+
+    func drag(_ tool: Int, _ chars: String, from: NSPoint, to: NSPoint) {
+        press(tool, chars)
+        guard let panel = controller.overlayWindowSnapshot().first else { return }
+        let v = panel.drawingView
+        func ev(_ t: NSEvent.EventType, _ p: NSPoint) -> NSEvent {
+            NSEvent.mouseEvent(with: t, location: p, modifierFlags: [], timestamp: 0,
+                               windowNumber: panel.windowNumber, context: nil, eventNumber: 0,
+                               clickCount: 1, pressure: 1)!
+        }
+        v.mouseDown(with: ev(.leftMouseDown, from))
+        v.mouseDragged(with: ev(.leftMouseDragged, to))
+        v.mouseUp(with: ev(.leftMouseUp, to))
+    }
+
     var live: Int { controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot()).first?.capturedStrokes().count ?? -1 }
     var state: String { !controller.isDrawingMode ? "OFF" : (controller.isInteractionMode ? "CLICK-THROUGH" : "DRAWING") }
 
@@ -143,6 +171,20 @@
               toolPushing(120, 0) + "/" + toolPushing(-120, 0), "PEN/ERASER")
         check("wheel: the dead zone picks nothing", toolPushing(6, -4), "none")
 
+        // Shapes are erased like everything else. Their `points` are only the two corners
+        // the drag was defined by, so measuring to those measured to a rectangle's diagonal
+        // rather than its outline: the eraser did nothing over most of a shape and took the
+        // whole thing where it did reach. Flattened, a shape cuts like a line, and what is
+        // left is no longer a shape - which is right, a piece was rubbed out of it.
+        press(kVK_ANSI_C, "c")
+        drag(kVK_ANSI_R, "r", from: NSPoint(x: 240, y: 620), to: NSPoint(x: 460, y: 760))
+        check("a rectangle is one stroke", "\(live)", "1")
+        press(kVK_ANSI_E, "e")
+        rubAcross(from: NSPoint(x: 200, y: 690), to: NSPoint(x: 280, y: 690))
+        check("erasing a rectangle's edge leaves the rest of it", live > 0 ? "yes" : "gone", "yes")
+        press(kVK_ANSI_C, "c")
+        press(kVK_ANSI_P, "p")
+
         // The laser is a light on the overlay, not a decoration on the cursor - a cursor is
         // only ours while we own the window under the pointer, and being there is the one
         // thing a laser has to do. It also has no business sitting on top of an app the
@@ -178,6 +220,16 @@
         press(kVK_ANSI_E, "e")
         rub(x: 290, y: 700)
         check("eraser cuts a line in two", "\(live)", "2")
+
+        // A quick hand produces one event that jumps a long way. The eraser used to cut a
+        // circle only where each event landed, so a fast stroke across a line passed either
+        // side of it and did nothing - which is the "sometimes it doesn't erase" reported.
+        press(kVK_ANSI_C, "c")
+        press(kVK_ANSI_P, "p")
+        stroke(y: 700)
+        press(kVK_ANSI_E, "e")
+        rubAcross(from: NSPoint(x: 290, y: 760), to: NSPoint(x: 290, y: 640))
+        check("a fast eraser stroke still cuts what it crossed", "\(live)", "2")
 
         // And a drag is one thing to take back, not one per mouse move.
         press(kVK_ANSI_Z, "z", .command)

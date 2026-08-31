@@ -54,7 +54,7 @@ pointer is a cursor the window server draws for us.
 
     swift build -c release        # must be warning-free
     ./build_app.sh                # also compiles x86_64 - it catches what the line above misses
-    ./Testing/run.sh              # every suite; behaviour must be 32/32
+    ./Testing/run.sh              # every suite; behaviour must be 35/35
     open dist/ScreenDrawOverlay.app
 
 `./Testing/run.sh behaviour` drives the real app and checks the mode matrix, hide/show,

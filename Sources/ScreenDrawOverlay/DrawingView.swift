@@ -56,6 +56,7 @@ final class DrawingView: NSView {
     // The laser, when it is the tool in hand. On the overlay rather than on the cursor,
     // because the one thing a laser has to do is be there whoever owns the cursor.
     private let laserLayer = LaserDot.makeLayer()
+    private var laserPoll: Timer?
 
     // Temporary ink, once it is finished: one self-fading layer each, above the ink.
     private let fadingInk = FadingInk()
@@ -120,6 +121,7 @@ final class DrawingView: NSView {
 
     deinit {
         fadeTimer?.invalidate()
+        laserPoll?.invalidate()
     }
 
     // AppKit can hand the view a new backing layer when it changes windows, and both
@@ -185,15 +187,47 @@ final class DrawingView: NSView {
         let wanted = tools.tool == .laser && !isInteractionMode
         guard wanted else {
             laserLayer.isHidden = true
+            stopLaserPoll()
             return
         }
 
         // Shown first, then placed: moveLaser does nothing while the layer is hidden, so
         // the other order lit it up wherever it had been left rather than under the hand.
         laserLayer.isHidden = false
-        if let window {
-            moveLaser(to: convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil))
+        followPointerWithLaser()
+        startLaserPoll()
+    }
+
+    // Polled, not driven by mouseMoved. Mouse-moved events only reach the key window, and
+    // these panels are non-activating, so the moment the user had clicked anything in
+    // another app the events stopped and the laser hung in the air where it was last lit -
+    // which is exactly what was reported. Polling the pointer works whoever has focus.
+    //
+    // The timer exists only while the laser is the tool in hand, so an idle overlay still
+    // costs nothing.
+    private func startLaserPoll() {
+        guard laserPoll == nil else {
+            return
         }
+
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+            self?.followPointerWithLaser()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        laserPoll = timer
+    }
+
+    private func stopLaserPoll() {
+        laserPoll?.invalidate()
+        laserPoll = nil
+    }
+
+    private func followPointerWithLaser() {
+        guard !laserLayer.isHidden, let window else {
+            return
+        }
+
+        moveLaser(to: convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil))
     }
 
     private func moveLaser(to point: NSPoint) {
@@ -238,7 +272,7 @@ final class DrawingView: NSView {
 
         guard tools.tool != .eraser else {
             // One drag is one thing to take back, however many strokes it cuts through.
-            canvas.beginErase()
+            canvas.beginErase(at: point)
             erase(at: point)
             return
         }

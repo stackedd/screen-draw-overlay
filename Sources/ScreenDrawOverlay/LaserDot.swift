@@ -7,6 +7,11 @@
 //
 // Following it costs a layer move and no repaint: measured at 1.5% of a core at sixty moves
 // a second, against 15.2% for asking the overlay to repaint instead.
+//
+// It follows by polling NSEvent.mouseLocation, not by mouseMoved. Mouse-moved events only
+// reach the key window, and these panels are non-activating - so the moment the user had
+// clicked anything in another app the events stopped and the laser hung in the air where it
+// was last lit. The wheel already had to solve this; the answer is the same one.
 
 import AppKit
 import QuartzCore

@@ -34,7 +34,13 @@ happen in no process this probe can see, and they are most of the bill - see
 
 ## Looking at it
 
-`probes/wheel.swift` renders the wheels to a PNG. It is not a pass or a fail, so it is not in
+`probes/eraser.swift` and `probes/wheel.swift` render to a PNG.
+
+The eraser one exists because counting strokes proves it cut something and cannot show that
+the hole is the size of the eraser, that a shape comes apart the way a line does, or that no
+crumbs are left in the gap. All three have been wrong at least once.
+
+`probes/wheel.swift` renders the wheels. It is not a pass or a fail, so it is not in
 `run.sh`; it exists because the suites cannot catch what goes wrong with a picture - blurry
 text, a swatch the same colour as the plate under it, a label too long for the hub it has to
 fit inside. The badge taught that twice.
