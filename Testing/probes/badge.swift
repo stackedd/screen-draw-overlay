@@ -36,7 +36,7 @@ one = made { _, badge in badge.isInteractionMode = true }
 samples.append(("click-through", one.0, one.1))
 one = made { tools, badge in
     tools.select(tool: .eraser)
-    badge.notice = "THE ERASER HAS NO COLOUR"
+    badge.notice = "The eraser has no colour"
 }
 samples.append(("saying something", one.0, one.1))
 

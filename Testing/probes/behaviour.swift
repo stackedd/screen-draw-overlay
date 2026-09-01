@@ -377,7 +377,7 @@
         check("and the eraser is still in hand", controller.tools.tool.label, "ERASER")
         if let badge = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot())
             .first?.badge {
-            check("the badge says why", badge.notice ?? "nothing", "THE ERASER HAS NO COLOUR")
+            check("the badge says why", badge.notice ?? "nothing", "The eraser has no colour")
         }
         controller.tools.select(tool: .pen)
 

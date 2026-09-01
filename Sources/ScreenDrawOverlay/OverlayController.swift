@@ -27,16 +27,11 @@ final class OverlayController {
     private static let toolOrder: [DrawingTool] = [.pen, .highlighter, .line, .arrow,
                                                    .eraser, .rectangle, .ellipse, .laser]
 
-    private static let toolWheel = Wheel(items: [
-        Wheel.Item(label: "PEN", symbol: "pencil.tip"),
-        Wheel.Item(label: "MARKER", symbol: "highlighter"),
-        Wheel.Item(label: "LINE", symbol: "line.diagonal"),
-        Wheel.Item(label: "ARROW", symbol: "arrow.up.right"),
-        Wheel.Item(label: "ERASER", symbol: "eraser"),
-        Wheel.Item(label: "RECT", symbol: "rectangle"),
-        Wheel.Item(label: "OVAL", symbol: "circle"),
-        Wheel.Item(label: "LASER", symbol: "dot.circle.and.hand.point.up.left.fill")
-    ], centreLabel: "CLICK-THROUGH")
+    // Built from the order above rather than written out beside it: the two lists had to
+    // agree, sector for sector, and nothing was checking that they did.
+    private static let toolWheel = Wheel(
+        items: toolOrder.map { Wheel.Item(label: $0.label, symbol: $0.symbolName) },
+        centreLabel: "CLICK-THROUGH")
 
     private static let colourWheel = Wheel(items: zip(
         ["RED", "ORANGE", "YELLOW", "GREEN", "BLUE", "WHITE"], ToolSettings.colors
@@ -193,7 +188,7 @@ final class OverlayController {
     // instead - it is the only place on screen this app can say anything.
     private func openColourWheel() {
         guard tools.tool != .eraser else {
-            drawingViews.forEach { $0.flash("THE ERASER HAS NO COLOUR") }
+            drawingViews.forEach { $0.flash("The eraser has no colour") }
             return
         }
 

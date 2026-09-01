@@ -136,16 +136,39 @@ enum DrawingTool: Hashable {
         return path
     }
 
-    var label: String {
+    // What the tool is called, written the way macOS writes things. The wheel shouts it -
+    // eight of them read at a glance, across a room, in the second a wheel is up - and the
+    // badge does not, because a permanent sign in the corner of somebody's screen that shouts
+    // is the thing that makes an app look like it came from somewhere else.
+    var name: String {
         switch self {
-        case .pen: return "PEN"
-        case .highlighter: return "MARKER"
-        case .line: return "LINE"
-        case .arrow: return "ARROW"
-        case .rectangle: return "RECT"
-        case .ellipse: return "OVAL"
-        case .eraser: return "ERASER"
-        case .laser: return "LASER"
+        case .pen: return "Pen"
+        case .highlighter: return "Marker"
+        case .line: return "Line"
+        case .arrow: return "Arrow"
+        case .rectangle: return "Rect"
+        case .ellipse: return "Oval"
+        case .eraser: return "Eraser"
+        case .laser: return "Laser"
+        }
+    }
+
+    var label: String {
+        name.uppercased()
+    }
+
+    // The picture of the tool, in one place: the wheel puts it in a sector and the badge puts
+    // it in the corner, and neither of them should be holding its own list of symbol names.
+    var symbolName: String {
+        switch self {
+        case .pen: return "pencil.tip"
+        case .highlighter: return "highlighter"
+        case .line: return "line.diagonal"
+        case .arrow: return "arrow.up.right"
+        case .rectangle: return "rectangle"
+        case .ellipse: return "circle"
+        case .eraser: return "eraser"
+        case .laser: return "dot.circle.and.hand.point.up.left.fill"
         }
     }
 }

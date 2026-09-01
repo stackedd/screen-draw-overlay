@@ -237,34 +237,10 @@ struct Wheel {
         label.draw(at: NSPoint(x: seat.x - labelSize.width / 2, y: seat.y - labelSize.height / 2))
     }
 
-    // A template image does not take the current fill colour when it is drawn - it takes
-    // the appearance of wherever it lands, which on a dark wedge in a bitmap is black. The
-    // colour has to be painted onto a copy of it, inside that copy's own context, where
-    // sourceAtop can only touch the glyph.
-    //
-    // Cached, because there are only ever sixteen of these - eight symbols, lit and unlit -
-    // and building them on every repaint was most of what a wheel cost to follow.
-    private static var glyphs: [String: NSImage] = [:]
-
+    // Painted, not drawn plain: a template image takes the appearance of wherever it lands
+    // rather than the current fill colour, which inside a bitmap is black on black. Glyph
+    // keeps the one copy of that, and the cache with it.
     private func tinted(_ symbol: String, described: String, with colour: NSColor) -> NSImage? {
-        let key = symbol + "|" + String(describing: colour)
-        if let cached = Wheel.glyphs[key] {
-            return cached
-        }
-
-        guard let image = NSImage(systemSymbolName: symbol, accessibilityDescription: described)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 21, weight: .medium)) else {
-            return nil
-        }
-
-        let made = NSImage(size: image.size, flipped: false) { rect in
-            image.draw(in: rect)
-            colour.set()
-            rect.fill(using: .sourceAtop)
-            return true
-        }
-        Wheel.glyphs[key] = made
-
-        return made
+        Glyph.symbol(symbol, pointSize: 21, colour: colour)
     }
 }

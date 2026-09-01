@@ -29,20 +29,25 @@ final class ModeBadge {
     private static let drawingHint = "⌥Z wheel · middle hands it back · ⌃⌥⌘Z undo"
     private static let interactionHint = "⌥Z wheel · pick a tool to draw · ⌃⌥⌘Esc quit"
 
-    private static let paddingX: CGFloat = 11
-    private static let paddingY: CGFloat = 8
-    private static let lineGap: CGFloat = 3
-    private static let margin: CGFloat = 16
-    private static let cornerRadius: CGFloat = 8
 
-    // The colour swatch, in its own column to the left of both lines. Drawn rather than
-    // typed: a coloured "●" glyph is at the mercy of the font and came out looking like a
-    // typo at this size.
-    private static let swatchDiameter: CGFloat = 10
-    private static let swatchGap: CGFloat = 8
+    // Sized for a screen rather than for a screenshot. These were set while the badge was
+    // being drawn at half scale by a bug two files away (docs/DECISIONS.md 28), so every one
+    // of them had been nudged up to compensate for something that was not the type's fault.
+    // At the size it is actually shown, 13 over 10 with 11x8 padding is a placard.
+    private static let paddingX: CGFloat = 12
+    private static let paddingY: CGFloat = 7
+    private static let lineGap: CGFloat = 2
+    private static let margin: CGFloat = 16
+    private static let cornerRadius: CGFloat = 10
+
+    // The tool, drawn in the colour it will draw with, in its own column to the left of both
+    // lines: one mark that says which tool and which colour, instead of a swatch that says
+    // half of it. The eraser and click-through have no colour, so theirs is plain.
+    private static let glyphColumn: CGFloat = 15
+    private static let glyphGap: CGFloat = 8
 
     // The mode stripe down the left edge.
-    private static let stripeWidth: CGFloat = 4
+    private static let stripeWidth: CGFloat = 3
 
     private let tools: ToolSettings
 
@@ -97,7 +102,7 @@ final class ModeBadge {
     func render(scale: CGFloat) -> (image: CGImage?, frame: NSRect) {
         let (mode, hint) = lines()
         let textWidth = max(mode.size().width, hint.size().width)
-        let column = ModeBadge.swatchDiameter + ModeBadge.swatchGap
+        let column = ModeBadge.glyphColumn + ModeBadge.glyphGap
         let width = ModeBadge.snappedUp(ModeBadge.paddingX * 2 + column + textWidth, scale: scale)
         let height = ModeBadge.snappedUp(mode.size().height + hint.size().height
                                              + ModeBadge.lineGap + ModeBadge.paddingY * 2,
@@ -133,37 +138,39 @@ final class ModeBadge {
             }
 
             // Bottom line first: the context is not flipped, so the mode sits above the hint.
-            let textX = ModeBadge.paddingX + ModeBadge.swatchDiameter + ModeBadge.swatchGap
+            let textX = ModeBadge.paddingX + ModeBadge.glyphColumn + ModeBadge.glyphGap
             hint.draw(at: NSPoint(x: textX, y: ModeBadge.paddingY))
             let modeY = ModeBadge.paddingY + hint.size().height + ModeBadge.lineGap
             mode.draw(at: NSPoint(x: textX, y: modeY))
 
-            drawSwatch(centredOn: modeY + mode.size().height / 2)
+            drawTool(centredOn: (height - ModeBadge.glyphColumn) / 2)
         }
 
         return (image, frame)
     }
 
-    // Filled in the pen's colour while drawing; hollow while clicks are passing through,
-    // because in that mode there is no colour in hand.
-    private func drawSwatch(centredOn y: CGFloat) {
-        let diameter = ModeBadge.swatchDiameter
-        let circle = NSBezierPath(ovalIn: NSRect(x: ModeBadge.paddingX, y: y - diameter / 2,
-                                                 width: diameter, height: diameter))
-        guard !isInteractionMode else {
-            circle.lineWidth = 1.5
-            NSColor.white.withAlphaComponent(0.75).setStroke()
-            circle.stroke()
+    // The tool in hand, in the colour it draws with. It is the only place on screen either of
+    // those appears, so it has to carry both: a swatch alone said the colour and left the tool
+    // to the words beside it, and in click-through there is no tool in hand at all, which is
+    // what the pointer glyph says.
+    private func drawTool(centredOn y: CGFloat) {
+        let box = NSRect(x: ModeBadge.paddingX, y: y,
+                         width: ModeBadge.glyphColumn, height: ModeBadge.glyphColumn)
+        let colour = isInteractionMode
+            ? NSColor.white.withAlphaComponent(0.7)
+            : (tools.tool == .eraser ? NSColor.white.withAlphaComponent(0.9) : tools.color)
+        let name = isInteractionMode ? "cursorarrow" : tools.tool.symbolName
+
+        guard let glyph = Glyph.symbol(name, pointSize: 13, weight: .semibold, colour: colour) else {
+            // No symbol on this system: a disc of the colour still says which pen is in hand.
+            colour.setFill()
+            NSBezierPath(ovalIn: box.insetBy(dx: 3, dy: 3)).fill()
             return
         }
 
-        tools.color.setFill()
-        circle.fill()
-        // A firm white ring, not a hint of one: the plate is red and so is the first pen,
-        // and a swatch that vanishes into the plate is worse than no swatch.
-        circle.lineWidth = 2
-        NSColor.white.withAlphaComponent(0.95).setStroke()
-        circle.stroke()
+        glyph.draw(in: NSRect(x: box.midX - glyph.size.width / 2,
+                              y: box.midY - glyph.size.height / 2,
+                              width: glyph.size.width, height: glyph.size.height))
     }
 
     // Whole device pixels, in points. A badge that is 87.34pt wide on a 2x display asks the
@@ -180,15 +187,15 @@ final class ModeBadge {
     // through, with the red stripe gone: nothing is being captured.
     private var text: String {
         guard !isInteractionMode else {
-            return "CLICK-THROUGH"
+            return "Click-through"
         }
 
         if tools.tool == .eraser || tools.tool == .laser {
-            return tools.tool.label
+            return tools.tool.name
         }
 
-        let temporary = tools.drawsTemporaryInk ? "TEMP " : ""
-        return "\(temporary)\(tools.tool.label) \(Int(tools.renderWidth))"
+        let temporary = tools.drawsTemporaryInk ? "Temp " : ""
+        return "\(temporary)\(tools.tool.name) \(Int(tools.renderWidth))"
     }
 
     private var backgroundColor: NSColor {
@@ -199,17 +206,16 @@ final class ModeBadge {
 
     private func lines() -> (mode: NSAttributedString, hint: NSAttributedString) {
         let mode = NSAttributedString(string: text, attributes: [
-            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
-            .foregroundColor: NSColor.white,
-            .kern: 0.3
+            .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+            .foregroundColor: NSColor.white
         ])
 
         let hint = NSAttributedString(string: notice ?? (isInteractionMode ? ModeBadge.interactionHint
                                                                             : ModeBadge.drawingHint),
                                       attributes: [
-            .font: NSFont.systemFont(ofSize: 10, weight: notice == nil ? .medium : .semibold),
+            .font: NSFont.systemFont(ofSize: 10, weight: notice == nil ? .regular : .semibold),
             .foregroundColor: notice == nil
-                ? NSColor.white.withAlphaComponent(0.78)
+                ? NSColor.white.withAlphaComponent(0.72)
                 : NSColor.systemYellow
         ])
 

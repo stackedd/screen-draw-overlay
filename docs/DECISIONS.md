@@ -534,6 +534,25 @@ says clicks are being captured. Click-through drops the stripe, because nothing 
 Both were found by rendering the badge offscreen to a PNG and looking at it, which is worth
 doing again before changing it — the suites will not catch blurry.
 
+**And then it was set the wrong size for two months.** Everything above was decided while the
+badge was being painted at half scale by the bug in entry 28, including the type: 11 over 9 was
+raised to 13 over 10 because it "looked like a debug overlay" in a picture where it was being
+shown at half the size it is on screen. Once the scale was fixed, the placard that came back
+was the compensation, not the design. It is 12 over 10 with 12x7 padding and a 10pt corner
+now — 46pt tall down to 40 — and it is the picture in `probes/badge.swift` that says whether
+that is right, at the scale it is actually shown at.
+
+**The swatch became the tool.** A coloured disc said which colour and left the tool to the
+words next to it. The same column now carries the tool's own SF Symbol, painted in the colour
+it draws with: one mark, both facts, and it matches the wheel sector the tool was picked from
+because both take the symbol from `DrawingTool` rather than keeping a list of their own.
+
+**And it stopped shouting.** `PEN 4` became `Pen 4`, `CLICK-THROUGH` became `Click-through`,
+and the notice is a sentence. The wheel still shouts, deliberately — eight labels read at a
+glance across a room, in the second a wheel is up — but a sign that sits in the corner of
+somebody's screen all day in capitals is one of the things that makes an app look like it
+came from somewhere else.
+
 ## 23. Undo works from anywhere, names strokes, and survives a hide
 
 Three faults, reported as one. All of them made undo do nothing, or the wrong thing, in a

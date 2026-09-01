@@ -30,6 +30,7 @@ CoreGraphics, ServiceManagement (open at login). Universal binary, macOS 11+.
       DrawingView.swift       the view: events in, three layers out
       InkPainter.swift        the ink layer's delegate
       Picture.swift           one way to paint a picture for a layer, at the right scale
+      Glyph.swift             an SF Symbol in a colour, cached
       FadingInk.swift         temporary ink, on its way out, one layer each
       LaserDot.swift          the laser's glow, following the pointer
       Canvas.swift            the drawing: strokes, eraser, undo/redo, fading
