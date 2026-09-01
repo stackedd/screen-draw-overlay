@@ -127,9 +127,27 @@ easy to repeat.
 
 ## Current focus
 
-The app is feature-complete for v0.2 and stable. What is open is **performance**, and it has
-now been measured rather than guessed (`docs/ARCHITECTURE.md`, "Where the drawing bill
-actually goes"). Three numbers govern everything:
+The app is feature-complete for v0.2. The last round was **the three faults a user could see
+and no test could**, and the pattern in all three is worth keeping in mind: every one of them
+lived between this app and the window server, where the app's own state was correct the whole
+time.
+
+- **Pictures were painted at 1x into Retina bitmaps** — the badge at half size, the laser's
+  glow 19pt off the pointer, temporary ink jumping when the mouse came up. One line, in three
+  copies. `Picture.drawn(size:scale:)` is the only place that makes a bitmap now, and the
+  behaviour suite checks coverage at 1x, 2x and 3x.
+- **The cursor.** A panel that appears under a stationary pointer is handed the plain arrow by
+  the window server ~25ms later, and nothing asks the app again until the mouse moves.
+  `takeCursorBack()` re-sets it for a third of a second. Found by sampling
+  `NSCursor.currentSystem` at 4ms (`Testing/probes/cursorflash.swift`), which is the only way
+  to see it: `NSCursor.current` was right throughout.
+- **The laser.** Lit from the pointer's position on every tick rather than by enter/exit
+  events, moved by the events that already have a point rather than only by the poll, and its
+  trail cut into pieces so it fades behind the hand instead of going out in one block when the
+  button comes up. Temporary ink's clock now starts when a mark is finished.
+
+**Performance** is measured rather than guessed (`docs/ARCHITECTURE.md`, "Where the drawing
+bill actually goes"). Three numbers govern everything:
 
 - Asking this overlay to repaint 60 times a second through `NSView` costs **15.7% CPU**,
   whatever the dirty rect's size. The bill is the number of repaints.
@@ -142,7 +160,7 @@ actually goes"). Three numbers govern everything:
 - Actually painting a drag costs **0.3–0.5%**. Optimising the painting is bidding for half a
   point out of twenty-three.
 
-That route has now been walked, and one step of it had to be walked back. Ink and badge are
+That route has been walked, and one step of it had to be walked back. Ink and badge are
 layers; the pointer turned out to belong to the window server instead; and the fade, which is
 the one thing whose dirty rect is *not* small, had to come off the repaint path altogether.
 Measured end to end on a real panel — moving the pointer over 200 strokes went from **22.9%

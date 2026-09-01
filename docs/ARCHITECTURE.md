@@ -175,7 +175,17 @@ each moved onto a `CALayer`; nothing about what is painted changed.
 | 50 temporary strokes fading | — | 3.8% | **0.7%** |
 
 Both columns are single runs of the same probe on the same machine; run to run these move by
-a point or two, which is smaller than anything the table is being used to claim.
+a point or two, which is smaller than anything the table is being used to claim. Re-run after
+the picture, laser and cursor work (2026-09-01) it lands on the same numbers: 0.4% idle, 0.7%
+and 0.8% moving the pointer over 0 and 200 strokes, 3.8% and 5.5% drawing, 0.2–0.8% fading.
+
+Two more from the same probe, which the table above never covered:
+
+- **The laser following the pointer costs 0.0%** — a layer move and no repaint, as designed.
+- **A wheel that is open and being swept costs 10.1%**, 9.4% of it the wheel itself: it
+  repaints its own 312pt view every time the highlight crosses into another sector. That is
+  the price of a key held for well under a second, and it is the one thing in this app that is
+  allowed to be expensive, because nothing else is happening while it is up.
 
 The first row is the invariant holding: an overlay that is up and not being used costs
 nothing either way. The second and third are the ones worth staring at — **moving the mouse
