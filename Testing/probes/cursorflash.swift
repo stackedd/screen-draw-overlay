@@ -86,6 +86,13 @@ func watch(_ what: String, seconds: Double, script: [(Double, () -> Void)]) {
     for entry in (seen + notes).sorted(by: { $0.0 < $1.0 }) {
         print(String(format: "      %6.0f ms  %@", entry.0 * 1000, entry.1))
     }
+
+    // The verdict, which is the line worth reading: what the screen ended up showing, against
+    // the cursor the tool in hand is supposed to have.
+    let ours = name(PointerCursor.cursor(for: controller.tools))
+    let shown = name(NSCursor.currentSystem)
+    print("      => the screen shows \(shown), the tool wants \(ours)"
+          + (shown == ours ? "" : "   <-- WRONG"))
 }
 
 warp(to: middle)
@@ -98,9 +105,7 @@ watch("first tool: the overlay is not open yet", seconds: 1.4, script: [
     (0.10, { fireHotKey(id: 6) }),
     (0.30, { warp(to: NSPoint(x: middle.x + 120, y: middle.y)) }),
     (0.60, { fireHotKey(id: 6, release: true) }),
-    (0.80, { warp(to: NSPoint(x: middle.x + 122, y: middle.y + 2)) }),
-    // Does a plain re-set, one runloop turn later, take the cursor back?
-    (1.00, { controller.drawingViews.forEach { $0.applyDrawingCursor() } })
+    (0.80, { warp(to: NSPoint(x: middle.x + 122, y: middle.y + 2)) })
 ])
 
 // And again with the overlay already up: push down-right, which is the marker.

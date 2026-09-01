@@ -56,6 +56,19 @@ fit inside. The badge taught that twice.
       && swift build --package-path .build/testing/wheel -c release \
       && OUT=/tmp/wheel.png .build/testing/wheel/.build/release/WHEEL
 
+`probes/cursorflash.swift` is the one that settled "the pointer turns into the system arrow
+for a moment when I pick a tool". It drives the real wheel gesture through the real hot keys
+and samples `NSCursor.currentSystem` - what the window server is showing - every four
+milliseconds, printing every moment it changed. That distinction is the whole point of it:
+`NSCursor.current` is this app's own idea of the cursor and it was right the entire time the
+screen was showing an arrow.
+
+    python3 Testing/make_probe.py cursorflash FLASH \
+      && swift build --package-path .build/testing/cursorflash -c release \
+      && .build/testing/cursorflash/.build/release/FLASH
+
+It warps the pointer around the middle of the main screen and puts it back.
+
 `probes/diagnose.swift` is the other kind of by-hand tool: it puts a real overlay up and asks
 it what state it is actually in - is the laser layer attached, does it have a picture in it,
 does the app's own cursor match the tool's, does the wheel hand the cursor back. It was

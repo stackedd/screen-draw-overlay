@@ -160,6 +160,24 @@ second**: measured, setting it on every move costs 2.3% of a
 core, more than everything else a mouse move does put together, and eight times a second costs
 a tenth of that and heals inside 150ms.
 
+**And the arrow that was left was the window server's, not ours.** The report was "picking a
+tool shows the system arrow for a moment first", and every offscreen test disagreed, because
+`NSCursor.current` — this app's own idea of the cursor — was right the whole time.
+`Testing/probes/cursorflash.swift` samples `NSCursor.currentSystem`, which is what is actually
+on the screen, every four milliseconds through the whole gesture, and the answer was plain:
+
+- **A panel that appears under a stationary pointer is handed the plain arrow**, by the window
+  server, about 25ms after it appears — whatever the app set before that. Nothing asks the app
+  again until the mouse next moves, so picking the *first* tool, the pick that creates the
+  panels, left the system arrow on the screen for as long as the user held still.
+- **Closing the wheel over an overlay that already exists does not do it.** Only a window
+  arriving does, which is why the second tool picked in a session looked fine.
+
+So `takeCursorBack()` keeps asking: every 120th of a second for a third of a second after a
+panel appears, then it stops. Measured: no arrow at all in a 4ms sampler, against 24ms of it
+at 30Hz and "until the mouse moves" before. Forty-two cursor sets is a millisecond and a half
+of CPU, once; the bound is what keeps an idle overlay at nothing.
+
 **A crash to not repeat:** the first version called `window.invalidateCursorRects(for:)` from
 inside `cursorUpdate`. That re-enters AppKit's tracking machinery and throws — `SIGABRT` the
 moment the pointer moved over the panel. Rebuilding cursor rects lives in its own method that
