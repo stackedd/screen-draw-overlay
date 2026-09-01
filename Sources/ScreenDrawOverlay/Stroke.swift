@@ -24,7 +24,11 @@ enum DrawingTool: Hashable {
     case laser
 
     var style: StrokeStyle {
-        self == .highlighter ? .highlighter : .pen
+        switch self {
+        case .highlighter: return .highlighter
+        case .laser: return .beam
+        default: return .pen
+        }
     }
 
     var isShape: Bool {
@@ -173,11 +177,20 @@ enum DrawingTool: Hashable {
     }
 }
 
-// What a stroke is drawn with. Highlighter is the same geometry with a wider, softer,
-// see-through pass, which is what makes it read as a marker over content.
+// What a stroke is drawn with, and how it is painted.
+//
+// The geometry is the same for all three - a path and a width - and the difference is the
+// passes. A pen is one line. A highlighter is the same line four times wider, softer and
+// see-through, which is what makes it read as a marker over content. A beam is light: a halo
+// that falls away, the colour inside it, and a white core down the middle, which is what the
+// laser's dot already looked like and its trail did not.
+//
+// The laser used to draw an ordinary pen line that happened to disappear. That is not a laser,
+// it is a pen with a short memory - which is exactly how it was described.
 enum StrokeStyle {
     case pen
     case highlighter
+    case beam
 
     var widthMultiplier: CGFloat {
         self == .highlighter ? 4 : 1
@@ -191,8 +204,48 @@ enum StrokeStyle {
         self == .highlighter ? .square : .round
     }
 
+    // How far the paint reaches past the path, as a multiple of the width. A beam's halo is
+    // wider than its line, so the rectangle to repaint has to be wider too - and the picture a
+    // fading beam is painted into has to have room for it, or the glow is clipped square.
+    var reach: CGFloat {
+        self == .beam ? 1.4 : 1
+    }
+
     var label: String {
-        self == .highlighter ? "MARKER" : "PEN"
+        switch self {
+        case .pen: return "PEN"
+        case .highlighter: return "MARKER"
+        case .beam: return "BEAM"
+        }
+    }
+
+    // Light, in three passes: a halo that falls away, the colour inside it, and a white core
+    // down the middle. Static, and not private, because the size wheel paints one too - a
+    // sector that says what the laser will look like beats a bar that stands for it.
+    static func paintBeam(_ path: NSBezierPath, width: CGFloat, colour: NSColor) {
+        let halo = path.copy() as! NSBezierPath
+        // The glow around the line, not a multiple of it: at 2.6x the widest setting was a
+        // 55pt capsule of light with a beam somewhere inside it. A fixed-ish spill keeps a
+        // thin beam glowing and a thick one from turning into a cloud.
+        halo.lineWidth = width + max(6, width * 0.8)
+        halo.lineCapStyle = .round
+        halo.lineJoinStyle = .round
+        colour.withAlphaComponent(0.22).setStroke()
+        halo.stroke()
+
+        let body = path.copy() as! NSBezierPath
+        body.lineWidth = width
+        body.lineCapStyle = .round
+        body.lineJoinStyle = .round
+        colour.withAlphaComponent(0.85).setStroke()
+        body.stroke()
+
+        let core = path.copy() as! NSBezierPath
+        core.lineWidth = max(1, width * 0.34)
+        core.lineCapStyle = .round
+        core.lineJoinStyle = .round
+        NSColor.white.withAlphaComponent(0.8).setStroke()
+        core.stroke()
     }
 }
 
@@ -245,9 +298,24 @@ struct Stroke {
     }
 
     // NSBezierPath.bounds covers the path geometry only, so grow it by this stroke's own
-    // line width to include the drawn line, its caps and antialiasing.
+    // line width to include the drawn line, its caps and antialiasing - and by more than that
+    // for a beam, whose halo is wider than the line it surrounds.
     var repaintBounds: NSRect {
-        path.bounds.insetBy(dx: -width, dy: -width)
+        let reach = width * style.reach
+        return path.bounds.insetBy(dx: -reach, dy: -reach)
+    }
+
+    // The one place a stroke is put on a surface, whether that is the ink layer, a fading
+    // layer of its own, or a test's bitmap. It was two identical lines in two files, which is
+    // how a beam could be given its own look in one of them and not the other.
+    func paint() {
+        guard style == .beam else {
+            renderColor.setStroke()
+            path.stroke()
+            return
+        }
+
+        StrokeStyle.paintBeam(path, width: width, colour: color)
     }
 
     // Distance from a point to the stroke's polyline. This is why a Stroke keeps its

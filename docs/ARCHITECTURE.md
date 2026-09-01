@@ -27,7 +27,7 @@ tried and rejected on the way; [../CLAUDE.md](../CLAUDE.md) is the short operati
 | `FadingInk.swift` | Temporary ink on its way out: one self-fading layer each, reconciled against the canvas. |
 | `LaserDot.swift` | The laser's glow, and the layer that carries it after the pointer. |
 | `Canvas.swift` | The drawing itself: strokes, the eraser, undo/redo, fading. Knows nothing about windows — it returns the rectangles that changed. |
-| `Stroke.swift` | What a mark is made of, and what each tool does with two points. |
+| `Stroke.swift` | What a mark is made of, what each tool does with two points, and how each style is painted — a pen line, a marker, or a beam of light. |
 | `ToolSettings.swift` | The pen in hand: colour, width, tool. Shared across screens, remembered between launches. |
 | `ModeBadge.swift` | The badge in the corner — the app's entire on-screen interface. It hands over a picture, snapped to whole pixels; the view carries it on a layer. |
 | `PointerCursor.swift` | The cursor drawing mode hands the window server: one per tool, in the colour in hand. |
@@ -155,9 +155,11 @@ next to the numbers above:
   it only reaches the size of a single repaint after a few thousand points.
 - A fade paints **nothing at all** now, which is what the cost suite's fourth sweep exists
   to keep true.
-- **The laser's trail** costs 0.015 ms an event while it is only extending, and 0.038 ms on
-  the event that cuts a piece off and paints it into a layer of its own - which happens ten
-  times a second, so about 0.04% of a core, with sixty pieces alive.
+- **The laser's trail** costs 0.013 ms an event while it is only extending, and 0.074 ms on
+  the event that cuts a piece off and paints it into a layer of its own — three passes of the
+  path now that a beam is painted as light rather than as a line, up from 0.038 ms for the
+  single pass. It happens ten times a second, so about 0.07% of a core with sixty pieces
+  alive.
 
 Put together: of the ~23% a drag used to cost, painting was roughly half a point and the
 repaints were the rest.

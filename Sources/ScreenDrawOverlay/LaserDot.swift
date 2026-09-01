@@ -22,18 +22,33 @@ import AppKit
 import QuartzCore
 
 enum LaserDot {
-    // Big enough to spot from the back of a room, small enough not to hide what it points at.
-    static let extent: CGFloat = 54
+    // Big enough to spot from the back of a room, small enough not to hide what it points at -
+    // and it follows the width in hand, because the size wheel means something to the laser
+    // now. The middle setting is the 54pt this has always been; the ends are a fine pointer
+    // and one somebody at the back of a hall can follow. Capped, because past a certain size
+    // it stops pointing at anything.
+    static func extent(for width: CGFloat) -> CGFloat {
+        min(96, (34 + width * 3.3).rounded())
+    }
 
-    private static var glows: [Int: CGImage] = [:]
+    private struct Key: Hashable {
+        let colour: Int
+        let width: CGFloat
+        let scale: CGFloat
+    }
 
-    // The picture, cached per colour: there are six of them and they never change.
-    static func glow(_ colour: NSColor, scale: CGFloat) -> CGImage? {
-        let key = Int(scale * 10) * 1000 + (ToolSettings.colors.firstIndex(of: colour) ?? 0)
+    private static var glows: [Key: CGImage] = [:]
+
+    // The picture, cached: a handful of colours by a handful of widths, and none of them
+    // change once drawn.
+    static func glow(_ colour: NSColor, width: CGFloat, scale: CGFloat) -> CGImage? {
+        let key = Key(colour: ToolSettings.colors.firstIndex(of: colour) ?? 0,
+                      width: width, scale: scale)
         if let cached = glows[key] {
             return cached
         }
 
+        let extent = extent(for: width)
         let image = Picture.drawn(size: NSSize(width: extent, height: extent), scale: scale) {
             let centre = NSPoint(x: extent / 2, y: extent / 2)
             // A halo that falls off to nothing, then a hot core inside it - which is what a
@@ -61,9 +76,9 @@ enum LaserDot {
     }
 
     // A layer set up to follow a pointer: no implicit animation, or the light lags the hand.
+    // Its bounds are set with the picture, which changes with the width in hand.
     static func makeLayer() -> CALayer {
         let layer = CALayer()
-        layer.bounds = NSRect(x: 0, y: 0, width: extent, height: extent)
         layer.actions = ["position": NSNull(), "contents": NSNull(),
                          "hidden": NSNull(), "bounds": NSNull()]
         layer.isHidden = true

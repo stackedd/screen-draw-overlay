@@ -57,6 +57,14 @@ fit inside. The badge taught that twice.
       && swift build --package-path .build/testing/wheel -c release \
       && OUT=/tmp/wheel.png .build/testing/wheel/.build/release/WHEEL
 
+`probes/laser.swift` renders the laser: the trail as light, the pen line it used to be
+underneath it for comparison, and three of the six sizes with their glow — over a dark slide
+and a light one, because the halo is the part that stops reading on white first.
+
+    python3 Testing/make_probe.py laser LASER \
+      && swift build --package-path .build/testing/laser -c release \
+      && OUT=/tmp/laser.png .build/testing/laser/.build/release/LASER
+
 `probes/cursorflash.swift` is the one that settled "the pointer turns into the system arrow
 for a moment when I pick a tool". It drives the real wheel gesture through the real hot keys
 and samples `NSCursor.currentSystem` - what the window server is showing - every four

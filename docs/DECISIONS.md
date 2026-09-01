@@ -683,6 +683,30 @@ audience may not be able to see, is worse than one.
 It goes out in click-through, because a laser dot on top of an app the user has just been
 handed back is something in the way.
 
+**It is light, not a pen line that disappears.** That is how it was reported - "the laser
+does what the pen does, only rubbed out; it has no design of its own" - and it was exactly
+right: a beam was an ordinary stroke in the pen's colour at a fixed six points, and the only
+thing that made it a laser was that it went away. A beam is its own `StrokeStyle` now, painted
+in three passes: a halo that spills past the line and falls away, the colour inside it, and a
+white core down the middle - which is what the glow at the pointer had always looked like and
+what its trail never did. The spill is `width + max(6, width * 0.8)` rather than a multiple of
+the width, because at 2.6x the widest setting was a 55pt capsule of light with a beam
+somewhere inside it.
+
+Painting lives on `Stroke.paint()`, one place, because it used to be the same two lines in the
+view and in the fading layer - which is how a beam could have got its own look in one of them
+and not the other. `StrokeStyle.paintBeam` is public to the size wheel for the same reason:
+the sector that offers a width paints the beam it is offering.
+
+**And its size is a setting.** It was pinned at 6pt, so the size wheel offered the laser six
+sectors that did nothing - the same fault the eraser had before its size started to mean
+something (entry 27). A beam is one and a half times the width in hand, so the middle setting
+is still the 6pt it always was, and the glow at the pointer grows with it, capped at 96pt
+because past that it stops pointing at anything. `Testing/probes/laser.swift` renders the
+trail, the sizes and the glow over a dark slide and a light one; the behaviour suite checks
+that the core is white, that the halo reaches past the line, and that the size wheel moves
+both the beam and the glow.
+
 **The trail is a run of short pieces, not one stroke.** One stroke has one age and one layer,
 so a beam drawn over two seconds held at full strength for all of it and then went out in one
 go when the button came up — which is the opposite of what a laser trail does, and it is what
@@ -767,6 +791,9 @@ six colours to a tool that has no colour.
   for five of the six widths: the size control did nothing for four steps out of five, which
   is the same fault the eraser itself had before it started cutting. It is `6 + width * 2`
   now — 20 to 68 points across.
+- **The laser's sizes are beams.** The wheel paints each one the way the laser will paint it,
+  in the colour in hand, because a flat bar is not what it will put on the screen — and
+  because the laser's width was a setting that did nothing until entry 25 gave it one.
 - **The cursors are the tools.** A pen is a pen, a nib and a barrel held at forty-five degrees
   with its point on the hot spot, and it gets visibly fatter as the pen does. A marker is a
   chisel. An eraser is a ring the size of the hole. The four tools that place a corner share

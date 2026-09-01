@@ -180,8 +180,11 @@ final class DrawingView: NSView {
     // The glow is redrawn only when the colour or the display's scale changes, and shown
     // only while the laser is the tool and the overlay is taking the mouse.
     private func refreshLaser() {
+        let extent = LaserDot.extent(for: tools.renderWidth)
+        laserLayer.bounds = NSRect(x: 0, y: 0, width: extent, height: extent)
         laserLayer.contentsScale = backingScale
-        laserLayer.contents = LaserDot.glow(tools.color, scale: backingScale)
+        laserLayer.contents = LaserDot.glow(tools.color, width: tools.renderWidth,
+                                            scale: backingScale)
         showLaserIfSelected()
     }
 

@@ -145,7 +145,9 @@ time.
 - **The laser.** Lit from the pointer's position on every tick rather than by enter/exit
   events, moved by the events that already have a point rather than only by the poll, and its
   trail cut into pieces so it fades behind the hand instead of going out in one block when the
-  button comes up. Temporary ink's clock now starts when a mark is finished.
+  button comes up. Temporary ink's clock now starts when a mark is finished. It is also light
+  rather than a pen line that disappears — halo, colour, white core — and its size is a
+  setting instead of a fixed 6pt (`docs/DECISIONS.md` 25, `Testing/probes/laser.swift`).
 
 **Performance** is measured rather than guessed (`docs/ARCHITECTURE.md`, "Where the drawing
 bill actually goes"). Three numbers govern everything:

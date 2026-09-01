@@ -300,7 +300,7 @@
         // And the glow has to sit on the pointer, not down and to the left of it: the fault
         // above moved it by a quarter of its own width, which is where "the laser does not
         // point at what I am pointing at" came from.
-        if let glow = LaserDot.glow(controller.tools.color, scale: 2) {
+        if let glow = LaserDot.glow(controller.tools.color, width: 6, scale: 2) {
             let values = alpha(glow)
             let side = glow.width
             var weight = 0.0, x = 0.0, y = 0.0
@@ -366,6 +366,56 @@
 
         check("and it leaves no permanent ink", "\(live)", "\(permanentBefore)")
         press(kVK_Space, " ")
+
+        // The laser draws light, not a pen line that happens to disappear - which is what
+        // "it has no design of its own" meant. A beam is three passes: a halo that reaches
+        // past the line, the colour, and a white core down the middle.
+        func sample(_ image: CGImage, _ x: Int, _ y: Int) -> (Double, Double, Double, Double) {
+            let (w, h) = (image.width, image.height)
+            var pixels = [UInt8](repeating: 0, count: w * h * 4)
+            guard let ctx = CGContext(data: &pixels, width: w, height: h, bitsPerComponent: 8,
+                                      bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+                return (0, 0, 0, 0)
+            }
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+            // The image counts rows from the top and the drawing counted them from the bottom.
+            let index = ((h - 1 - y) * w + x) * 4
+            return (Double(pixels[index]) / 255, Double(pixels[index + 1]) / 255,
+                    Double(pixels[index + 2]) / 255, Double(pixels[index + 3]) / 255)
+        }
+
+        let beamLine = NSBezierPath()
+        beamLine.move(to: NSPoint(x: 10, y: 30))
+        beamLine.line(to: NSPoint(x: 70, y: 30))
+        if let picture = Picture.drawn(size: NSSize(width: 80, height: 60), scale: 1, {
+            StrokeStyle.paintBeam(beamLine, width: 8, colour: .systemRed)
+        }) {
+            let core = sample(picture, 40, 30)
+            let halo = sample(picture, 40, 36)
+            let clear = sample(picture, 40, 44)
+            check("the beam has a white core, not a flat line",
+                  core.1 > 0.5 && core.2 > 0.5 ? "yes" : "no: \(core)", "yes")
+            check("and a halo that reaches past the line it draws",
+                  halo.3 > 0.05 && halo.3 < 0.7 && clear.3 < 0.05 ? "yes" : "no: \(halo) \(clear)",
+                  "yes")
+        }
+
+        // And its size is a setting now. It was pinned at 6, which made the size wheel six
+        // sectors that did nothing - the fault the eraser had before its size started to mean
+        // something.
+        controller.tools.select(tool: .laser)
+        controller.tools.selectWidth(0)
+        let thinBeam = controller.tools.renderWidth
+        let thinGlow = LaserDot.extent(for: thinBeam)
+        controller.tools.selectWidth(5)
+        let fatBeam = controller.tools.renderWidth
+        check("the size wheel means something to the laser as well",
+              fatBeam > thinBeam && LaserDot.extent(for: fatBeam) > thinGlow ? "yes" : "no", "yes")
+        controller.tools.selectWidth(2)
+        check("and its middle setting is the 6pt beam it always had",
+              "\(Int(controller.tools.renderWidth))", "6")
+        controller.tools.select(tool: .pen)
 
         // Colour means nothing to the eraser, so the colour wheel does not open for it and
         // the badge says why. Handing the pen back instead was tried and was worse: it

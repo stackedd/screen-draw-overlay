@@ -68,8 +68,7 @@ final class FadingInk {
         guard frame.width > 0, frame.height > 0,
               let image = Picture.drawn(size: frame.size, scale: contentsScale, {
                   NSGraphicsContext.current?.cgContext.translateBy(x: -frame.minX, y: -frame.minY)
-                  stroke.renderColor.setStroke()
-                  stroke.path.stroke()
+                  stroke.paint()
               }) else {
             return nil
         }

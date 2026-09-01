@@ -190,7 +190,9 @@ final class ModeBadge {
             return "Click-through"
         }
 
-        if tools.tool == .eraser || tools.tool == .laser {
+        // The eraser's size is drawn around the pointer, so the badge would only be saying
+        // it twice. Everything else that has a width says it here.
+        if tools.tool == .eraser {
             return tools.tool.name
         }
 

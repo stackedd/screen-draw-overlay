@@ -74,10 +74,23 @@ final class ToolSettings {
         ToolSettings.colors[colorIndex]
     }
 
-    // The width a stroke is actually drawn with, multiplier included. The laser is a beam,
-    // so it has one width of its own rather than six.
+    // The width a stroke is actually drawn with, multiplier included.
+    //
+    // The laser used to be pinned at 6, which made the size wheel a wheel of six things that
+    // did nothing - the same fault the eraser had before its size started to mean something
+    // (docs/DECISIONS.md 27). It is one and a half times the width in hand now, so the middle
+    // setting is still the 6 it has always been and the ends are a thin pointer and a fat one.
     var renderWidth: CGFloat {
-        tool == .laser ? 6 : ToolSettings.widths[widthIndex] * style.widthMultiplier
+        tool == .laser
+            ? ToolSettings.laserWidth(at: widthIndex)
+            : ToolSettings.widths[widthIndex] * style.widthMultiplier
+    }
+
+    // Half again as wide as the same setting in a pen, so the middle one is the 6pt beam the
+    // laser has always drawn and the ends are a fine pointer and one that carries to the back
+    // of a room.
+    static func laserWidth(at index: Int) -> CGFloat {
+        widths[min(max(index, 0), widths.count - 1)] * 1.5
     }
 
     // Ink that goes away by itself: the laser always, and anything else when temporary ink

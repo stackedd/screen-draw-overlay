@@ -42,7 +42,7 @@ final class OverlayController {
     // the one in hand: the line a pen will draw, the wider line a marker will, and the hole
     // an eraser will take out. Every tool brings its own context; a wheel of identical bars
     // with numbers under them is the version that does not.
-    private static func widthWheel(for tool: DrawingTool) -> Wheel {
+    private static func widthWheel(for tool: DrawingTool, in colour: NSColor) -> Wheel {
         Wheel(items: ToolSettings.widths.indices.map { index in
             guard tool != .eraser else {
                 // Scaled into the space a sector has rather than drawn true size - the
@@ -53,6 +53,14 @@ final class OverlayController {
                 let largest = ToolSettings.eraserRadius(at: ToolSettings.widths.count - 1)
                 let shown = 6 + (radius - smallest) / (largest - smallest) * 13
                 return Wheel.Item(label: "\(Int(radius * 2))", symbol: "", disc: shown)
+            }
+
+            // The laser draws light, not a line, so its sectors are beams: the same halo,
+            // colour and white core it will put on the screen, in the colour in hand.
+            guard tool != .laser else {
+                let drawn = ToolSettings.laserWidth(at: index)
+                return Wheel.Item(label: "\(Int(drawn))", symbol: "",
+                                  beam: (width: drawn, colour: colour))
             }
 
             let drawn = ToolSettings.widths[index] * tool.style.widthMultiplier
@@ -200,7 +208,7 @@ final class OverlayController {
     }
 
     private func openWidthWheel() {
-        wheels.open(OverlayController.widthWheel(for: tools.tool),
+        wheels.open(OverlayController.widthWheel(for: tools.tool, in: tools.color),
                     cursor: toolCursor) { [weak self] index in
             index.map { self?.tools.selectWidth($0) }
         }

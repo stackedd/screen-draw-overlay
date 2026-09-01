@@ -25,14 +25,20 @@ struct Wheel {
         // Set where the sector is an area rather than a line - the eraser's size. A bar is
         // the wrong picture for a hole.
         let disc: CGFloat?
+        // Set where the sector is a beam - the laser's size. Painted the way the laser paints,
+        // in the colour in hand, because a bar of flat colour is not what it will put on the
+        // screen.
+        let beam: (width: CGFloat, colour: NSColor)?
 
         init(label: String, symbol: String, tint: NSColor? = nil,
-             rule: CGFloat? = nil, disc: CGFloat? = nil) {
+             rule: CGFloat? = nil, disc: CGFloat? = nil,
+             beam: (width: CGFloat, colour: NSColor)? = nil) {
             self.label = label
             self.symbol = symbol
             self.tint = tint
             self.rule = rule
             self.disc = disc
+            self.beam = beam
         }
     }
 
@@ -211,6 +217,19 @@ struct Wheel {
             ring.stroke()
             label.draw(at: NSPoint(x: seat.x - labelSize.width / 2,
                                    y: seat.y + 6 - radius - labelSize.height - 3))
+            return
+        }
+
+        // The laser's size draws itself the way the laser will: halo, colour, white core.
+        if let beam = item.beam {
+            let width = min(beam.width, 16)
+            let bar = NSBezierPath()
+            let half: CGFloat = 17
+            bar.move(to: NSPoint(x: seat.x - half, y: seat.y + 7))
+            bar.line(to: NSPoint(x: seat.x + half, y: seat.y + 7))
+            StrokeStyle.paintBeam(bar, width: width, colour: beam.colour)
+            label.draw(at: NSPoint(x: seat.x - labelSize.width / 2,
+                                   y: seat.y + 7 - width * 1.3 - labelSize.height - 4))
             return
         }
 
