@@ -77,6 +77,14 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
         menu.addItem(warningItem)
         hotKeyWarningItem = warningItem
 
+        // The whole interface is a key nobody can see, so the one place the app has to itself
+        // says what it is. Somebody who installed this a month ago and forgot opens the menu,
+        // not the README.
+        let hint = NSMenuItem(title: "Hold ⌥Z for the tool wheel", action: nil, keyEquivalent: "")
+        hint.isEnabled = false
+        menu.addItem(hint)
+        menu.addItem(.separator())
+
         let toggleItem = NSMenuItem(title: "Start Drawing",
                                     action: #selector(toggleDrawingModeFromMenu),
                                     keyEquivalent: "")
@@ -114,10 +122,10 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
     }
 
     func update(isDrawing: Bool, isClickThrough: Bool, hasKeptStrokes: Bool) {
-        // The menu says the same thing the hot keys do: D returns to drawing or puts the
-        // overlay away, E only means anything once there is something on screen.
-        // Click-Through is a state, so it reads as a checkable item rather than a second
-        // command that would say the same thing as the first one.
+        // The menu is the way in when ⌥Z is taken by something else, so it offers what the
+        // wheel offers: start or put away the overlay, and hand the screen back. Click-Through
+        // is a state, so it reads as a checkable item rather than a second command that would
+        // say the same thing as the first one.
         drawingMenuItem?.title = !isDrawing
             ? (!hasKeptStrokes ? "Start Drawing" : "Show Drawing")
             : (isClickThrough ? "Back to Drawing" : "Hide Overlay")
@@ -138,10 +146,10 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
         let tooltip: String
         if !isDrawing {
             symbolName = "scribble"
-            tooltip = "Screen Draw Overlay - Control Option Command D to draw"
+            tooltip = "Screen Draw Overlay - hold ⌥Z and push at a tool to draw"
         } else if isClickThrough {
             symbolName = "pencil.slash"
-            tooltip = "Click-through: drawing is showing, clicks go to the app underneath"
+            tooltip = "Click-through: the drawing is showing, clicks go to the app underneath"
         } else {
             symbolName = "pencil.tip.crop.circle.fill"
             tooltip = "Drawing: the overlay is taking your clicks"

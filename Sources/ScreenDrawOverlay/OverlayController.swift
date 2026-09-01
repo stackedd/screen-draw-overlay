@@ -3,9 +3,10 @@
 //
 // Three things worth knowing before changing anything here:
 //
-//   1. The mode model. Off, drawing, click-through. ⌃⌥⌘D moves between off and drawing and
-//      brings click-through back to drawing; ⌃⌥⌘E flips drawing and click-through. Held
-//      rather than tapped, ⌃⌥⌘D is momentary.
+//   1. The mode model. Off, drawing, click-through, and one gesture moves between all three:
+//      ⌥Z holds a wheel open, pushing at a tool opens the overlay and hands you that tool,
+//      and letting go in the middle leaves - the screen back to the app underneath first,
+//      then the overlay away with the drawing kept.
 //   2. Overlay lifetime. Panels are created per screen on entry and destroyed on exit, so
 //      the drawing is lifted out and filed by display beforehand - hiding is not erasing,
 //      only C erases - along with the undo history that goes with it.

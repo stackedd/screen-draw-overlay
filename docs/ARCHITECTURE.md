@@ -20,7 +20,7 @@ tried and rejected on the way; [../CLAUDE.md](../CLAUDE.md) is the short operati
 | `Shortcuts.swift` | The global shortcuts as one set: what each is, and reporting the ones macOS refused. |
 | `MenuBarItem.swift` | The menu bar presence: icon, menu, Open at Login, and the "shortcut unavailable" line. |
 | `OverlayPanel.swift` | The transparent window, one per screen: its level, its collection behaviour, and the fact that it swallows key equivalents. |
-| `DrawingView.swift` | The view: events in, paint out, plus the timer that drives the fade. It owns two layers - ink and badge - and paints nothing through `draw(_:)`. |
+| `DrawingView.swift` | The view: events in, paint out. It owns three layers — ink, badge and the laser's glow — paints nothing through `draw(_:)`, and keeps the timer that drops ink which has run out of life. |
 | `InkPainter.swift` | The ink layer's delegate, which is why the ink is not painted through the view. |
 | `Picture.swift` | Painting a bitmap for a layer, at the scale of the display it will appear on. The badge, the glow and fading ink all go through it. |
 | `Glyph.swift` | An SF Symbol painted in a colour, cached. The wheel's sectors and the badge's tool column share it. |
@@ -30,7 +30,7 @@ tried and rejected on the way; [../CLAUDE.md](../CLAUDE.md) is the short operati
 | `Stroke.swift` | What a mark is made of, and what each tool does with two points. |
 | `ToolSettings.swift` | The pen in hand: colour, width, tool. Shared across screens, remembered between launches. |
 | `ModeBadge.swift` | The badge in the corner — the app's entire on-screen interface. It hands over a picture, snapped to whole pixels; the view carries it on a layer. |
-| `PointerCursor.swift` | The cursor drawing mode hands the window server: the system arrow with a ring around its tip. |
+| `PointerCursor.swift` | The cursor drawing mode hands the window server: one per tool, in the colour in hand. |
 | `GlobalHotKey.swift` | The global shortcuts, on Carbon, and the ownership rules that keep the callback safe. |
 | `Wheel.swift` | A radial menu: its sectors, which one a direction picks, and how it paints itself. |
 | `WheelPanel.swift` | The window a wheel appears in, and the hold-push-release that drives it. |
@@ -184,8 +184,16 @@ the idle number, because the window server draws the cursor and we do nothing at
 active, so a background app hides nothing — that attempt left two pointers on screen during a
 presentation. Handing the window a transparent cursor and painting our own removed the system
 one, but only while we owned the window under the pointer: lose that once, to the menu bar,
-and there are two pointers again with no way back. The pointer is now the system arrow with a
-ring around its tip, as one cursor, which cannot double.
+and there are two pointers again with no way back. The pointer is now one cursor per tool,
+drawn in the colour in hand, which cannot double.
+
+Setting it is not the same as keeping it. A panel that appears under a stationary pointer is
+handed the plain arrow by the window server about 25ms later, whatever the app set before
+that, and nothing asks the app again until the mouse moves — so the pick that opens the
+overlay used to leave an arrow on the screen until the user moved. `takeCursorBack()` re-sets
+it every 120th of a second for a third of a second after a panel appears, then stops.
+Measured with `Testing/probes/cursorflash.swift`, which samples `NSCursor.currentSystem` — what
+the screen shows, rather than what the app believes — every 4ms.
 
 **`needsToDraw(_:)` is not a lever here.** It looked like a free win — AppKit hands
 `draw(_:)` the bounding box of every invalid rectangle, so a pointer that invalidates where
@@ -199,10 +207,6 @@ clash with another app is silent — the app can only report the case macOS refu
 (`-9878`, which is a second registration inside one process). This is also why the app quits
 on launch if another copy is already running: two copies would both answer the shortcut.
 
-**Cursor.** `NSCursor.hide()` is per application and only applies while that application is
-active, so a background app hides nothing — that attempt left two pointers on screen during
-a presentation. Handing the window a fully transparent cursor is what actually removes the
-system one.
 
 ## Known walls
 

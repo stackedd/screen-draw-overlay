@@ -24,9 +24,10 @@ final class OverlayPanel: NSPanel {
     // full-width strip at 26, a Keynote 13.2 slideshow at 9 with its fade at 26.
     // .popUpMenu (101) clears all of them.
     //
-    // Being above the menu bar is only safe because nothing on screen is needed to get
-    // out: ⌃⌥⌘D hides (keeping the drawing), ⌃⌥⌘E hands control back, and ⌃⌥⌘Esc quits
-    // the app outright. All three are global hot keys that do not depend on the overlay.
+    // Being above the menu bar is only safe because nothing on screen is needed to get out:
+    // ⌥Z opens the wheel wherever the pointer is and its middle hands the screen back and then
+    // puts the overlay away, and ⌃⌥⌘Esc quits the app outright. Both are global hot keys that
+    // do not depend on anything the overlay is showing.
     private static let overlayLevel = NSWindow.Level.popUpMenu
 
     let drawingView: DrawingView

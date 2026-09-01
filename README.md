@@ -32,7 +32,7 @@ Requires macOS 11 Big Sur or later, on Apple Silicon or Intel.
 
 The app has no Dock icon and no window — it lives only in the menu bar. If your menu bar is full, macOS quietly hides the items that do not fit, and this one is small enough to be among them. Hold `Command` and drag the menu bar icons to rearrange them and make room.
 
-The quickest way to check that it is running at all is to press the shortcut: `Control + Option + Command + D`. Nothing dims — the overlay is fully transparent — but a badge appears in the top-right corner with a red stripe down its edge, and a coloured ring appears around your pointer. Press it again to hide it.
+The quickest way to check that it is running at all is to hold `Option + Z`: a wheel of tools opens under the pointer. Push the mouse at one and let go, and the overlay is up — nothing dims, because it is fully transparent, but a badge appears in the top-right corner with a red stripe down its edge and your pointer becomes the tool you picked. Hold `Option + Z` again and let go in the middle to leave.
 
 Your colour, width and tool are remembered between launches, so a highlighter-in-yellow habit only has to be set once. The eraser and the laser are not: they are things you pick up for a moment, so what comes back is the last tool that actually drew.
 
@@ -80,7 +80,7 @@ While you are drawing, the keyboard belongs to the tool. No modifiers to hold �
 | `R` | Rectangle |
 | `O` | Oval |
 | `E` | Eraser — rubs out the part you pass over, as wide as the current width. One drag is one undo |
-| `Space` | Laser pointer — a glow that follows the pointer. Hold the button and it draws a beam that fades away in half a second, so a gesture reads on a screen share without leaving anything behind. It is drawn on the overlay, not on the cursor, so it is there whatever else the system is doing with the pointer. Press again for the tool you had |
+| `Space` | Laser pointer — a glow that follows the pointer. Hold the button and it draws a beam that thins out behind your hand and is gone in about half a second, so a gesture reads on a screen share without leaving anything behind. It is drawn on the overlay, not on the cursor, so it is there whatever else the system is doing with the pointer. Press again for the tool you had |
 
 | Key | What it does |
 | --- | --- |
@@ -93,27 +93,27 @@ While you are drawing, the keyboard belongs to the tool. No modifiers to hold �
 
 ### Drawing and click-through
 
-There are three states — off, drawing and click-through — and two shortcuts move between them.
+There are three states — off, drawing and click-through — and one gesture moves between all of them: hold `Option + Z`, push, let go.
 
-While you are **drawing**, the overlay takes the mouse and the keyboard: your strokes land on it and nothing reaches the app underneath. Press `Control + Option + Command + E` and it switches to **click-through**: the drawing stays exactly where it is, but clicks, scrolls and keystrokes go straight to the app below, so you can advance a slide, scroll a page or switch apps without losing what you drew. `Control + Option + Command + E` again goes back to drawing, and so does `Control + Option + Command + D` — from click-through, `D` means "back to drawing", not "throw it away".
+While you are **drawing**, the overlay takes the mouse and the keyboard: your strokes land on it and nothing reaches the app underneath. Let go of the wheel in the middle and it switches to **click-through**: the drawing stays exactly where it is, but clicks, scrolls and keystrokes go straight to the app below, so you can advance a slide, scroll a page or switch apps without losing what you drew. Picking any tool from the wheel takes the screen back.
 
-**Holding beats toggling.** Tapping `Control + Option + Command + D` leaves the overlay up until you tap it again, which is what you want when you are marking up a slide for a minute. Holding it down is for the other case: press, scribble one arrow, let go, and the screen is yours again — nothing to remember to switch off. That is what makes it safe to leave running all day.
+**Leaving happens one step at a time, and the hub says which step is next.** From drawing, the middle hands the screen back (the hub reads `CLICK-THROUGH`). From there, the middle again puts the overlay away (`HIDE`). Nothing is ever thrown away by accident, because the wheel tells you what it is about to do before you let go.
 
-**Hiding is not erasing.** `Control + Option + Command + D` while you are drawing puts the overlay away but keeps your strokes; the next `Control + Option + Command + D` brings them back where they were. Hitting the shortcut by accident costs you nothing. The only thing that erases a drawing is `C`.
+**Hiding is not erasing.** Putting the overlay away keeps your strokes and the undo history that goes with them; the next tool you pick brings both back where they were. Reaching for the wheel by accident costs you nothing. The only thing that erases a drawing is `C`.
 
-**While drawing, the keyboard belongs to the tool.** The keys above do their thing and everything else — including `Escape` — is swallowed and does nothing. If you need to type, or need `Escape` to reach the app underneath (leaving a slideshow, for instance), switch to click-through with `Control + Option + Command + E` first.
+**While drawing, the keyboard belongs to the tool.** The keys above do their thing and everything else — including `Escape` — is swallowed and does nothing. If you need to type, or need `Escape` to reach the app underneath (leaving a slideshow, for instance), let go of the wheel in the middle first.
 
-You can always tell which state you are in, and which tool you are holding: the corner badge reads `PEN 4` — the tool, its width, and a dot in the current colour beside it — or `CLICK-THROUGH` when your clicks pass through. A red stripe down its left edge means the overlay is taking your clicks; it disappears in click-through, when it is not. Its second line names what to do right now (`⌥Z wheel · middle hands it back · ⌃⌥⌘Z undo` while drawing) — which matters, because it is the only thing on screen telling someone whose clicks have stopped working what to press. There is no palette on screen on purpose: a tool that occupies screen space is not one you leave running.
+You can always tell which state you are in, and which tool you are holding: the corner badge reads `Pen 4` — the tool, its width, and the tool's own icon beside it, drawn in the colour you are about to draw with — or `Click-through` when your clicks pass through. A red stripe down its left edge means the overlay is taking your clicks; it disappears in click-through, when it is not. Its second line names what to do right now (`⌥Z wheel · middle hands it back · ⌃⌥⌘Z undo` while drawing) — which matters, because it is the only thing on screen telling someone whose clicks have stopped working what to press. There is no palette on screen on purpose: a tool that occupies screen space is not one you leave running.
 
 Each tool has its own pointer, in the colour you are drawing with: the pen is a nib, the highlighter a chisel, the shape tools a fine crosshair with the shape they make beside it, and the eraser a ring exactly the size of the hole it will leave. The laser has no cursor at all — its glow is drawn on the overlay, where the audience can see it, and two marks an inch apart would be worse than one. If something else takes the cursor for a moment you get the ordinary arrow back, which is a thing you can see rather than a bug; the overlay takes it again as soon as you move.
 
 The menu bar icon turns red while the overlay is taking clicks and becomes a dimmed struck-through pen in click-through.
 
-`Control + Option + Command + Escape` is the panic key, and it is blunt on purpose: **it quits the app**, exactly like Quit in the menu. If the overlay is ever swallowing your clicks and nothing else responds, ending the process is the one recovery that cannot fail — the app releases the screen and closes its panels on the way out. Your drawing goes with it, so use `Control + Option + Command + D` for ordinary "get this out of my way". Start it again from `/Applications` afterwards.
+`Control + Option + Command + Escape` is the panic key, and it is blunt on purpose: **it quits the app**, exactly like Quit in the menu. If the overlay is ever swallowing your clicks and nothing else responds, ending the process is the one recovery that cannot fail — the app releases the screen and closes its panels on the way out. Your drawing goes with it, so use the wheel's middle for ordinary "get this out of my way". Start it again from `/Applications` afterwards.
 
-The menu bar item carries **Start / Show / Hide / Back to Drawing**, a **Click-Through** checkbox, and **Quit** — but note that while you are drawing, the overlay covers the whole screen including the menu bar, so the item is not clickable until you hide the overlay or switch to click-through. That is deliberate: drawing mode is meant to interact with nothing. The shortcuts are how you get out of it.
+The menu bar item names the wheel shortcut and carries **Start / Show / Hide / Back to Drawing**, a **Click-Through** checkbox, and **Quit** — but note that while you are drawing, the overlay covers the whole screen including the menu bar, so the item is not clickable until you hide the overlay or switch to click-through. That is deliberate: drawing mode is meant to interact with nothing. The shortcuts are how you get out of it.
 
-If `Control + Option + Command + D` does nothing, another app is probably using the same shortcut. macOS lets several apps register one shortcut without complaining, so the conflict is usually silent — the app can only warn you when the system refuses the registration outright, and it does that in the menu ("Shortcut unavailable"), never with a dialog. Either way the menu bar item still works, and you can change the key code or modifiers in `Sources/ScreenDrawOverlay/AppDelegate.swift` and rebuild.
+If `Option + Z` does nothing, another app is probably using the same shortcut. macOS lets several apps register one shortcut without complaining, so the conflict is usually silent — the app can only warn you when the system refuses the registration outright, and it does that in the menu ("Shortcut unavailable"), never with a dialog. Either way the menu bar item still works, and you can change the key code or modifiers in `Sources/ScreenDrawOverlay/Shortcuts.swift` and rebuild.
 
 ## Build from source
 
@@ -135,7 +135,7 @@ Deliberately small. There is no toolbar or palette, no text tool, no saving or s
 
 Beyond that, things worth knowing:
 
-- While drawing mode is on, the overlay is above everything — the menu bar, other apps' status items, dialogs and alerts. Nothing on screen can be clicked until you switch to click-through with `Control + Option + Command + E` or hide the overlay with `Control + Option + Command + D`.
+- While drawing mode is on, the overlay is above everything — the menu bar, other apps' status items, dialogs and alerts. Nothing on screen can be clicked until you let go of the wheel in the middle, which hands the screen back and then, a second time, puts the overlay away.
 - The Dock still reacts to where the pointer is, even though your clicks never reach it: pass over it while drawing and it will still show app names. macOS reports the pointer position to the Dock independently of which window is on top, and suppressing that would need an event tap and Accessibility permission, which this app deliberately does not ask for. Setting the Dock to hide automatically keeps it out of the way.
 
 - Plugging in, unplugging or rearranging a display while drawing ends drawing mode and discards the drawing, kept strokes included. That is intentional — it is better than leaving an overlay stranded on a display that no longer exists, or restoring an annotation onto the wrong screen.

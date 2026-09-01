@@ -119,6 +119,11 @@ easy to repeat.
     history**; `C` is the only thing that erases, and even that is undoable.
 11. **Never let an edit point at a position.** Undo names strokes by `id`. `removeLast()`
     took back the wrong line whenever temporary ink faded out from under the history.
+12. **Never make a bitmap by hand.** `Picture.drawn(size:scale:)` is the one place that gets
+    the order right — an `NSBitmapImageRep` measures itself in pixels until it is told
+    otherwise, and the graphics context takes that measurement when it is made. Three copies
+    of this code each set the size afterwards, and everything they painted came out at half
+    scale in the corner of its own frame (`docs/DECISIONS.md` 28).
 
 ## Current focus
 

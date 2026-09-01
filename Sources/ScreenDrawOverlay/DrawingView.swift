@@ -11,9 +11,9 @@
 //      covers, and the ink is painted skipping strokes that do not meet the dirty rect.
 //      Repainting everything per mouse move cost 26x more. Anything added here should
 //      invalidate its own rect, never the whole layer.
-//   3. The pointer is a cursor, not paint. The panel hands the window server the system
-//      arrow with a ring around its tip, so there is only ever one pointer on screen and
-//      following the mouse costs this process nothing at all.
+//   3. The pointer is a cursor, not paint. The panel hands the window server a cursor drawn
+//      for the tool in hand, so there is only ever one pointer on screen and following the
+//      mouse costs this process nothing at all.
 //   4. The badge in the corner is the only interface. There is no palette on screen on
 //      purpose, so it has to say which tool, which colour and how to get out. It is a layer
 //      too, for the same reason as the pointer: it changed rarely and was being laid out on
