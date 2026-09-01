@@ -154,7 +154,9 @@ final class Canvas {
     // it has to be committed, or it is dropped on the floor.
     @discardableResult
     func finishStroke() -> NSRect? {
-        guard let finished = strokeInProgress else {
+        // Temporary ink starts counting down from here rather than from the mouse going down,
+        // or a stroke that took longer to draw than it lives is already gone when it lands.
+        guard let finished = strokeInProgress?.startingNow() else {
             return nil
         }
 
@@ -165,6 +167,27 @@ final class Canvas {
         lastPoint = nil
 
         return finished.repaintBounds
+    }
+
+    // Cuts the beam being drawn into its next piece, if the one in hand has run long enough,
+    // and says what changed. The new piece starts where the old one ended, so the trail has no
+    // gap in it; each piece then fades on its own, which is what makes the light thin out
+    // behind the pointer instead of disappearing in one go when the button comes up.
+    //
+    // Only the laser draws this way. Every other tool draws one stroke per drag, because
+    // everything else is a mark somebody meant to keep.
+    func breakBeamIfDue(with tools: ToolSettings) -> NSRect? {
+        guard tools.tool == .laser,
+              let started = strokeInProgress?.createdAt,
+              let last = lastPoint,
+              Date().timeIntervalSince(started) >= Stroke.beamPiece else {
+            return nil
+        }
+
+        let closed = finishStroke()
+        let opened = beginStroke(at: last, with: tools)
+
+        return closed?.union(opened) ?? opened
     }
 
     // MARK: - Erasing and history

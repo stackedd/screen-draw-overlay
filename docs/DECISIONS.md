@@ -230,6 +230,14 @@ working on temporary ink without the eraser knowing where temporary ink lives.
 
 `Stroke.opacity(at:)` went with the old scheme. Nothing computes a fade curve any more.
 
+**A fade starts when the mark is finished, not when it was begun.** `createdAt` was stamped on
+the mouse going down, so anything that took longer to draw than it was meant to last had
+already expired by the time it landed: the layer was never made, the next tick dropped the
+stroke, and what the user saw was ink vanishing the instant they lifted the pen. Three seconds
+is long enough that most drawings escaped it; half a second is not, so the laser did it every
+single time. `Stroke.startingNow()` re-stamps the clock in `finishStroke()`, which is the one
+place a mark stops being drawn and starts being kept.
+
 ## 9. The menu bar icon is never tinted
 
 **Measured:** rendering the status button with `contentTintColor` set gives mean luminance
@@ -622,6 +630,15 @@ audience may not be able to see, is worse than one.
 
 It goes out in click-through, because a laser dot on top of an app the user has just been
 handed back is something in the way.
+
+**The trail is a run of short pieces, not one stroke.** One stroke has one age and one layer,
+so a beam drawn over two seconds held at full strength for all of it and then went out in one
+go when the button came up — which is the opposite of what a laser trail does, and it is what
+was reported as the fade not working. The beam is cut every tenth of a second now
+(`Stroke.beamPiece`): each piece is finished, handed its own fading layer, and continued from
+the point the last one ended, so the light thins out behind the hand while the hand is still
+moving. A second of drawing is ten pieces of which about five are alive, against sixty if it
+were cut per event.
 
 **What it leaves behind is drawn by holding the button**, not by passing over. The first
 version dropped a little dot every thirtieth of a second as the pointer moved, pressed or

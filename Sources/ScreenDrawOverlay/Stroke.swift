@@ -186,6 +186,13 @@ struct Stroke {
     static let fadeDuration: TimeInterval = 3
     static let fadeHold = 0.55
 
+    // How long one piece of the laser's trail is drawn for before it is finished and the next
+    // one starts. The beam is a run of short strokes rather than one long one, because a trail
+    // has to fade behind the hand while the hand is still moving: one stroke has one age, so
+    // it holds at full strength until the button comes up and then goes all at once. A tenth
+    // of a second thins evenly and makes a second of drawing ten layers rather than sixty.
+    static let beamPiece: TimeInterval = 0.1
+
     // Identity, because the history has to name a stroke rather than point at a position.
     // Undo used to take back "the last one added", which is the same thing right up until
     // temporary ink fades out from under an entry still sitting in the stack - and then it
@@ -267,6 +274,22 @@ struct Stroke {
         self.createdAt = createdAt
         self.isShape = isShape
         self.life = life
+    }
+
+    // The same mark, with its life starting now.
+    //
+    // Temporary ink is timed from the moment it is finished, not from the moment it was begun.
+    // A stroke that took longer to draw than it was meant to last had already expired when the
+    // mouse came up: it vanished instead of fading, which is what "the fade does not work"
+    // was. The laser, which lives half a second, did it every time somebody held the button
+    // down for longer than that.
+    func startingNow() -> Stroke {
+        guard createdAt != nil else {
+            return self
+        }
+
+        return Stroke(id: id, points: points, path: path, color: color, width: width,
+                      style: style, createdAt: Date(), isShape: isShape, life: life)
     }
 
     // What the eraser leaves behind: the same pen, colour and life, a shorter line, and a

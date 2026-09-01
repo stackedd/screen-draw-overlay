@@ -329,6 +329,41 @@
             check("and the beam is gone in well under a second",
                   (beams.first?.life ?? 99) < 1 ? "yes" : "no", "yes")
         }
+        // Temporary ink is timed from when it is finished, not from when it was begun. A
+        // stroke that took longer to draw than it lives had already expired when the mouse
+        // came up, so it vanished instead of fading - which the laser, at half a second, did
+        // every single time somebody held the button down.
+        let stale = Stroke(points: [.zero], path: NSBezierPath(), color: .systemRed, width: 2,
+                           style: .pen, createdAt: Date(timeIntervalSinceNow: -10), life: 3)
+        check("temporary ink is timed from when it is finished",
+              stale.startingNow().hasFaded ? "already gone" : "still fading", "still fading")
+
+        // And the beam is cut into pieces as it is drawn, because one stroke has one age: it
+        // holds at full strength until the button comes up and then goes all at once, instead
+        // of thinning out behind the hand the way a laser trail does.
+        if let panel = controller.overlayWindowSnapshot().first {
+            let view = panel.drawingView
+            func beam(_ type: NSEvent.EventType, _ x: CGFloat) -> NSEvent {
+                NSEvent.mouseEvent(with: type, location: NSPoint(x: x, y: 700), modifierFlags: [],
+                                   timestamp: 0, windowNumber: panel.windowNumber, context: nil,
+                                   eventNumber: 0, clickCount: 1, pressure: 1)!
+            }
+            view.mouseDown(with: beam(.leftMouseDown, 200))
+            for step in 1...3 {
+                RunLoop.current.run(until: Date().addingTimeInterval(Stroke.beamPiece + 0.02))
+                view.mouseDragged(with: beam(.leftMouseDragged, 200 + CGFloat(step) * 40))
+            }
+            let trail = view.canvas.strokes.filter { $0.createdAt != nil }.count
+            view.mouseUp(with: beam(.leftMouseUp, 320))
+            check("and it is cut into pieces as it is drawn, so it fades behind the hand",
+                  trail > 1 ? "yes" : "no: \(trail)", "yes")
+
+            // Left to expire rather than cleared, so the checks after this one see the canvas
+            // they expect: a beam is temporary ink and takes its undo entry with it.
+            RunLoop.current.run(until: Date().addingTimeInterval(Stroke.fadeDuration * 0.25))
+            view.advanceFade()
+        }
+
         check("and it leaves no permanent ink", "\(live)", "\(permanentBefore)")
         press(kVK_Space, " ")
 

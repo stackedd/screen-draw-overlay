@@ -321,6 +321,15 @@ final class DrawingView: NSView {
                                            with: tools) {
             invalidateInk(dirty)
         }
+
+        // The laser's trail is a run of short pieces, each handed its own fading layer as it
+        // is finished, so the light thins out behind the hand rather than hanging at full
+        // strength until the button comes up.
+        if let cut = canvas.breakBeamIfDue(with: tools) {
+            startFadingIfNeeded()
+            syncFadingInk()
+            invalidateInk(cut)
+        }
     }
 
     override func mouseUp(with event: NSEvent) {
