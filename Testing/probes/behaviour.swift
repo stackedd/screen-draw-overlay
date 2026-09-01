@@ -576,6 +576,19 @@
         controller.toggleDrawingMode()
         check("and hiding kept the drawing", "\(live)", "\(beforeHiding)")
 
+        // The cursor hold is what stops the window server leaving an arrow on a pointer that
+        // is not moving, and it is a timer, so where it stops matters as much as where it
+        // runs: click-through hands the pointer to the app underneath, and a closed overlay
+        // has to cost nothing at all.
+        check("the cursor hold runs while drawing mode has the mouse",
+              controller.cursorHold != nil ? "yes" : "no", "yes")
+        controller.toggleInteractionMode()
+        check("and stops when the screen is handed back",
+              controller.cursorHold == nil ? "yes" : "no", "yes")
+        controller.toggleInteractionMode()
+        controller.toggleDrawingMode()
+        check("and when the overlay goes away", controller.cursorHold == nil ? "yes" : "no", "yes")
+
         print("REG summary: \(pass) passed, \(fail) failed")
         // Quits through the panic key rather than NSApp.terminate, so the shortcut that has
         // to work from any state is exercised on every run.
