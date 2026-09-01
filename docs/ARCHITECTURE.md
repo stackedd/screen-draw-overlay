@@ -152,6 +152,9 @@ next to the numbers above:
   it only reaches the size of a single repaint after a few thousand points.
 - A fade paints **nothing at all** now, which is what the cost suite's fourth sweep exists
   to keep true.
+- **The laser's trail** costs 0.015 ms an event while it is only extending, and 0.038 ms on
+  the event that cuts a piece off and paints it into a layer of its own - which happens ten
+  times a second, so about 0.04% of a core, with sixty pieces alive.
 
 Put together: of the ~23% a drag used to cost, painting was roughly half a point and the
 repaints were the rest.

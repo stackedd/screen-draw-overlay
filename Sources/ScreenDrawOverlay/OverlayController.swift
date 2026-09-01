@@ -452,7 +452,11 @@ final class OverlayController {
         var attempts = 0
         let timer = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] timer in
             attempts += 1
-            self?.setDrawingCursor()
+            // Only the cursor, not the rects. Rebuilding cursor rects is the call that must
+            // never be made from inside AppKit's tracking machinery (docs/DECISIONS.md 6), so
+            // the repeated half is the one that does nothing but set a cursor.
+            self?.drawingViewSnapshot(from: self?.overlayWindowSnapshot() ?? [])
+                .forEach { $0.applyDrawingCursor() }
 
             guard attempts >= 42 || self == nil else {
                 return

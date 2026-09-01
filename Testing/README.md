@@ -26,9 +26,10 @@ session and moves whenever the session's own behaviour changes - it went 5 to 7 
 eraser started cutting shapes instead of removing them.
 
 **cost** (`probes/cost.swift`) drives the same view and paints, into an offscreen bitmap at
-a Retina backing scale, every rectangle the view asks to have repainted - then times it. Four
+a Retina backing scale, every rectangle the view asks to have repainted - then times it. Five
 sweeps: one unbroken stroke of up to 5000 points, pointer moves over a canvas holding 0, 50
-and 200 strokes, a short drag over the same, and a fade tick. Two dirty-region models are run
+and 200 strokes, a short drag over the same, a fade tick, and the laser's trail - the one
+thing here that makes a bitmap while the mouse is moving. Two dirty-region models are run
 side by side (each rectangle painted on its own, and one paint covering all of them), because
 a layer-backed view really does get the union.
 

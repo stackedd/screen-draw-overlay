@@ -266,6 +266,54 @@ for model in [Bench.Model.rects, .union] {
                 mean(times[0...]), bench.paintedArea / 1_000_000))
 }
 
+// MARK: - Sweep 5: the laser's trail
+//
+// The beam is cut into a new piece every tenth of a second, and each piece is painted once
+// into a picture and handed to a layer of its own. That is the one thing in this app that
+// makes a bitmap while the mouse is moving, so it is worth knowing what it costs next to an
+// ordinary move - and whether it grows as the pieces pile up.
+//
+// Cutting comes due on the clock, so the piece in hand is backdated to force it: the second
+// column is every event doing the most expensive thing an event can do here.
+
+line("")
+line("== 5. the laser's trail (per-event ms: an ordinary move, and one that cuts a piece)")
+for model in [Bench.Model.rects, .union] {
+    let bench = Bench(model)
+    bench.tools.select(tool: .laser)
+    bench.view.mouseDown(with: bench.event(.leftMouseDown, scribble(0)))
+    bench.discardInvalidations()
+
+    var plain: [Double] = []
+    for index in 1...200 {
+        let started = milliseconds()
+        bench.view.mouseDragged(with: bench.event(.leftMouseDragged, scribble(index)))
+        bench.paint()
+        plain.append(milliseconds() - started)
+    }
+
+    var cuts: [Double] = []
+    for index in 201...260 {
+        if let piece = bench.view.canvas.strokeInProgress {
+            bench.view.canvas.strokeInProgress = Stroke(
+                id: piece.id, points: piece.points, path: piece.path, color: piece.color,
+                width: piece.width, style: piece.style,
+                createdAt: Date().addingTimeInterval(-Stroke.beamPiece * 2),
+                isShape: false, life: piece.life)
+        }
+
+        let started = milliseconds()
+        bench.view.mouseDragged(with: bench.event(.leftMouseDragged, scribble(index)))
+        bench.paint()
+        cuts.append(milliseconds() - started)
+    }
+
+    line(String(format: "   %-5@ %.3f ms/move   cutting a piece %.3f ms   (%d pieces alive)",
+                model == .rects ? "rects" : "union" as NSString,
+                mean(plain[0...]), mean(cuts[0...]),
+                bench.view.canvas.strokes.filter { $0.createdAt != nil }.count))
+}
+
 line("")
 line("   Painting only. The backing store update and the window server's compositing of a")
 line("   full screen transparent surface are not in these numbers - measure those on the")
