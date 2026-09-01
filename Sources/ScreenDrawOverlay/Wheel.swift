@@ -151,13 +151,18 @@ struct Wheel {
                         clockwise: true)
         wedge.close()
 
-        // Lit in the sector's own colour where it has one, so choosing blue does not light
-        // up red, and in the app's red where the sector is a tool rather than a colour.
-        (lit ? (item.tint ?? NSColor.systemRed).withAlphaComponent(0.92)
+        // Lit in the sector's own colour where it has one, so choosing blue does not light up
+        // red, and in the colour the rest of macOS uses for a selection where the sector is a
+        // tool rather than a colour. It was this app's own red, which is a choice a Mac app
+        // does not get to make: everything else on the screen highlights in the accent colour
+        // the user picked in System Settings.
+        (lit ? (item.tint ?? NSColor.controlAccentColor).withAlphaComponent(0.92)
              : NSColor.black.withAlphaComponent(0.62)).setFill()
         wedge.fill()
-        NSColor.white.withAlphaComponent(lit ? 0.35 : 0.12).setStroke()
-        wedge.lineWidth = 1
+        // A white edge on the lit one whatever the accent is, so a graphite or a yellow
+        // selection still reads as the selected one.
+        NSColor.white.withAlphaComponent(lit ? 0.5 : 0.12).setStroke()
+        wedge.lineWidth = lit ? 1.5 : 1
         wedge.stroke()
 
         let seat = NSPoint(x: centre.x + cos(middle) * (Wheel.innerRadius + Wheel.outerRadius) / 2,

@@ -761,6 +761,17 @@ six colours to a tool that has no colour.
 `Testing/probes/cursor.swift` and `probes/wheel.swift` render all of it, because none of this
 is visible from a passing test.
 
+**And the wheel highlights in the accent colour, not in ours.** The lit sector was this app's
+own red, which is a choice a Mac app does not get to make: every other selection on the screen
+is the colour the user chose in System Settings, and one thing that quietly says "this was
+built somewhere else" is an interface that picks its own. Sectors that *are* a colour still
+light in their own — choosing blue must not light up the accent — and the lit wedge keeps a
+white edge whatever the accent is, so a graphite or a yellow one still reads as selected.
+
+**It fades in and out, over a tenth of a second and a twelfth.** A HUD that snaps on is the
+same kind of tell. The panel takes no clicks, so the fade on the way out is in nobody's way,
+and the cursor underneath is being held for a third of a second anyway (entry 6).
+
 ## 28. Every picture a layer gets is painted in one place
 
 Three things hand a layer a finished picture instead of painting each frame: the badge, the

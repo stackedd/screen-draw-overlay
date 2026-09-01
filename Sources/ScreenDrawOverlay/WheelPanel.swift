@@ -54,6 +54,9 @@ final class WheelPanel {
     private var poll: Timer?
     private var centre: NSPoint = .zero
     private var pick: ((Int?) -> Void)?
+    // Which showing of the wheel is the current one, so a fade that is still running cannot
+    // put away a wheel that has been opened again since.
+    private var showing = 0
 
     var isOpen: Bool { poll != nil }
 
@@ -107,7 +110,17 @@ final class WheelPanel {
         centre = NSPoint(x: origin.x + extent / 2, y: origin.y + extent / 2)
 
         panel.setFrameOrigin(origin)
+        // Faded in rather than snapped on. A tenth of a second is what macOS gives anything
+        // that appears under the pointer, and a HUD that arrives instantly is one of the small
+        // things that reads as "not from here" without anybody being able to say why.
+        showing += 1
+        panel.alphaValue = 0
         panel.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.10
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 1
+        }
         panel.invalidateCursorRects(for: view)
         cursor.set()
 
@@ -140,8 +153,26 @@ final class WheelPanel {
             cursor.set()
         }
 
-        panel.orderOut(nil)
+        fadeOut()
         onClose?()
+    }
+
+    // On the way out it goes the same way it came in. The panel takes no clicks, so the extra
+    // twelfth of a second it stays on screen is in nobody's way - and the cursor is being held
+    // by the overlay underneath for a third of a second either way (OverlayController).
+    private func fadeOut() {
+        let thisOne = showing
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.08
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            guard let self, self.showing == thisOne else {
+                return
+            }
+
+            self.panel.orderOut(nil)
+        })
     }
 
     // Whoever opened the wheel gets told when it has gone, because the overlay underneath
@@ -154,10 +185,12 @@ final class WheelPanel {
     // shows in that moment is the system arrow.
     var cursorNow: (() -> NSCursor)?
 
+    // The way out that does not wait for anything: the overlay is going away, or the app is.
     func close() {
         let wasOpen = poll != nil
         poll?.invalidate()
         poll = nil
+        showing += 1
         panel.orderOut(nil)
 
         if wasOpen {

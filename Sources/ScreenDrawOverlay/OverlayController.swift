@@ -141,7 +141,7 @@ final class OverlayController {
     // into the wheel.
     private var hubLabel: String {
         guard isDrawingMode else {
-            return "NOTHING TO DO"
+            return "CANCEL"
         }
 
         return isInteractionMode ? "HIDE" : "CLICK-THROUGH"
