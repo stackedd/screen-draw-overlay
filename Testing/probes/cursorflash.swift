@@ -88,11 +88,16 @@ func watch(_ what: String, seconds: Double, script: [(Double, () -> Void)]) {
     }
 
     // The verdict, which is the line worth reading: what the screen ended up showing, against
-    // the cursor the tool in hand is supposed to have.
-    let ours = name(PointerCursor.cursor(for: controller.tools))
+    // the cursor that mode is supposed to have. In click-through the answer is the system
+    // arrow, on purpose - the pointer belongs to the app underneath there.
+    let tool = name(PointerCursor.cursor(for: controller.tools))
     let shown = name(NSCursor.currentSystem)
-    print("      => the screen shows \(shown), the tool wants \(ours)"
-          + (shown == ours ? "" : "   <-- WRONG"))
+    // In click-through the pointer belongs to the app underneath, so the only wrong answer
+    // there is ours.
+    let ours = controller.isInteractionMode ? "anything but \(tool)" : tool
+    let right = controller.isInteractionMode ? shown != tool : shown == tool
+    print("      => the screen shows \(shown), this mode wants \(ours)"
+          + (right ? "" : "   <-- WRONG"))
 }
 
 warp(to: middle)
@@ -100,29 +105,52 @@ RunLoop.current.run(until: Date().addingTimeInterval(0.6))
 print("=== the wheel gesture, as the screen sees it ===")
 print("  the system arrow is \(NSCursor.arrow.image.size)")
 
-// Hold the wheel key, push right (the pen), let go.
-watch("first tool: the overlay is not open yet", seconds: 1.4, script: [
-    (0.10, { fireHotKey(id: 6) }),
-    (0.30, { warp(to: NSPoint(x: middle.x + 120, y: middle.y)) }),
-    (0.60, { fireHotKey(id: 6, release: true) }),
-    (0.80, { warp(to: NSPoint(x: middle.x + 122, y: middle.y + 2)) })
-])
+// Each gesture is the real one: hold the key, push the mouse, let go - and then **do not
+// touch the mouse**, which is the case the report is about. Nothing asks the app for a cursor
+// again while the pointer is still, so anything that takes it in the next three seconds keeps
+// it until the user moves.
+func gesture(_ what: String, key: UInt32, push: NSPoint, watching seconds: Double = 3.0) {
+    watch(what, seconds: seconds, script: [
+        (0.10, { fireHotKey(id: key) }),
+        (0.30, { warp(to: NSPoint(x: middle.x + push.x, y: middle.y + push.y)) }),
+        (0.60, { fireHotKey(id: key, release: true) })
+    ])
+}
 
-// And again with the overlay already up: push down-right, which is the marker.
-watch("second tool: the overlay is already up", seconds: 1.4, script: [
-    (0.10, { fireHotKey(id: 6) }),
-    (0.30, { warp(to: NSPoint(x: middle.x + 90, y: middle.y - 90)) }),
-    (0.60, { fireHotKey(id: 6, release: true) }),
-    (0.80, { warp(to: NSPoint(x: middle.x + 92, y: middle.y - 92)) })
-])
+// The tools wheel: first the pick that has to create the panels, then one over an overlay
+// that is already up.
+gesture("first tool: the overlay is not open yet, then three seconds of holding still",
+        key: 6, push: NSPoint(x: 120, y: 0))
+warp(to: middle)
+gesture("second tool: the overlay is already up", key: 6, push: NSPoint(x: 90, y: -90))
+warp(to: middle)
 
-// The width wheel, which is the one the report named.
-watch("a width", seconds: 1.4, script: [
-    (0.10, { fireHotKey(id: 8) }),
-    (0.30, { warp(to: NSPoint(x: middle.x, y: middle.y + 120)) }),
-    (0.60, { fireHotKey(id: 8, release: true) }),
-    (0.80, { warp(to: NSPoint(x: middle.x + 2, y: middle.y + 122)) })
-])
+// The two wheels that only change what is in hand.
+gesture("a width", key: 8, push: NSPoint(x: 0, y: 120))
+warp(to: middle)
+gesture("a colour", key: 7, push: NSPoint(x: -120, y: 0))
+warp(to: middle)
+
+// The keyboard, which changes the tool without any window appearing or going away - and
+// which nothing was holding the cursor for.
+func key(_ what: String, _ code: Int, _ chars: String) {
+    watch(what, seconds: 3.0, script: [
+        (0.10, {
+            guard let panel = controller.overlayWindowSnapshot().first else { return }
+            NSApp.sendEvent(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                                             timestamp: 0, windowNumber: panel.windowNumber,
+                                             context: nil, characters: chars,
+                                             charactersIgnoringModifiers: chars, isARepeat: false,
+                                             keyCode: UInt16(code))!)
+        })
+    ])
+}
+
+key("the H key: the marker, no window involved", 4, "h")
+key("the ] key: one step thicker", 30, "]")
+
+// And the way out: letting go in the middle, which hands the screen back.
+gesture("the hub, which hands the screen back", key: 6, push: NSPoint(x: 0, y: 0))
 
 warp(to: home)
 controller.shutDown()

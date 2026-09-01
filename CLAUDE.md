@@ -110,9 +110,10 @@ easy to repeat.
    tracking machinery and crashes — this was a shipped `SIGABRT` once.
 7. **Never put a modal dialog in front of the user.** `runModal` blocks a background app and
    can sit behind every window; failures are said in the menu.
-8. **Never leave a timer running when the overlay is idle.** Idle is 0.0% CPU and that is a
-   tested property. The fade timer starts with temporary ink and stops with it — and it no
-   longer drives the fade, which Core Animation does; it only drops ink that has expired.
+8. **Never leave a timer running when the overlay is closed.** Closed is 0.0% CPU and that
+   is a tested property. Three timers run while it is open, each tied to something being
+   true and each stopping with it: the fade tick (temporary ink on screen), the laser's poll
+   (the laser in hand), and the cursor hold (drawing mode taking the mouse, 0.1% of a core).
 9. **Never make drawing mode interact with anything** — no key should escape it, no click
    should reach what is underneath. Interaction is what click-through is for.
 10. **Never let hiding erase.** The wheel's `HIDE` keeps the strokes **and the undo

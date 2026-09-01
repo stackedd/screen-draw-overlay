@@ -71,9 +71,10 @@ final class OverlayController {
     private var isInteractionMode = false
     private var overlayScreenLayout: [String] = []
 
-    // Runs for a third of a second after a panel appears, and never otherwise. See
-    // takeCursorBack().
+    // The two that keep the pointer ours: a burst after something changed, and a slow hold
+    // for as long as the overlay is taking the mouse. See takeCursorBack().
     private var cursorSettling: Timer?
+    private var cursorHold: Timer?
 
     private var keptDrawings: [String: Canvas.Kept] = [:]
     private let tools = ToolSettings()
@@ -411,6 +412,7 @@ final class OverlayController {
             // swallowed here. Step out of the way so the app underneath owns input.
             NSApp.deactivate()
             // Hand the real pointer back; the drawn one belongs to drawing mode only.
+            stopHoldingCursor()
             windows.forEach { $0.drawingView.releaseDrawingCursor() }
             print("ScreenDrawOverlay: click-through mode ON (drawing kept, clicks pass through)")
         } else {
@@ -431,34 +433,42 @@ final class OverlayController {
     // **Setting the cursor is not the same as keeping it**, and this is the whole of an arrow
     // people kept seeing. Measured with `Testing/probes/cursorflash.swift`, which samples
     // `NSCursor.currentSystem` - what is actually on the screen, as opposed to this app's own
-    // idea of it - every four milliseconds through the whole gesture: a panel that appears
-    // under a stationary pointer is handed the plain arrow by the window server about 25ms
-    // after it appears, whatever the app set before that, and nothing asks us again until the
-    // mouse next moves. So picking the first tool - the pick that creates the panels - showed
-    // the system arrow until the user moved the mouse, with `NSCursor.current` correct the
-    // whole time. Closing the wheel over an overlay that already exists does not do it; only a
-    // window arriving does.
+    // idea of it - every four milliseconds: a panel that appears under a stationary pointer is
+    // handed the plain arrow by the window server about 25ms after it appears, whatever the
+    // app set before that, and **nothing asks us again until the mouse moves**. That last part
+    // is what makes it a fault rather than a flicker: the arrow stays until the user moves the
+    // mouse, and the app's own NSCursor.current is right the whole time.
     //
-    // The answer is to keep asking until it has caught up: every 120th of a second for a
-    // third of a second, then stop. Fast, because the flash is one or two frames wide and a
-    // 30Hz reply left 24ms of arrow on the screen; bounded, because an overlay that is up and
-    // not being used still has to cost nothing. Forty-two cursor sets is a millisecond and a
-    // half of CPU, once, against a measured 2.3% of a core for setting it sixty times a
-    // second forever.
+    // Two things hold it, because one was not enough. `takeCursorBack()` asks hard for a third
+    // of a second after something we know about - a panel arriving, a wheel closing, a mode
+    // change. `holdCursor()` then keeps asking, gently, for as long as drawing mode is on,
+    // which covers the cases nobody has reproduced yet: it was still being reported after the
+    // first half measured clean on every path this repo can drive, and a symptom that survives
+    // a fix nobody can reproduce is worth answering at the symptom.
+    //
+    // Both are cheap, and measured rather than assumed: `NSCursor.set()` is 0.049ms, so twenty
+    // a second is 0.1% of a core - and setting it blind is three times cheaper than asking
+    // `NSCursor.currentSystem` what is on screen first (0.157ms). Neither timer exists while
+    // the overlay is closed, which is where the "idle costs nothing" promise lives.
+    private static let cursorHoldInterval: TimeInterval = 1.0 / 20
+    private static let cursorSettleInterval: TimeInterval = 1.0 / 120
+    private static let cursorSettleTicks = 42
+
     private func takeCursorBack() {
         setDrawingCursor()
+        holdCursor()
         cursorSettling?.invalidate()
 
         var attempts = 0
-        let timer = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] timer in
+        let timer = Timer(timeInterval: OverlayController.cursorSettleInterval,
+                          repeats: true) { [weak self] timer in
             attempts += 1
             // Only the cursor, not the rects. Rebuilding cursor rects is the call that must
             // never be made from inside AppKit's tracking machinery (docs/DECISIONS.md 6), so
             // the repeated half is the one that does nothing but set a cursor.
-            self?.drawingViewSnapshot(from: self?.overlayWindowSnapshot() ?? [])
-                .forEach { $0.applyDrawingCursor() }
+            self?.applyCursorEverywhere()
 
-            guard attempts >= 42 || self == nil else {
+            guard attempts >= OverlayController.cursorSettleTicks || self == nil else {
                 return
             }
 
@@ -469,11 +479,37 @@ final class OverlayController {
         cursorSettling = timer
     }
 
+    // For as long as the overlay is taking the mouse. It stops on click-through, where the
+    // pointer belongs to the app underneath, and when the overlay goes away.
+    private func holdCursor() {
+        guard cursorHold == nil, isDrawingMode, !isInteractionMode else {
+            return
+        }
+
+        let timer = Timer(timeInterval: OverlayController.cursorHoldInterval,
+                          repeats: true) { [weak self] _ in
+            self?.applyCursorEverywhere()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        cursorHold = timer
+    }
+
+    private func stopHoldingCursor() {
+        cursorHold?.invalidate()
+        cursorHold = nil
+        cursorSettling?.invalidate()
+        cursorSettling = nil
+    }
+
     private func setDrawingCursor() {
         drawingViewSnapshot(from: overlayWindowSnapshot()).forEach { drawingView in
             drawingView.refreshCursorRects()
             drawingView.applyDrawingCursor()
         }
+    }
+
+    private func applyCursorEverywhere() {
+        drawingViewSnapshot(from: overlayWindowSnapshot()).forEach { $0.applyDrawingCursor() }
     }
 
     private func refreshMenuBar() {
@@ -490,8 +526,7 @@ final class OverlayController {
         // Before anything else: the wheels belong to an overlay that is about to stop
         // existing, and ⌥Z has to go back to typing what it types.
         stopWheels()
-        cursorSettling?.invalidate()
-        cursorSettling = nil
+        stopHoldingCursor()
 
         let windows = overlayWindowSnapshot()
         let views = drawingViewSnapshot(from: windows)

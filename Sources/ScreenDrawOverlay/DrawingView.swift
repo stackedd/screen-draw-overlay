@@ -93,7 +93,6 @@ final class DrawingView: NSView {
         }
     }
     private var mouseTrackingArea: NSTrackingArea?
-    private var lastCursorReclaim = Date.distantPast
     private var noticeTimer: Timer?
 
     override var acceptsFirstResponder: Bool { true }
@@ -307,14 +306,9 @@ final class DrawingView: NSView {
         followPointerWithLaser(to: point)
 
         guard tools.tool != .eraser else {
-            reclaimCursorIfDue()
             erase(at: point)
             return
         }
-
-        // A drag delivers mouseDragged, never mouseMoved, so the cursor has to be taken
-        // back from here as well or a whole stroke can be drawn under a system arrow.
-        reclaimCursorIfDue()
 
         if let dirty = canvas.extendStroke(to: point,
                                            shiftHeld: event.modifierFlags.contains(.shift),
@@ -342,7 +336,6 @@ final class DrawingView: NSView {
         let point = convert(event.locationInWindow, from: nil)
         updateBadgeHover(at: point)
         followPointerWithLaser(to: point)
-        reclaimCursorIfDue()
     }
 
     override func mouseEntered(with event: NSEvent) {
@@ -366,30 +359,15 @@ final class DrawingView: NSView {
         applyDrawingCursor()
     }
 
-    // Safe to call from an event callback: it only sets the cursor. Rebuilding cursor
-    // rects from inside cursorUpdate re-enters AppKit's tracking machinery and throws,
-    // so that lives in refreshCursorRects, which only mode changes call.
-    // Take the cursor back periodically, not only when AppKit thinks to ask. Anything that
-    // owns it for a moment - the menu bar at the top of the screen is the reliable way to
-    // see it - leaves the plain arrow behind, and cursorUpdate does not necessarily fire
-    // again on the way back in. What the user sees then is a system pointer sitting on a
-    // drawing overlay with no way to get rid of it.
+    // Safe to call from an event callback: it only sets the cursor. Rebuilding cursor rects
+    // from inside cursorUpdate re-enters AppKit's tracking machinery and throws, so that lives
+    // in refreshCursorRects, which only mode and tool changes call.
     //
-    // Not on every move: measured, setting the cursor sixty times a second costs 2.3% of a
-    // core, which is more than everything else a mouse move does put together. Eight times
-    // a second costs a tenth of that and heals inside 150ms, which nobody can see.
-    private static let cursorReclaimInterval: TimeInterval = 0.125
-
-    private func reclaimCursorIfDue() {
-        let now = Date()
-        guard now.timeIntervalSince(lastCursorReclaim) >= DrawingView.cursorReclaimInterval else {
-            return
-        }
-
-        lastCursorReclaim = now
-        applyDrawingCursor()
-    }
-
+    // Taking the cursor back on a schedule used to live here, throttled to eight times a
+    // second and driven by mouse events - which meant it only ran while the mouse was moving,
+    // and the case that was actually reported is the pointer standing still. It is
+    // OverlayController's cursor hold now, on a timer, so a stationary pointer is covered and
+    // a moving one costs nothing to handle.
     func applyDrawingCursor() {
         guard !isInteractionMode else {
             return

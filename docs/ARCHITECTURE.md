@@ -82,8 +82,11 @@ These exist because something went wrong once. Do not remove them without readin
 4. **`⌃⌥⌘Esc` ends the process.** Anything less can, in principle, still leave someone
    stuck. It is the one recovery that cannot fail.
 5. **`.accessory` activation policy** — no Dock icon, no app switcher entry.
-6. **Idle costs nothing.** No timers, no polling while the overlay is closed. The one timer
-   in the app runs only while temporary ink is fading and stops with it.
+6. **Idle costs nothing.** No timers, no polling while the overlay is closed. Three timers
+   exist while it is open, each tied to something being true: the fade tick (only while
+   temporary ink is on screen), the laser's poll (only while the laser is in hand), and the
+   cursor hold at 20Hz, 0.1% of a core (only while drawing mode is taking the mouse). All
+   three stop with the thing that started them.
 7. **Drawing mode interacts with nothing.** Keys are swallowed (no beeps, no `⌘Q`), clicks
    never reach what is underneath. Interaction is what click-through is for.
 

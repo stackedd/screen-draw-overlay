@@ -178,6 +178,21 @@ panel appears, then it stops. Measured: no arrow at all in a 4ms sampler, agains
 at 30Hz and "until the mouse moves" before. Forty-two cursor sets is a millisecond and a half
 of CPU, once; the bound is what keeps an idle overlay at nothing.
 
+**And then it was reported again**, with every path this repo can drive measuring clean: the
+probe fires the real hot keys through the real handlers and walks all seven ways in and out,
+and none of them leaves an arrow. A symptom that survives a fix nobody can reproduce is worth
+answering at the symptom, so there is a second, slower half: `holdCursor()` re-sets the tool's
+cursor **twenty times a second for as long as drawing mode is on**, and stops on click-through
+and when the overlay goes away. Whatever hands the arrow out, it holds for at most 50ms.
+
+That is a poll, and this app does not like polls, so it was measured before it was written:
+`NSCursor.set()` costs **0.049ms**, which is 0.1% of a core at 20Hz — and setting it blind is
+three times cheaper than asking `NSCursor.currentSystem` what is on screen first (0.157ms) and
+only setting it when it differs. The per-move version this replaces did the same work eight
+times a second but *only while the mouse was moving*, which is exactly the case that was not
+being reported. It is gone from the event path, so a mouse move is one `Date()` and one
+comparison cheaper than it was.
+
 **A crash to not repeat:** the first version called `window.invalidateCursorRects(for:)` from
 inside `cursorUpdate`. That re-enters AppKit's tracking machinery and throws — `SIGABRT` the
 moment the pointer moved over the panel. Rebuilding cursor rects lives in its own method that
