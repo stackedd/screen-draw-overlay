@@ -57,6 +57,7 @@ final class DrawingView: NSView {
     // because the one thing a laser has to do is be there whoever owns the cursor.
     private let laserLayer = LaserDot.makeLayer()
     private var laserPoll: Timer?
+    private var lastLaserPoint: NSPoint?
 
     // Temporary ink, once it is finished: one self-fading layer each, above the ink.
     private let fadingInk = FadingInk()
@@ -186,24 +187,23 @@ final class DrawingView: NSView {
     }
 
     private func showLaserIfSelected() {
-        let wanted = tools.tool == .laser && !isInteractionMode
-        guard wanted else {
+        guard tools.tool == .laser, !isInteractionMode else {
             laserLayer.isHidden = true
             stopLaserPoll()
             return
         }
 
-        // Shown first, then placed: moveLaser does nothing while the layer is hidden, so
-        // the other order lit it up wherever it had been left rather than under the hand.
-        laserLayer.isHidden = false
+        // Placed before it is shown: followPointerWithLaser does both, in that order, so the
+        // glow cannot appear for a frame wherever it was last left.
         followPointerWithLaser()
         startLaserPoll()
     }
 
-    // Polled, not driven by mouseMoved. Mouse-moved events only reach the key window, and
-    // these panels are non-activating, so the moment the user had clicked anything in
-    // another app the events stopped and the laser hung in the air where it was last lit -
-    // which is exactly what was reported. Polling the pointer works whoever has focus.
+    // Polled as well as driven by events, because neither is enough on its own. Mouse-moved
+    // events only reach the key window and these panels are non-activating, so the moment the
+    // user has clicked anything in another app the events stop and the glow hangs in the air
+    // where it was last lit. The poll works whoever has focus; the events keep the glow level
+    // with the ink it is drawing, which a poll on its own does not.
     //
     // The timer exists only while the laser is the tool in hand, so an idle overlay still
     // costs nothing.
@@ -224,20 +224,32 @@ final class DrawingView: NSView {
         laserPoll = nil
     }
 
-    private func followPointerWithLaser() {
-        guard !laserLayer.isHidden, let window else {
+    // Where the glow goes, and whether this screen is the one that shows it. Called with a
+    // point by everything that already has one - a move, a press, a drag - and without one by
+    // the poll, which asks the window server instead.
+    //
+    // Whether it is lit is decided here, from where the pointer is, rather than by
+    // mouseEntered and mouseExited. Those were doing it, and an exit with no matching entry -
+    // a menu opening over the panel is enough - put the laser out for good, because nothing
+    // else ever turned it back on. Decided from the pointer's position it heals itself on the
+    // next tick, whatever was missed.
+    private func followPointerWithLaser(to point: NSPoint? = nil) {
+        guard let window, tools.tool == .laser, !isInteractionMode else {
             return
         }
 
-        moveLaser(to: convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil))
-    }
-
-    private func moveLaser(to point: NSPoint) {
-        guard !laserLayer.isHidden else {
-            return
+        let here = point ?? convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
+        if here != lastLaserPoint {
+            lastLaserPoint = here
+            laserLayer.position = here
         }
 
-        laserLayer.position = point
+        // One glow, on the screen the pointer is actually over. Every panel polls, so without
+        // this each of them would light one at the edge nearest the pointer.
+        let mine = bounds.contains(here)
+        if laserLayer.isHidden == mine {
+            laserLayer.isHidden = !mine
+        }
     }
 
     private func refreshBadge() {
@@ -271,6 +283,7 @@ final class DrawingView: NSView {
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         updateBadgeHover(at: point)
+        followPointerWithLaser(to: point)
 
         guard tools.tool != .eraser else {
             // One drag is one thing to take back, however many strokes it cuts through.
@@ -289,6 +302,9 @@ final class DrawingView: NSView {
     override func mouseDragged(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         updateBadgeHover(at: point)
+        // The beam is drawn where the event says the pointer is, so the glow is told the same
+        // thing: left to the poll, the light trailed the ink it is supposed to be making.
+        followPointerWithLaser(to: point)
 
         guard tools.tool != .eraser else {
             reclaimCursorIfDue()
@@ -316,13 +332,13 @@ final class DrawingView: NSView {
     override func mouseMoved(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         updateBadgeHover(at: point)
-        moveLaser(to: point)
+        followPointerWithLaser(to: point)
         reclaimCursorIfDue()
     }
 
     override func mouseEntered(with event: NSEvent) {
         applyDrawingCursor()
-        moveLaser(to: convert(event.locationInWindow, from: nil))
+        followPointerWithLaser(to: convert(event.locationInWindow, from: nil))
     }
 
     // Three ways to claim the cursor, because any one of them can be missed: the cursor
@@ -386,9 +402,10 @@ final class DrawingView: NSView {
     }
 
     override func mouseExited(with event: NSEvent) {
-        // The pointer is on another screen's panel; that one lights its own laser.
-        laserLayer.isHidden = true
-
+        // The laser is deliberately not touched here: which screen shows the glow is decided
+        // from where the pointer is, on every tick, so an exit with no entry after it cannot
+        // put the light out for good.
+        //
         // The pointer is on another screen's panel now. A hover left in effect here would
         // keep the badge hidden on this one until the pointer came back and crossed it
         // again, so it is forgotten on the way out.

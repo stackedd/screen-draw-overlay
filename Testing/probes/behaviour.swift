@@ -241,6 +241,35 @@
             .first.map { !$0.laserLayer.isHidden } ?? true
         check("click-through puts the laser out", laserInClickThrough ? "still lit" : "out", "out")
 
+        // Back to drawing, and then the two ways the light used to go missing. The pointer
+        // leaving the panel put it out - mouseExited hid the layer and nothing except a tool
+        // change ever showed it again, so a menu opening over the overlay took the laser away
+        // for the rest of the session. And a drag moved the ink without moving the glow,
+        // because only the poll placed it, so the light ran a frame or more behind the beam
+        // it was supposed to be drawing.
+        controller.toggleInteractionMode()
+        if let view = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot()).first,
+           let panel = controller.overlayWindowSnapshot().first {
+            let exit = NSEvent.enterExitEvent(with: .mouseExited, location: .zero, modifierFlags: [],
+                                              timestamp: 0, windowNumber: panel.windowNumber,
+                                              context: nil, eventNumber: 0, trackingNumber: 0,
+                                              userData: nil)!
+            view.mouseExited(with: exit)
+            view.followPointerWithLaser(to: NSPoint(x: 300, y: 300))
+            check("the laser comes back when the pointer does",
+                  view.laserLayer.isHidden ? "still out" : "lit", "lit")
+
+            let target = NSPoint(x: 420, y: 260)
+            view.mouseDragged(with: NSEvent.mouseEvent(with: .leftMouseDragged, location: target,
+                                                       modifierFlags: [], timestamp: 0,
+                                                       windowNumber: panel.windowNumber, context: nil,
+                                                       eventNumber: 0, clickCount: 1, pressure: 1)!)
+            check("and it is where the event says the pointer is, not where the poll left it",
+                  "\(view.laserLayer.position)", "\(target)")
+            view.finishStrokeInProgress()
+        }
+        controller.toggleInteractionMode()
+
         // Every picture this app hands to a layer has to cover the frame it was drawn for.
         // An NSBitmapImageRep measures itself in pixels until it is told otherwise and the
         // graphics context takes that measurement when it is made, so setting the size
