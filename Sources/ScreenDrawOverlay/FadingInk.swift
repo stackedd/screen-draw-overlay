@@ -55,44 +55,40 @@ final class FadingInk {
             return nil
         }
 
-        let frame = stroke.repaintBounds
-        let scale = contentsScale
-        guard frame.width > 0, frame.height > 0,
-              let rep = NSBitmapImageRep(bitmapDataPlanes: nil,
-                                         pixelsWide: Int((frame.width * scale).rounded(.up)),
-                                         pixelsHigh: Int((frame.height * scale).rounded(.up)),
-                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
-                                         isPlanar: false, colorSpaceName: .deviceRGB,
-                                         bytesPerRow: 0, bitsPerPixel: 0),
-              let context = NSGraphicsContext(bitmapImageRep: rep) else {
-            return nil
-        }
-
-        rep.size = frame.size
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = context
-        context.cgContext.translateBy(x: -frame.minX, y: -frame.minY)
-        stroke.renderColor.setStroke()
-        stroke.path.stroke()
-        NSGraphicsContext.restoreGraphicsState()
-
-        let layer = CALayer()
-        layer.frame = frame
-        layer.contentsScale = scale
-        layer.contents = rep.cgImage
-        layer.actions = ["contents": NSNull(), "position": NSNull(), "bounds": NSNull()]
-
         let age = Date().timeIntervalSince(createdAt)
         let remaining = stroke.life - age
         guard remaining > 0 else {
             return nil
         }
 
+        // Whole device pixels. The stroke is handed from the ink layer to this one at the
+        // moment the mouse comes up, and a picture resampled by a fraction of a pixel reads
+        // as the ink shifting under the hand.
+        let frame = Picture.snapped(stroke.repaintBounds, scale: contentsScale)
+        guard frame.width > 0, frame.height > 0,
+              let image = Picture.drawn(size: frame.size, scale: contentsScale, {
+                  NSGraphicsContext.current?.cgContext.translateBy(x: -frame.minX, y: -frame.minY)
+                  stroke.renderColor.setStroke()
+                  stroke.path.stroke()
+              }) else {
+            return nil
+        }
+
+        let layer = CALayer()
+        layer.frame = frame
+        layer.contentsScale = contentsScale
+        layer.contents = image
+        layer.actions = ["contents": NSNull(), "position": NSNull(), "bounds": NSNull()]
+
         let animation = CAKeyframeAnimation(keyPath: "opacity")
         let holdEnds = stroke.life * Stroke.fadeHold
         animation.values = [1, 1, 0]
         animation.keyTimes = [0, NSNumber(value: max(0, min(1, (holdEnds - age) / remaining))), 1]
         animation.duration = remaining
+        // Ease out, not linear: ink that thins away has to look like it is going rather than
+        // like a dimmer being turned down at a constant rate.
+        animation.timingFunctions = [CAMediaTimingFunction(name: .linear),
+                                     CAMediaTimingFunction(name: .easeIn)]
         animation.fillMode = .forwards
         animation.isRemovedOnCompletion = false
         layer.opacity = 0

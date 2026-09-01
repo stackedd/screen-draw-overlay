@@ -34,40 +34,27 @@ enum LaserDot {
             return cached
         }
 
-        let pixels = Int((extent * scale).rounded())
-        guard pixels > 0,
-              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
-                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
-                                         isPlanar: false, colorSpaceName: .deviceRGB,
-                                         bytesPerRow: 0, bitsPerPixel: 0),
-              let context = NSGraphicsContext(bitmapImageRep: rep) else {
-            return nil
+        let image = Picture.drawn(size: NSSize(width: extent, height: extent), scale: scale) {
+            let centre = NSPoint(x: extent / 2, y: extent / 2)
+            // A halo that falls off to nothing, then a hot core inside it - which is what a
+            // laser spot looks like and what makes it read as light rather than as a drawn
+            // circle.
+            let halo = NSGradient(colors: [colour.withAlphaComponent(0.62),
+                                           colour.withAlphaComponent(0.26),
+                                           colour.withAlphaComponent(0)],
+                                  atLocations: [0, 0.45, 1], colorSpace: .deviceRGB)
+            halo?.draw(fromCenter: centre, radius: 0, toCenter: centre, radius: extent / 2,
+                       options: [])
+
+            let core = extent * 0.16
+            colour.setFill()
+            NSBezierPath(ovalIn: NSRect(x: centre.x - core, y: centre.y - core,
+                                        width: core * 2, height: core * 2)).fill()
+            NSColor.white.withAlphaComponent(0.85).setFill()
+            NSBezierPath(ovalIn: NSRect(x: centre.x - core / 2.2, y: centre.y - core / 2.2,
+                                        width: core / 1.1, height: core / 1.1)).fill()
         }
 
-        rep.size = NSSize(width: extent, height: extent)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = context
-
-        let centre = NSPoint(x: extent / 2, y: extent / 2)
-        // A halo that falls off to nothing, then a hot core inside it - which is what a laser
-        // spot looks like and what makes it read as light rather than as a drawn circle.
-        let halo = NSGradient(colors: [colour.withAlphaComponent(0.62),
-                                       colour.withAlphaComponent(0.26),
-                                       colour.withAlphaComponent(0)],
-                              atLocations: [0, 0.45, 1], colorSpace: .deviceRGB)
-        halo?.draw(fromCenter: centre, radius: 0, toCenter: centre, radius: extent / 2, options: [])
-
-        let core = extent * 0.16
-        colour.setFill()
-        NSBezierPath(ovalIn: NSRect(x: centre.x - core, y: centre.y - core,
-                                    width: core * 2, height: core * 2)).fill()
-        NSColor.white.withAlphaComponent(0.85).setFill()
-        NSBezierPath(ovalIn: NSRect(x: centre.x - core / 2.2, y: centre.y - core / 2.2,
-                                    width: core / 1.1, height: core / 1.1)).fill()
-
-        NSGraphicsContext.restoreGraphicsState()
-
-        let image = rep.cgImage
         glows[key] = image
 
         return image

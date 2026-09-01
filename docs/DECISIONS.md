@@ -706,3 +706,40 @@ six colours to a tool that has no colour.
 
 `Testing/probes/cursor.swift` and `probes/wheel.swift` render all of it, because none of this
 is visible from a passing test.
+
+## 28. Every picture a layer gets is painted in one place
+
+Three things hand a layer a finished picture instead of painting each frame: the badge, the
+laser's glow, and each piece of temporary ink on its way out. All three made their own bitmap,
+and all three made the same mistake:
+
+```swift
+let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 108, pixelsHigh: 108, ...)
+let context = NSGraphicsContext(bitmapImageRep: rep)   // takes the size as it is now: 108pt
+rep.size = NSSize(width: 54, height: 54)               // too late, the context is made
+```
+
+`NSBitmapImageRep` measures itself in pixels until it is told otherwise, and
+`NSGraphicsContext` takes that measurement when the context is created. Setting `size`
+afterwards renames the picture and leaves the context at 1x, so on a Retina display everything
+was painted into the bottom left quarter of the bitmap and then stretched back over the whole
+frame. Measured: a 20x20pt fill covered 400 of 1600 pixels at 2x and 400 of 3600 at 3x.
+
+What that was on screen, and it is the whole of two of the three faults that were reported:
+
+- **The badge at half size**, sitting inside a hover rectangle four times its area — so it
+  also stopped drawing where the pointer was nowhere near it.
+- **The laser's glow thirteen points down and to the left of the pointer**, at half its
+  intended width. "It does not point at what I am pointing at."
+- **Temporary ink jumping** down-left and shrinking to half size the instant the mouse came
+  up, which is the moment the stroke is handed from the ink layer to a fading layer of its
+  own. The fade was working; what people saw was the jump in front of it.
+
+It is one function now, `Picture.drawn(size:scale:)`, with the order that matters on one line
+and the reason next to it, and nothing else in the app makes a bitmap by hand. The behaviour
+suite checks the coverage at 1x, 2x and 3x and checks that the glow's centre of mass is on its
+hot spot; all four checks fail if the two lines are swapped back.
+
+Fading ink also snaps its frame out to whole device pixels now, for the reason the badge
+already did (entry 22): the stroke changes layers at the moment the mouse comes up, and a
+picture resampled by a fraction of a pixel reads as the ink shifting under the hand.

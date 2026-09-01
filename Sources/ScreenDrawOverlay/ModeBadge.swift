@@ -107,55 +107,41 @@ final class ModeBadge {
                        width: width,
                        height: height)
 
-        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil,
-                                         pixelsWide: Int((width * scale).rounded()),
-                                         pixelsHigh: Int((height * scale).rounded()),
-                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
-                                         isPlanar: false, colorSpaceName: .deviceRGB,
-                                         bytesPerRow: 0, bitsPerPixel: 0),
-              let context = NSGraphicsContext(bitmapImageRep: rep) else {
-            return (nil, frame)
+        let image = Picture.drawn(size: frame.size, scale: scale) {
+            let box = NSRect(x: 0, y: 0, width: width, height: height)
+            let plate = NSBezierPath(roundedRect: box, xRadius: ModeBadge.cornerRadius,
+                                     yRadius: ModeBadge.cornerRadius)
+            backgroundColor.setFill()
+            plate.fill()
+            // A hairline lip. Without it the plate has no edge against a light background and
+            // reads as a flat sticker rather than something sitting on top of the screen.
+            let lip = NSBezierPath(roundedRect: box.insetBy(dx: 0.5, dy: 0.5),
+                                   xRadius: ModeBadge.cornerRadius - 0.5,
+                                   yRadius: ModeBadge.cornerRadius - 0.5)
+            lip.lineWidth = 1
+            NSColor.white.withAlphaComponent(0.22).setStroke()
+            lip.stroke()
+
+            // The one loud thing on the badge, and the only warning that clicks are not
+            // reaching whatever is underneath. Clipped to the plate so it follows the corner.
+            if !isInteractionMode {
+                NSGraphicsContext.saveGraphicsState()
+                plate.addClip()
+                NSColor.systemRed.setFill()
+                NSRect(x: 0, y: 0, width: ModeBadge.stripeWidth, height: height).fill()
+                NSGraphicsContext.restoreGraphicsState()
+            }
+
+            // Bottom line first: the context is not flipped, so the mode sits above the hint.
+            let textX = ModeBadge.paddingX + ModeBadge.swatchDiameter + ModeBadge.swatchGap
+            hint.draw(at: NSPoint(x: textX, y: ModeBadge.paddingY))
+            let modeY = ModeBadge.paddingY + hint.size().height + ModeBadge.lineGap
+            mode.draw(at: NSPoint(x: textX, y: modeY))
+
+            drawSwatch(centredOn: modeY + mode.size().height / 2)
         }
 
-        rep.size = NSSize(width: width, height: height)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = context
-
-        let box = NSRect(x: 0, y: 0, width: width, height: height)
-        let plate = NSBezierPath(roundedRect: box, xRadius: ModeBadge.cornerRadius,
-                                 yRadius: ModeBadge.cornerRadius)
-        backgroundColor.setFill()
-        plate.fill()
-        // A hairline lip. Without it the plate has no edge against a light background and
-        // reads as a flat sticker rather than something sitting on top of the screen.
-        let lip = NSBezierPath(roundedRect: box.insetBy(dx: 0.5, dy: 0.5),
-                               xRadius: ModeBadge.cornerRadius - 0.5,
-                               yRadius: ModeBadge.cornerRadius - 0.5)
-        lip.lineWidth = 1
-        NSColor.white.withAlphaComponent(0.22).setStroke()
-        lip.stroke()
-
-        // The one loud thing on the badge, and the only warning that clicks are not reaching
-        // whatever is underneath. Clipped to the plate so it follows the rounded corner.
-        if !isInteractionMode {
-            NSGraphicsContext.saveGraphicsState()
-            plate.addClip()
-            NSColor.systemRed.setFill()
-            NSRect(x: 0, y: 0, width: ModeBadge.stripeWidth, height: height).fill()
-            NSGraphicsContext.restoreGraphicsState()
-        }
-
-        // Bottom line first: the context is not flipped, so the mode sits above the hint.
-        let textX = ModeBadge.paddingX + ModeBadge.swatchDiameter + ModeBadge.swatchGap
-        hint.draw(at: NSPoint(x: textX, y: ModeBadge.paddingY))
-        let modeY = ModeBadge.paddingY + hint.size().height + ModeBadge.lineGap
-        mode.draw(at: NSPoint(x: textX, y: modeY))
-
-        drawSwatch(centredOn: modeY + mode.size().height / 2)
-
-        NSGraphicsContext.restoreGraphicsState()
-
-        return (rep.cgImage, frame)
+        return (image, frame)
     }
 
     // Filled in the pen's colour while drawing; hollow while clicks are passing through,

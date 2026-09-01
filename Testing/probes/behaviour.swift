@@ -241,6 +241,50 @@
             .first.map { !$0.laserLayer.isHidden } ?? true
         check("click-through puts the laser out", laserInClickThrough ? "still lit" : "out", "out")
 
+        // Every picture this app hands to a layer has to cover the frame it was drawn for.
+        // An NSBitmapImageRep measures itself in pixels until it is told otherwise and the
+        // graphics context takes that measurement when it is made, so setting the size
+        // afterwards left the badge, the glow and every piece of fading ink painted at 1x
+        // into the bottom left quarter of a Retina bitmap. On screen: a half-size badge, a
+        // glow thirteen points down and left of the pointer, and ink that jumped the moment
+        // the mouse came up. None of it was visible to a test that counted strokes.
+        func alpha(_ image: CGImage) -> [Double] {
+            let (w, h) = (image.width, image.height)
+            var pixels = [UInt8](repeating: 0, count: w * h * 4)
+            guard let ctx = CGContext(data: &pixels, width: w, height: h, bitsPerComponent: 8,
+                                      bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return [] }
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return stride(from: 3, to: pixels.count, by: 4).map { Double(pixels[$0]) / 255 }
+        }
+
+        for scale in [1.0, 2.0, 3.0] as [CGFloat] {
+            let filled = Picture.drawn(size: NSSize(width: 20, height: 20), scale: scale) {
+                NSColor.white.setFill()
+                NSRect(x: 0, y: 0, width: 20, height: 20).fill()
+            }
+            let covered = filled.map { alpha($0).filter { $0 > 0.5 }.count } ?? -1
+            check("a picture covers the frame it was drawn for at \(Int(scale))x",
+                  "\(covered)", "\(Int(20 * scale) * Int(20 * scale))")
+        }
+
+        // And the glow has to sit on the pointer, not down and to the left of it: the fault
+        // above moved it by a quarter of its own width, which is where "the laser does not
+        // point at what I am pointing at" came from.
+        if let glow = LaserDot.glow(controller.tools.color, scale: 2) {
+            let values = alpha(glow)
+            let side = glow.width
+            var weight = 0.0, x = 0.0, y = 0.0
+            for (index, value) in values.enumerated() {
+                weight += value
+                x += value * Double(index % side)
+                y += value * Double(index / side)
+            }
+            let offset = weight > 0 ? hypot(x / weight - Double(side - 1) / 2,
+                                            y / weight - Double(side - 1) / 2) : 999
+            check("the glow is centred on the pointer", offset < 1 ? "yes" : "no: \(offset) px", "yes")
+        }
+
         // Holding the button with the laser in hand draws a beam that goes away by itself.
         // It used to be a trail of little dots dropped as the pointer passed, pressed or
         // not, which looked like beads and was drawing something nobody had asked for.
