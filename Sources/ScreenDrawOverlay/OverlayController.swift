@@ -498,7 +498,8 @@ final class OverlayController {
             windows.forEach { $0.drawingView.releaseDrawingCursor() }
             print("ScreenDrawOverlay: click-through mode ON (drawing kept, clicks pass through)")
         } else {
-            // Escape, C and Command+Z are local keys, so the panel has to be key again.
+            // Key again, so that keys land here and stop instead of reaching the app under a
+            // screen the overlay is covering.
             let keyPanel = windows.first { $0.drawingView.showsBadge } ?? windows[0]
             keyPanel.makeKeyAndOrderFront(nil)
             takeCursorBack()

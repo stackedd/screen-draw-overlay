@@ -4,8 +4,9 @@
 // guessed and decides what the overlay can cover, and .nonactivatingPanel, which lets the
 // panel take the mouse and keyboard without yanking the front app out from under the user.
 //
-// It also swallows key equivalents, because in drawing mode the keyboard belongs to the
-// tool and a stray Command+Q in the middle of a stroke is not what anyone meant.
+// It also swallows every key equivalent, because drawing mode interacts with nothing: a stray
+// Command+Q in the middle of a stroke is not what anyone meant, and this app's own commands
+// arrive as global hot keys, outside this path entirely.
 
 import AppKit
 
@@ -82,8 +83,8 @@ final class OverlayPanel: NSPanel {
         makeFirstResponder(drawingView)
     }
 
-    // Borderless panels do not normally become key windows. We opt in so the drawing
-    // view's own keys - C to clear, Command+Z to undo - reach it.
+    // Borderless panels do not normally become key windows. We opt in so that keystrokes come
+    // here and stop, rather than reaching the app underneath while the overlay covers it.
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 

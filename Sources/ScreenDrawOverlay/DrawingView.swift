@@ -586,8 +586,8 @@ final class DrawingView: NSView {
         invalidateAllInk()
     }
 
-    // Undo and redo reach the canvas from two directions: Command+Z while the panel is key,
-    // and the global shortcut, which works whatever has the keyboard.
+    // Undo and redo arrive from the actions wheel, which is a global hot key: the canvas can
+    // be taken back from whatever the user is doing, on the screen the pointer is over.
     func undo() {
         canvas.undo().forEach(invalidateInk)
         syncFadingInk()

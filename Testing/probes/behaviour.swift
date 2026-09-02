@@ -117,13 +117,13 @@
         controller.tools.selectColor(2); controller.tools.select(tool: .arrow)
         stroke(y: 400)
         let signature = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot()).first!.capturedStrokes()
-            .map { "\($0.style.label)/\(Int($0.width))/\($0.points.count)" }.joined(separator: ",")
+            .map { "\($0.style)/\(Int($0.width))/\($0.points.count)" }.joined(separator: ",")
         check("arrow tool produced a two-point stroke", signature.hasSuffix("/2") ? "yes" : "no: \(signature)", "yes")
         controller.toggleDrawingMode()
         check("hidden", state, "OFF")
         controller.toggleDrawingMode()
         let restored = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot()).first!.capturedStrokes()
-            .map { "\($0.style.label)/\(Int($0.width))/\($0.points.count)" }.joined(separator: ",")
+            .map { "\($0.style)/\(Int($0.width))/\($0.points.count)" }.joined(separator: ",")
         check("hide+show keeps strokes exactly", restored, signature)
 
         stroke(finish: false, y: 500)
@@ -254,7 +254,7 @@
         // only ours while we own the window under the pointer, and being there is the one
         // thing a laser has to do. It also has no business sitting on top of an app the
         // user has just been handed back.
-        controller.tools.toggleLaser()
+        controller.tools.select(tool: .laser)
         let laserLit = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot())
             .first.map { !$0.laserLayer.isHidden } ?? false
         check("space lights the laser on the overlay", laserLit ? "yes" : "no", "yes")
@@ -398,7 +398,7 @@
         }
 
         check("and it leaves no permanent ink", "\(live)", "\(permanentBefore)")
-        controller.tools.toggleLaser()
+        controller.tools.select(tool: .laser)
 
         // The laser draws light, not a pen line that happens to disappear - which is what
         // "it has no design of its own" meant. A beam is three passes: a halo that reaches

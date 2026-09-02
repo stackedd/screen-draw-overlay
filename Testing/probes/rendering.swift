@@ -70,9 +70,9 @@ set { tools.select(tool: .highlighter) }; drag(from: NSPoint(x: 60, y: 620), to:
 // The marker at its widest, because the rectangle a stroke asks to have repainted is now its
 // own reach rather than a whole width either side - and a 56pt line is where being one point
 // too mean would show.
-set { tools.stepWidth(by: 1) }; set { tools.stepWidth(by: 1) }; set { tools.stepWidth(by: 1) }
+set { tools.selectWidth(ToolSettings.widths.count - 1) }
 drag(from: NSPoint(x: 80, y: 680), to: NSPoint(x: 780, y: 660), steps: 30)
-set { tools.stepWidth(by: -1) }; set { tools.stepWidth(by: -1) }; set { tools.stepWidth(by: -1) }
+set { tools.selectWidth(2) }
 set { tools.select(tool: .eraser) }; drag(from: NSPoint(x: 400, y: 230), to: NSPoint(x: 405, y: 230), steps: 4)
 set { view.undo() }
 set { view.redo() }

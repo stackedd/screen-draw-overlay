@@ -1,9 +1,10 @@
 import AppKit
 import Carbon
 
-// A real overlay on a real screen, questioned about the two things that keep being reported
-// and keep passing every offscreen test: the laser not appearing, and the system cursor
-// turning up while drawing.
+// A real overlay on a real screen, questioned about the things that live between this app and
+// the window server - where every offscreen test passes and the screen still looks wrong: is
+// the laser's glow attached and lit, is the pointer's own layer carrying a picture and
+// following the hand, and is the window server holding the cursor that shows nothing.
 //
 //     python3 Testing/make_probe.py diagnose DIAG \
 //       && swift build --package-path .build/testing/diagnose -c release \
@@ -137,7 +138,7 @@ report("in the middle of a drag")
 view.mouseUp(with: event(.leftMouseUp, NSPoint(x: middle.x + 120, y: middle.y)))
 report("after the drag")
 
-tools.stepWidth(by: 2)
+tools.selectWidth(4)
 settle()
 report("after changing the width")
 

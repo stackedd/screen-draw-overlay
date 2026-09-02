@@ -231,14 +231,6 @@ enum StrokeStyle {
         return (width + max(6, width * 0.8)) / 2 + 1
     }
 
-    var label: String {
-        switch self {
-        case .pen: return "PEN"
-        case .highlighter: return "MARKER"
-        case .beam: return "BEAM"
-        }
-    }
-
     // Light, in three passes: a halo that falls away, the colour inside it, and a white core
     // down the middle. Static, and not private, because the size wheel paints one too - a
     // sector that says what the laser will look like beats a bar that stands for it.

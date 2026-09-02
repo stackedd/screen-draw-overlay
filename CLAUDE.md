@@ -131,28 +131,25 @@ easy to repeat.
 
 ## Current focus
 
-The app is feature-complete for v0.2. The last round was **the three faults a user could see
-and no test could**, and the pattern in all three is worth keeping in mind: every one of them
-lived between this app and the window server, where the app's own state was correct the whole
-time.
+**Working towards the first release.** The app does what it is for; the round in progress is
+about making it one thing to learn and one thing to trust.
 
-- **Pictures were painted at 1x into Retina bitmaps** — the badge at half size, the laser's
-  glow 19pt off the pointer, temporary ink jumping when the mouse came up. One line, in three
-  copies. `Picture.drawn(size:scale:)` is the only place that makes a bitmap now, and the
-  behaviour suite checks coverage at 1x, 2x and 3x.
-- **The cursor.** A panel that appears under a stationary pointer is handed the plain arrow by
-  the window server ~25ms later, and nothing asks the app again until the mouse moves.
-  `takeCursorBack()` re-sets it for a third of a second. Found by sampling
-  `NSCursor.currentSystem` at 4ms (`Testing/probes/cursorflash.swift`), which is the only way
-  to see it: `NSCursor.current` was right throughout.
-- **The laser.** Lit from the pointer's position on every tick rather than by enter/exit
-  events, moved by the events that already have a point rather than only by the poll, and its
-  trail cut into pieces so it fades behind the hand instead of going out in one block when the
-  button comes up. Temporary ink's clock now starts when a mark is finished. It is also light
-  rather than a pen line that disappears — halo, colour, white core — and its size is a
-  setting instead of a fixed 6pt (`docs/DECISIONS.md` 25, `Testing/probes/laser.swift`).
+- **One mechanic.** Four keys on the Option row — `⌥Z` tools, `⌥X` colour, `⌥C` size, `⌥V`
+  what you do *to* a drawing — all of them global, all of them hold-push-release, and nothing
+  underneath them. The bare keys are gone (`docs/DECISIONS.md` 30): they only worked while a
+  non-activating panel happened to be key, which is a state the user cannot see. `⌥V`'s hub is
+  undo, so a tap takes one thing back; a wheel only appears if the key is held past 180ms.
+- **The pointer is drawn, not handed over.** An app that is presenting hides the system
+  cursor, and nothing this app may do can detect or undo that, so the pointer is a layer and
+  the window server gets a cursor that shows nothing (`docs/DECISIONS.md` 6). The cursor hold
+  runs at 60Hz while drawing mode has the mouse, which is what stops the arrow coming back.
+- **Still open, in order:** the in-progress stroke is re-stroked in full on every mouse move
+  (quadratic in its own length); `Stroke.repaintBounds` is recomputed per stroke per repaint;
+  points closer together than about 1.5pt are worth dropping; and the pointer poll could fall
+  back to a slower rate while the hand is still. Each of those is a measurement before it is
+  a change.
 
-**Performance** is measured rather than guessed (`docs/ARCHITECTURE.md`, "Where the drawing
+**Performance is measured rather than guessed** (`docs/ARCHITECTURE.md`, "Where the drawing
 bill actually goes"). Three numbers govern everything:
 
 - Asking this overlay to repaint 60 times a second through `NSView` costs **15.7% CPU**,
@@ -160,27 +157,12 @@ bill actually goes"). Three numbers govern everything:
 - The same repaint asked for through a **`CALayer` costs 3.8%** — 4x less, for identical
   output — **but only while the dirty rect is small.** A layer repaint costs 21.0% at
   400x400 and 50.7% for the whole screen, where the view path stays flat. Small rects: use a
-  layer. Whole-screen ones: do not repaint at all.
-- Moving a sublayer, which is not a repaint, costs **1.6%**. A cursor the window server draws
-  costs nothing.
-- Actually painting a drag costs **0.3–0.5%**. Optimising the painting is bidding for half a
-  point out of twenty-three.
+  layer. Whole-screen ones: do not repaint at all. This is also why a stroke asks to repaint
+  its own reach and not twice it: a fat marker went from 4.01 Mpx to 1.13 Mpx a drag.
+- Moving a sublayer, which is not a repaint, costs **1.6%**. Drawing the pointer that way
+  costs about a point of a core against a cursor the window server draws — and it is the only
+  pointer that survives a presentation.
 
-That route has been walked, and one step of it had to be walked back. Ink and badge are
-layers; the pointer turned out to belong to the window server instead; and the fade, which is
-the one thing whose dirty rect is *not* small, had to come off the repaint path altogether.
-Measured end to end on a real panel — moving the pointer over 200 strokes went from **22.9%
-to 0.5%**, drawing over them from **23.4% to 5.4%**, fifty strokes fading from 3.8% to 0.7%,
-and idle stayed at 0.5%.
-
-**What is still open**, in order:
-
-1. The **quadratic in-progress stroke** — the stroke under the mouse is re-stroked in full on
-   every move, so the last tenth of a 5000-point line costs 13x its first tenth. Now the
-   largest thing left in the painting half.
-2. **Coalescing repaints to the display refresh.** Worth exactly what the real event rate
-   exceeds the refresh rate, which has not been measured yet. Measure that first.
-3. Cheap and correct either way: caching `Stroke.repaintBounds`, and thinning points that
-   land less than about 1.5pt from the last one.
-
-WindowServer is not involved in any of this; it does not move when the overlay repaints.
+Measured end to end on a real panel (`Testing/probes/onscreen.swift`): idle 0.9%, moving the
+pointer 1.7%, drawing over 200 strokes 5.9%, a wheel open and being swept 6.8%. Everything
+except the pointer's own cost came down from the 22.9%/23.4% the painted version cost.

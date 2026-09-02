@@ -123,17 +123,6 @@ final class ToolSettings {
         onChange?()
     }
 
-    func stepWidth(by delta: Int) {
-        let next = min(max(widthIndex + delta, 0), ToolSettings.widths.count - 1)
-        guard next != widthIndex else {
-            return
-        }
-
-        widthIndex = next
-        persist()
-        onChange?()
-    }
-
     func select(tool newTool: DrawingTool) {
         guard newTool != tool else {
             return
@@ -145,12 +134,6 @@ final class ToolSettings {
         }
         persist()
         onChange?()
-    }
-
-    // Space is a switch, not a one-way trip: it drops the laser and hands back whatever
-    // was in hand before.
-    func toggleLaser() {
-        select(tool: tool == .laser ? lastDrawingTool : .laser)
     }
 
     func toggleTemporaryInk() {
