@@ -149,8 +149,9 @@ about making it one thing to learn and one thing to trust.
   this list — caching `repaintBounds` and thinning points — were measured and **dropped**:
   AppKit already caches bounds, and thinning overlaps with the trimming above and loses to it
   (`docs/ARCHITECTURE.md`).
-- **Still open:** the pointer poll could fall back to a slower rate while the hand is still
-  (idle is 0.9% of a core). Measure it before changing it.
+- **Nothing is open on the painting side.** The pointer poll was the last candidate and it
+  measured at 0.00008 ms a tick — the 0.9% an idle overlay costs is the cursor hold (0.3%) and
+  the run loop, not the poll. The next thing worth measuring is the release itself.
 
 **Performance is measured rather than guessed** (`docs/ARCHITECTURE.md`, "Where the drawing
 bill actually goes"). Three numbers govern everything:

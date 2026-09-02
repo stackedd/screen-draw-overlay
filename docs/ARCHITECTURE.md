@@ -273,6 +273,12 @@ months and both turned out to be worth nothing once measured:
   aimed at, and thinning then makes each remaining paint cover more ground. The cheaper one
   wins alone.
 
+**And a third: making the pointer poll adaptive.** One tick of it — `NSEvent.mouseLocation`,
+converted into the view, compared with the last one — costs **0.00008 ms**, which at 60Hz is
+five thousandths of a percent of a core. The 0.9% an idle overlay costs is not the poll; the
+largest measurable piece of it is the cursor hold, at 60 x 0.049 ms = 0.3%, and that is the
+price of a pointer that does not blink (entry 6 in DECISIONS).
+
 **`needsToDraw(_:)` is not a lever here.** It looked like a free win — AppKit hands
 `draw(_:)` the bounding box of every invalid rectangle, so a pointer that invalidates where
 it left and where it arrived can union into a band across the screen. Measured: a
