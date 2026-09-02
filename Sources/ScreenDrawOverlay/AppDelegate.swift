@@ -28,6 +28,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Keep the app out of the Dock. The small menu bar item is the whole presence.
         NSApp.setActivationPolicy(.accessory)
 
+        // Off unless SDO_CURSOR_LOG is set: this is the app saying what the screen shows, on
+        // the machine where the pointer misbehaves, because no probe here can reproduce it.
+        CursorLog.startIfAsked { [weak self] in
+            self?.controller.stateDescription ?? "no controller"
+        }
+
         let unavailable = controller.start()
         if !unavailable.isEmpty {
             print("ScreenDrawOverlay: hotkeys unavailable: \(unavailable.joined(separator: ", "))")

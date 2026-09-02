@@ -223,6 +223,14 @@ final class OverlayController {
         menuBar?.reportUnavailableShortcuts(shortcuts)
     }
 
+    // What the app believes is happening, for the cursor log to print next to what the screen
+    // is actually showing. Nothing else reads it.
+    var stateDescription: String {
+        let mode = !isDrawingMode ? "off" : (isInteractionMode ? "click-through" : "drawing")
+
+        return mode + "/" + tools.tool.name.lowercased() + (wheels.isOpen ? "/wheel up" : "")
+    }
+
     func undoOnScreenUnderPointer(redo: Bool) {
         let windows = overlayWindowSnapshot()
         guard isDrawingMode, !windows.isEmpty else {
@@ -492,10 +500,15 @@ final class OverlayController {
         cursorSettling = timer
     }
 
+    // A way to take the hold out of the picture, so that "is the hold closing the gap or
+    // causing the flicker?" is a question an experiment answers. See CursorLog.
+    private static let holdsCursor = ProcessInfo.processInfo.environment["SDO_CURSOR_HOLD"] != "0"
+
     // For as long as the overlay is taking the mouse. It stops on click-through, where the
     // pointer belongs to the app underneath, and when the overlay goes away.
     private func holdCursor() {
-        guard cursorHold == nil, isDrawingMode, !isInteractionMode else {
+        guard OverlayController.holdsCursor, cursorHold == nil, isDrawingMode,
+              !isInteractionMode else {
             return
         }
 
