@@ -156,6 +156,12 @@ next to the numbers above:
   it only reaches the size of a single repaint after a few thousand points.
 - A fade paints **nothing at all** now, which is what the cost suite's fourth sweep exists
   to keep true.
+- **A wide marker asks for the area it draws on**, not twice it. The rectangle a mouse move
+  invalidates is the segment grown by the pen's own reach — half its width and a point of
+  antialiasing — where it used to be a whole width either side. Measured on the marker at its
+  widest (56pt), 300 moves over a canvas of 50 strokes: **4.01 Mpx and 0.297 ms an event
+  before, 1.13 Mpx and 0.126 ms after**. A layer repaint costs with its area, so this is the
+  part of "the fat marker feels coarse" that was the app's own fault.
 - **The laser's trail** costs 0.013 ms an event while it is only extending, and 0.074 ms on
   the event that cuts a piece off and paints it into a layer of its own — three passes of the
   path now that a beam is painted as light rather than as a line, up from 0.038 ms for the

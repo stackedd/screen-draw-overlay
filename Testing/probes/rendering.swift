@@ -67,6 +67,12 @@ tap(kVK_ANSI_5, "5"); tap(kVK_ANSI_A, "a"); drag(from: NSPoint(x: 60, y: 320), t
 tap(kVK_ANSI_4, "4"); tap(kVK_ANSI_R, "r"); drag(from: NSPoint(x: 120, y: 420), to: NSPoint(x: 700, y: 560))
 tap(kVK_ANSI_2, "2"); tap(kVK_ANSI_O, "o"); drag(from: NSPoint(x: 200, y: 430), to: NSPoint(x: 620, y: 550))
 tap(kVK_ANSI_H, "h"); drag(from: NSPoint(x: 60, y: 620), to: NSPoint(x: 800, y: 620))
+// The marker at its widest, because the rectangle a stroke asks to have repainted is now its
+// own reach rather than a whole width either side - and a 56pt line is where being one point
+// too mean would show.
+tap(kVK_ANSI_RightBracket, "]"); tap(kVK_ANSI_RightBracket, "]"); tap(kVK_ANSI_RightBracket, "]")
+drag(from: NSPoint(x: 80, y: 680), to: NSPoint(x: 780, y: 660), steps: 30)
+tap(kVK_ANSI_LeftBracket, "["); tap(kVK_ANSI_LeftBracket, "["); tap(kVK_ANSI_LeftBracket, "[")
 tap(kVK_ANSI_E, "e"); drag(from: NSPoint(x: 400, y: 230), to: NSPoint(x: 405, y: 230), steps: 4)
 tap(kVK_ANSI_Z, "z", .command)
 tap(kVK_ANSI_Z, "z", [.command, .shift])

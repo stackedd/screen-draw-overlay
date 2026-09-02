@@ -114,7 +114,8 @@ final class Canvas {
         shapeAnchor = tools.tool.isShape ? point : nil
         lastPoint = point
 
-        return Canvas.segmentBounds(from: point, to: point, width: width)
+        return Canvas.segmentBounds(from: point, to: point,
+                                    reach: tools.style.reach(at: width))
     }
 
     func extendStroke(to point: NSPoint, shiftHeld: Bool, with tools: ToolSettings) -> NSRect? {
@@ -146,7 +147,8 @@ final class Canvas {
         // Only the new segment changed. Invalidating everything here meant every mouse
         // move re-stroked every path drawn so far, so the cost of a drag grew with the
         // number of strokes already on screen.
-        return Canvas.segmentBounds(from: previousPoint, to: point, width: existing.width)
+        return Canvas.segmentBounds(from: previousPoint, to: point,
+                                    reach: existing.style.reach(at: existing.width))
     }
 
     // A stroke the user has not lifted the mouse off yet is still a stroke. Whenever the
@@ -448,11 +450,14 @@ final class Canvas {
         redoStack.removeAll()
     }
 
-    private static func segmentBounds(from start: NSPoint, to end: NSPoint, width: CGFloat) -> NSRect {
+    // The rectangle one segment of a stroke covers: the box between its ends, grown by how far
+    // that pen's paint reaches from the middle of the line. `reach` rather than the width,
+    // because a fat marker was asking for twice the area it drew on every mouse move.
+    private static func segmentBounds(from start: NSPoint, to end: NSPoint, reach: CGFloat) -> NSRect {
         NSRect(x: min(start.x, end.x),
                y: min(start.y, end.y),
                width: abs(end.x - start.x),
                height: abs(end.y - start.y))
-            .insetBy(dx: -width, dy: -width)
+            .insetBy(dx: -reach, dy: -reach)
     }
 }

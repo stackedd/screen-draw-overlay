@@ -212,11 +212,23 @@ enum StrokeStyle {
         self == .highlighter ? .butt : .round
     }
 
-    // How far the paint reaches past the path, as a multiple of the width. A beam's halo is
-    // wider than its line, so the rectangle to repaint has to be wider too - and the picture a
-    // fading beam is painted into has to have room for it, or the glow is clipped square.
-    var reach: CGFloat {
-        self == .beam ? 1.4 : 1
+    // How far the paint reaches from the middle of the line, in points. Everything that
+    // invalidates a rectangle asks this, and it is worth being exact about: too small and an
+    // incremental repaint leaves the edge of a stroke behind, too large and every mouse move
+    // repaints more than it drew - and a layer repaint costs with its area, 3.8% of a core at
+    // 40x40 against 21% at 400x400 (docs/ARCHITECTURE.md).
+    //
+    // It used to be a whole width either side, which is twice what a line needs: half of it
+    // covers the stroke and a point covers the antialiasing. At 56pt - a marker at its widest,
+    // which is where "it feels coarse" was reported - that was 112pt of rectangle for a stroke
+    // 56pt wide.
+    func reach(at width: CGFloat) -> CGFloat {
+        guard self == .beam else {
+            return width / 2 + 1
+        }
+
+        // The halo is wider than the line it surrounds; this is the width paintBeam uses.
+        return (width + max(6, width * 0.8)) / 2 + 1
     }
 
     var label: String {
@@ -305,11 +317,10 @@ struct Stroke {
         color.withAlphaComponent(style.alpha)
     }
 
-    // NSBezierPath.bounds covers the path geometry only, so grow it by this stroke's own
-    // line width to include the drawn line, its caps and antialiasing - and by more than that
-    // for a beam, whose halo is wider than the line it surrounds.
+    // NSBezierPath.bounds covers the path geometry only, so grow it by how far this stroke's
+    // paint actually reaches: half its width, a point of antialiasing, and a beam's halo.
     var repaintBounds: NSRect {
-        let reach = width * style.reach
+        let reach = style.reach(at: width)
         return path.bounds.insetBy(dx: -reach, dy: -reach)
     }
 

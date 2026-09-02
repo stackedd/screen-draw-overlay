@@ -314,6 +314,36 @@ for model in [Bench.Model.rects, .union] {
                 bench.view.canvas.strokes.filter { $0.createdAt != nil }.count))
 }
 
+// MARK: - Sweep 6: the marker at its widest
+//
+// The rectangle a mouse move asks to have repainted is the segment grown by how far the pen's
+// paint reaches. That used to be a whole width either side, which is twice what a line needs,
+// and the marker is four times the width in hand - so this is where it shows. The area is the
+// number to watch: a layer repaint costs with it (docs/ARCHITECTURE.md).
+
+line("")
+line("== 6. a drag with the marker at its widest (per-event ms and the area asked for)")
+for model in [Bench.Model.rects, .union] {
+    let bench = Bench(model)
+    bench.tools.select(tool: .highlighter)
+    bench.tools.selectWidth(ToolSettings.widths.count - 1)
+    bench.prefill(strokes: 50)
+
+    var times: [Double] = []
+    bench.view.mouseDown(with: bench.event(.leftMouseDown, scribble(0)))
+    for index in 1...300 {
+        let started = milliseconds()
+        bench.view.mouseDragged(with: bench.event(.leftMouseDragged, scribble(index)))
+        bench.paint()
+        times.append(milliseconds() - started)
+    }
+    bench.view.mouseUp(with: bench.event(.leftMouseUp, scribble(300)))
+
+    line(String(format: "   %-5@ %.3f ms/move   %.2f Mpx painted over 300 moves",
+                model == .rects ? "rects" : "union" as NSString,
+                mean(times[0...]), bench.paintedArea / 1_000_000))
+}
+
 line("")
 line("   Painting only. The backing store update and the window server's compositing of a")
 line("   full screen transparent surface are not in these numbers - measure those on the")
