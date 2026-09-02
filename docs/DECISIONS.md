@@ -819,6 +819,12 @@ six colours to a tool that has no colour.
 - **The laser's sizes are beams.** The wheel paints each one the way the laser will paint it,
   in the colour in hand, because a flat bar is not what it will put on the screen — and
   because the laser's width was a setting that did nothing until entry 25 gave it one.
+- **A fat marker does not get a fat pen for a pointer.** The drawing grew one for one with
+  the width, and the marker is four times the width in hand, so at the widest setting the
+  pointer was a 148pt pen following the mouse — clumsy however well it is drawn. Past a dozen
+  points the barrel grows at a fifth of the rate (about 90pt at the widest) and the reach is
+  capped; the six settings still read in order, which is all the pointer has to say. The
+  eraser is the exception and stays true size, because its size *is* what it does.
 - **The cursors are the tools.** A pen is a pen, a nib and a barrel held at forty-five degrees
   with its point on the hot spot, and it gets visibly fatter as the pen does. A marker is a
   chisel. An eraser is a ring the size of the hole. The four tools that place a corner share

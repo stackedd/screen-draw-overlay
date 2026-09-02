@@ -100,11 +100,19 @@ enum PointerCursor {
         var length: CGFloat { nib + body }
 
         init(width: CGFloat, chisel: Bool) {
-            nib = (chisel ? 8 : 11) + width * 0.30
-            nibHalf = (chisel ? 3.0 : 1.2) + width * 0.18
-            body = (chisel ? 16 : 21) + width * 0.5
-            bodyHalf = (chisel ? 5.2 : 3.8) + width * 0.34
-            chiselHalf = chisel ? 2.2 + width * 0.16 : 0
+            // The barrel grows with the width, but not one for one. It used to, and the marker
+            // is four times the width in hand: at the widest setting the pointer was a 148pt
+            // pen following the mouse, which reads as clumsy however well it is drawn. Past a
+            // dozen points the drawing grows at a fifth of the rate, so the widest marker is
+            // about 90pt and the six settings still read in order - which is what the pointer
+            // has to say. How wide the ink will be is on the badge, and under the hand.
+            let held = min(width, 12) + max(0, width - 12) * 0.2
+
+            nib = (chisel ? 8 : 11) + held * 0.30
+            nibHalf = (chisel ? 3.0 : 1.2) + held * 0.18
+            body = (chisel ? 16 : 21) + held * 0.5
+            bodyHalf = (chisel ? 5.2 : 3.8) + held * 0.34
+            chiselHalf = chisel ? 2.2 + held * 0.16 : 0
         }
     }
 
@@ -112,10 +120,12 @@ enum PointerCursor {
     // is drawn in. The hot spot is always the middle of that square.
     private static func reach(of tool: DrawingTool, width: CGFloat, eraserRadius: CGFloat) -> CGFloat {
         switch tool {
+        // The eraser is the one pointer whose size *is* the tool's footprint, so it is drawn
+        // true size however big it gets.
         case .eraser: return eraserRadius + casing
         case .laser: return 6
-        case .pen: return Barrel(width: width, chisel: false).length + casing + 2
-        case .highlighter: return Barrel(width: width, chisel: true).length + casing + 2
+        case .pen: return min(56, Barrel(width: width, chisel: false).length + casing + 2)
+        case .highlighter: return min(56, Barrel(width: width, chisel: true).length + casing + 2)
         default: return 18
         }
     }

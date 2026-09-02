@@ -21,8 +21,8 @@ let tools = ToolSettings()
 // Width included, because size is meant to show: a fat pen has to look fat and a big eraser
 // has to look big, or the size control is invisible again.
 let shown: [(DrawingTool, Int, Int)] = [
-    (.pen, 0, 0), (.pen, 0, 3), (.pen, 4, 5), (.highlighter, 2, 1),
-    (.eraser, 0, 0), (.eraser, 0, 5), (.line, 3, 2), (.rectangle, 4, 2)
+    (.pen, 0, 0), (.pen, 0, 5), (.highlighter, 2, 0), (.highlighter, 2, 2),
+    (.highlighter, 2, 5), (.eraser, 0, 0), (.eraser, 0, 5), (.line, 3, 2)
 ]
 
 let cell = 96.0
