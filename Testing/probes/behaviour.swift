@@ -690,6 +690,28 @@
         check("which came back", "\(live)", "\(beforeUndo)")
         clearAll()
 
+        // A wheel only appears if you hold the key. Under the threshold it is a tap and the
+        // hub's job is done with nothing on screen - which matters most for ⌥V, whose hub is
+        // undo: a wheel flashing up on every undo would be the wrong thing for the one action
+        // people repeat.
+        controller.openActionWheel()
+        check("a tap puts nothing on screen",
+              controller.wheels.isShowing ? "a wheel" : "nothing", "nothing")
+        controller.wheels.release()
+
+        controller.openActionWheel()
+        controller.wheels.track(NSPoint(x: controller.wheels.centre.x + 120,
+                                        y: controller.wheels.centre.y))
+        check("but aiming shows it at once, however short the press",
+              controller.wheels.isShowing ? "a wheel" : "nothing", "a wheel")
+        controller.wheels.close()
+
+        controller.openActionWheel()
+        RunLoop.current.run(until: Date().addingTimeInterval(WheelPanel.holdBeforeShowing + 0.1))
+        check("and holding brings it up on its own",
+              controller.wheels.isShowing ? "a wheel" : "nothing", "a wheel")
+        controller.wheels.close()
+
         // The wheel is the only way in now, so it has to be able to open an overlay that
         // is not there - and the eighth sector has to be able to put it away again, keeping
         // the drawing, which is what ⌃⌥⌘D used to do.

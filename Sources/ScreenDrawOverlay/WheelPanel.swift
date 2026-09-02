@@ -74,6 +74,13 @@ final class WheelPanel {
     private static let level = NSWindow.Level(rawValue: NSWindow.Level.popUpMenu.rawValue + 1)
     private static let pollInterval: TimeInterval = 1.0 / 60
 
+    // How long a key has to be held before the wheel appears. Under this it is a tap, and a
+    // tap does the hub's job without anything appearing on screen at all - which matters most
+    // for ⌥V, whose hub is undo: a wheel flashing up on every undo would be the wrong thing
+    // for the one action people repeat. Pushing the mouse out of the dead zone shows it at
+    // once, however short the press, because at that point the user is plainly aiming.
+    private static let holdBeforeShowing: TimeInterval = 0.18
+
     private let view: WheelView = {
         let view = WheelView(frame: NSRect(x: 0, y: 0, width: Wheel.extent, height: Wheel.extent))
         view.wantsLayer = true
@@ -81,6 +88,8 @@ final class WheelPanel {
     }()
     private let panel: NSPanel
     private var poll: Timer?
+    private var showTimer: Timer?
+    private var isShowing = false
     private var centre: NSPoint = .zero
     private var pick: ((Int?) -> Void)?
     // Which showing of the wheel is the current one, so a fade that is still running cannot
@@ -138,19 +147,16 @@ final class WheelPanel {
         centre = NSPoint(x: origin.x + extent / 2, y: origin.y + extent / 2)
 
         panel.setFrameOrigin(origin)
-        // Faded in rather than snapped on. A tenth of a second is what macOS gives anything
-        // that appears under the pointer, and a HUD that arrives instantly is one of the small
-        // things that reads as "not from here" without anybody being able to say why.
         showing += 1
-        panel.alphaValue = 0
-        panel.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.10
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            panel.animator().alphaValue = 1
-        }
-        panel.invalidateCursorRects(for: view)
         PointerCursor.invisible.set()
+
+        // Not shown yet: a short press is a tap, and a tap is the hub's job with nothing on
+        // screen. The timer, or the first push out of the dead zone, brings it up.
+        let hold = Timer(timeInterval: WheelPanel.holdBeforeShowing, repeats: false) { [weak self] _ in
+            self?.show()
+        }
+        RunLoop.main.add(hold, forMode: .common)
+        showTimer = hold
 
         // Read where the pointer already is, rather than waiting a frame to find out.
         track(NSEvent.mouseLocation)
@@ -170,6 +176,29 @@ final class WheelPanel {
         poll = timer
     }
 
+    // Faded in rather than snapped on. A tenth of a second is what macOS gives anything that
+    // appears under the pointer, and a HUD that arrives instantly is one of the small things
+    // that reads as "not from here" without anybody being able to say why.
+    private func show() {
+        showTimer?.invalidate()
+        showTimer = nil
+
+        guard !isShowing else {
+            return
+        }
+
+        isShowing = true
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.10
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 1
+        }
+        panel.invalidateCursorRects(for: view)
+        PointerCursor.invisible.set()
+    }
+
     // The held key came up. Whatever the pointer is pushing towards is the answer; the dead
     // zone in the middle is how the user says never mind.
     func release() {
@@ -178,6 +207,8 @@ final class WheelPanel {
         pick = nil
         poll?.invalidate()
         poll = nil
+        showTimer?.invalidate()
+        showTimer = nil
 
         // The choice first, so that whatever it changed - the tool, and with it the cursor -
         // has already happened by the time this window goes away.
@@ -191,6 +222,12 @@ final class WheelPanel {
     // twelfth of a second it stays on screen is in nobody's way - and the cursor is being held
     // by the overlay underneath for a third of a second either way (OverlayController).
     private func fadeOut() {
+        // Never shown - a tap - so there is nothing to take away.
+        guard isShowing else {
+            return
+        }
+
+        isShowing = false
         let thisOne = showing
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.08
@@ -214,6 +251,9 @@ final class WheelPanel {
         let wasOpen = poll != nil
         poll?.invalidate()
         poll = nil
+        showTimer?.invalidate()
+        showTimer = nil
+        isShowing = false
         showing += 1
         panel.orderOut(nil)
 
@@ -228,6 +268,12 @@ final class WheelPanel {
     func track(_ pointer: NSPoint) {
         let offset = NSPoint(x: pointer.x - centre.x, y: pointer.y - centre.y)
         let selection = view.wheel?.selection(for: offset)
+
+        // Aiming at something is as good as holding: the moment the pointer leaves the dead
+        // zone the wheel comes up, however short the press has been so far.
+        if selection != nil, !isShowing {
+            show()
+        }
 
         // The dot follows the hand and costs a layer move; the wheel itself is repainted
         // only when the highlight crosses into another sector, which is a handful of times

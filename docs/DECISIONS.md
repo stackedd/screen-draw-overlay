@@ -935,6 +935,13 @@ Taking things back is the only job here that is done over and over, and a push-a
 gesture for each would be the wrong shape for it — while `REDO`, `CLEAR`, `TEMP INK` and
 `HIDE` are all things you do once and are worth a deliberate push.
 
+**A wheel only appears if you hold the key.** Under 180ms it is a tap: the hub's job is done
+and nothing goes on the screen at all. That falls out of making undo the hub of `⌥V` — a wheel
+flashing up on every undo would be the wrong thing for the one action people repeat — and it
+improves the other three as well, because tapping `⌥Z` to step out no longer flashes a wheel
+of tools nobody was choosing from. Pushing the mouse out of the dead zone shows it at once,
+however short the press has been: at that point the user is plainly aiming at something.
+
 **Why `CLEAR` moved onto a wheel.** It was the bare letter `C`, and that was wrong twice over:
 it is easy to hit by accident for something that erases a whole drawing, and it only worked
 while this app happened to have the keyboard — which is a state the user cannot see. A push on
