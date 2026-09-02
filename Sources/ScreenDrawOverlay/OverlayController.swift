@@ -34,6 +34,43 @@ final class OverlayController {
         items: toolOrder.map { Wheel.Item(label: $0.label, symbol: $0.symbolName) },
         centreLabel: "CLICK-THROUGH")
 
+    // What you do *to* a drawing rather than with it. The hub is UNDO rather than a cancel,
+    // which is what makes a tap of ⌥V undo: taking something back is the one thing here that
+    // is done over and over, and a gesture per undo would be the wrong shape for it. The four
+    // sectors are the rest, and CLEAR being one of them is the point - it used to be the bare
+    // letter C, which is both easy to hit by accident and only worked when this app happened
+    // to have the keyboard.
+    private static let actionOrder: [Action] = [.redo, .clear, .temporaryInk, .hide]
+
+    enum Action {
+        case redo
+        case clear
+        case temporaryInk
+        case hide
+
+        var label: String {
+            switch self {
+            case .redo: return "REDO"
+            case .clear: return "CLEAR"
+            case .temporaryInk: return "TEMP INK"
+            case .hide: return "HIDE"
+            }
+        }
+
+        var symbolName: String {
+            switch self {
+            case .redo: return "arrow.uturn.forward"
+            case .clear: return "trash"
+            case .temporaryInk: return "timer"
+            case .hide: return "eye.slash"
+            }
+        }
+    }
+
+    private static let actionWheel = Wheel(
+        items: actionOrder.map { Wheel.Item(label: $0.label, symbol: $0.symbolName) },
+        centreLabel: "UNDO")
+
     private static let colourWheel = Wheel(items: zip(
         ["RED", "ORANGE", "YELLOW", "GREEN", "BLUE", "WHITE"], ToolSettings.colors
     ).map { Wheel.Item(label: $0.0, symbol: "circle.fill", tint: $0.1) })
@@ -129,6 +166,7 @@ final class OverlayController {
         shortcuts.registerWheels(Shortcuts.WheelActions(
             colours: { [weak self] in self?.openColourWheel() },
             widths: { [weak self] in self?.openWidthWheel() },
+            actions: { [weak self] in self?.openActionWheel() },
             released: { [weak self] in self?.wheels.release() }
         ))
     }
@@ -206,6 +244,35 @@ final class OverlayController {
         }
     }
 
+    // The hub undoes, so a tap of ⌥V is an undo and nothing else. Everything on this wheel
+    // works whatever has the keyboard, which is the whole reason it exists: the keys it
+    // replaces only worked while this app happened to be the one being typed at.
+    private func openActionWheel() {
+        wheels.open(OverlayController.actionWheel) { [weak self] index in
+            guard let self else {
+                return
+            }
+
+            guard let index else {
+                self.undoOnScreenUnderPointer(redo: false)
+                return
+            }
+
+            switch OverlayController.actionOrder[index] {
+            case .redo:
+                self.undoOnScreenUnderPointer(redo: true)
+            case .clear:
+                // The screen the pointer is on, like undo - so that taking it back afterwards
+                // puts back what was actually cleared.
+                self.onTheScreenUnderThePointer { $0.clear() }
+            case .temporaryInk:
+                self.tools.toggleTemporaryInk()
+            case .hide:
+                self.hideOverlay(reason: "hidden from the actions wheel")
+            }
+        }
+    }
+
     private func stopWheels() {
         shortcuts.unregisterWheels()
         wheels.close()
@@ -232,6 +299,19 @@ final class OverlayController {
     }
 
     func undoOnScreenUnderPointer(redo: Bool) {
+        onTheScreenUnderThePointer { drawingView in
+            if redo {
+                drawingView.redo()
+            } else {
+                drawingView.undo()
+            }
+        }
+    }
+
+    // Editing happens on one screen: the one the pointer is over, or the one with the badge
+    // if it is over none of them. Undo, redo and clear all mean "here", and they have to agree
+    // about where "here" is or taking something back puts it on the wrong display.
+    private func onTheScreenUnderThePointer(_ act: (DrawingView) -> Void) {
         let windows = overlayWindowSnapshot()
         guard isDrawingMode, !windows.isEmpty else {
             return
@@ -242,11 +322,7 @@ final class OverlayController {
             ?? windows.first { $0.drawingView.showsBadge }
             ?? windows[0]
 
-        if redo {
-            window.drawingView.redo()
-        } else {
-            window.drawingView.undo()
-        }
+        act(window.drawingView)
     }
 
     // Three states - off, drawing, click-through - and D always means "get me back to

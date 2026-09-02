@@ -22,12 +22,13 @@ final class Shortcuts {
         let redo: () -> Void
     }
 
-    // The other two wheels only mean something once there is a canvas, so they come and go
+    // The other three wheels only mean something once there is a canvas, so they come and go
     // with the overlay. Each is held rather than tapped, so each needs both halves of the
     // keypress.
     struct WheelActions {
         let colours: () -> Void
         let widths: () -> Void
+        let actions: () -> Void
         let released: () -> Void
     }
 
@@ -41,6 +42,7 @@ final class Shortcuts {
         case toolWheel = 6
         case colourWheel = 7
         case widthWheel = 8
+        case actionWheel = 9
     }
 
     // Held only to keep them registered; nothing here needs to reach one by name.
@@ -119,9 +121,12 @@ final class Shortcuts {
             return
         }
 
+        // Z X C V, four keys in a row under the left hand: tools, colour, size, and the
+        // things you do to a drawing rather than with it.
         let wheels: [(ID, UInt32, () -> Void)] = [
             (.colourWheel, UInt32(kVK_ANSI_X), actions.colours),
-            (.widthWheel, UInt32(kVK_ANSI_C), actions.widths)
+            (.widthWheel, UInt32(kVK_ANSI_C), actions.widths),
+            (.actionWheel, UInt32(kVK_ANSI_V), actions.actions)
         ]
 
         for (id, keyCode, opened) in wheels {

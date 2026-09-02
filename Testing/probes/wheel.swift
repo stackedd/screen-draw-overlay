@@ -18,6 +18,8 @@ let side = Wheel.extent
 let scale: CGFloat = 2
 let panels: [(String, Wheel, Int?)] = [
     ("tools, nothing picked", OverlayController.toolWheel, nil),
+    // The one whose hub does something: a tap of ⌥V undoes.
+    ("actions, nothing picked", OverlayController.actionWheel, nil),
     ("colours, blue", OverlayController.colourWheel, 4),
     ("widths, pen", OverlayController.widthWheel(for: .pen, in: .systemRed), 3),
     ("widths, eraser", OverlayController.widthWheel(for: .eraser, in: .systemRed), 3),
@@ -58,7 +60,15 @@ for (index, panel) in panels.enumerated() {
         let reach = (Wheel.innerRadius + Wheel.outerRadius) / 2
         return NSPoint(x: cos(angle) * reach, y: sin(angle) * reach)
     } ?? NSPoint(x: 12, y: -18)
-    panel.1.draw(in: ctx, bounds: box, highlighted: panel.2, pointer: push)
+    panel.1.draw(in: ctx, bounds: box, highlighted: panel.2)
+
+    // The dot rides on a layer over the real panel, so it is drawn here by hand - the sheet
+    // would otherwise show a wheel nobody is pushing.
+    if let dot = Wheel.dot(scale: scale) {
+        let side = Wheel.dotDiameter + 4
+        ctx.draw(dot, in: CGRect(x: box.midX + push.x - side / 2,
+                                 y: box.midY + push.y - side / 2, width: side, height: side))
+    }
     NSAttributedString(string: panel.0, attributes: [
         .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .medium),
         .foregroundColor: NSColor.white.withAlphaComponent(0.9)

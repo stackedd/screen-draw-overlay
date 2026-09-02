@@ -611,6 +611,52 @@
             controller.toggleInteractionMode()
         }
 
+        // The actions wheel is the one whose hub does something rather than cancelling: a tap
+        // of ⌥V undoes, because taking things back is the one job here that is done over and
+        // over and a gesture for each would be the wrong shape. Everything on it works
+        // whatever has the keyboard, which is why the bare letters it replaces are gone.
+        controller.tools.select(tool: .pen)
+        press(kVK_ANSI_C, "c")
+        stroke(y: 300); stroke(y: 340)
+        let beforeUndo = live
+        controller.openActionWheel()
+        controller.wheels.track(controller.wheels.centre)
+        controller.wheels.release()
+        check("a tap on the actions wheel takes one back", "\(live)", "\(beforeUndo - 1)")
+
+        // Sector 0 is due right, and the order runs clockwise from there: redo, clear, temp
+        // ink, hide.
+        func pushAction(_ index: Int) {
+            let sweep = CGFloat.pi * 2 / CGFloat(OverlayController.actionOrder.count)
+            let angle = -CGFloat(index) * sweep
+            controller.openActionWheel()
+            controller.wheels.track(NSPoint(x: controller.wheels.centre.x + cos(angle) * 120,
+                                            y: controller.wheels.centre.y + sin(angle) * 120))
+            controller.wheels.release()
+        }
+
+        pushAction(0)
+        check("and pushing right puts it back", "\(live)", "\(beforeUndo)")
+
+        pushAction(1)
+        check("pushing down clears the screen", "\(live)", "0")
+        controller.openActionWheel()
+        controller.wheels.track(controller.wheels.centre)
+        controller.wheels.release()
+        check("and that is one thing to take back", "\(live)", "\(beforeUndo)")
+
+        let temporaryBefore = controller.tools.drawsTemporaryInk
+        pushAction(2)
+        check("pushing left switches temporary ink",
+              controller.tools.drawsTemporaryInk == temporaryBefore ? "no" : "yes", "yes")
+        pushAction(2)
+
+        pushAction(3)
+        check("and pushing up puts the overlay away, keeping the drawing", state, "OFF")
+        controller.toggleDrawingMode()
+        check("which came back", "\(live)", "\(beforeUndo)")
+        press(kVK_ANSI_C, "c")
+
         // The wheel is the only way in now, so it has to be able to open an overlay that
         // is not there - and the eighth sector has to be able to put it away again, keeping
         // the drawing, which is what ⌃⌥⌘D used to do.

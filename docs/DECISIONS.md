@@ -922,3 +922,20 @@ side at fifteen samples and at sixty (`Testing/probes/ink.swift`), the differenc
 2pt and invisible at 56pt — a wide line hides its own chords. It would also cost the thing the
 report was about: a midpoint curve ends half a segment behind the hand, so the ink would lag
 the pointer unless a separate tail were drawn every frame. Not worth it for what it buys.
+
+## 30. Everything is on the Option row, and none of it depends on focus
+
+`⌥Z` tools, `⌥X` colour, `⌥C` size — and now `⌥V`, the things you do *to* a drawing rather
+than with it: undo, redo, clear, temporary ink, hide. Four keys in a row under the left hand,
+one family, and every one of them a global hot key, which is the part that matters.
+
+**The hub of this one does something.** Every other wheel's middle is a cancel; this one's is
+`UNDO`, so a tap of `⌥V` takes one thing back and a run of taps takes back a run of them.
+Taking things back is the only job here that is done over and over, and a push-and-release
+gesture for each would be the wrong shape for it — while `REDO`, `CLEAR`, `TEMP INK` and
+`HIDE` are all things you do once and are worth a deliberate push.
+
+**Why `CLEAR` moved onto a wheel.** It was the bare letter `C`, and that was wrong twice over:
+it is easy to hit by accident for something that erases a whole drawing, and it only worked
+while this app happened to have the keyboard — which is a state the user cannot see. A push on
+a wheel is deliberate, and it works from anywhere.
