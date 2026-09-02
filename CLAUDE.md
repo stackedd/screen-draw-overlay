@@ -132,13 +132,14 @@ easy to repeat.
 ## Current focus
 
 **Working towards the first release.** The app does what it is for; the round in progress is
-about making it one thing to learn and one thing to trust.
+about making it one thing to learn and one thing to trust. It is MIT-licensed and given
+away, so there is nothing in the code that checks, counts, phones home or asks for money.
 
 - **One mechanic.** Four keys on the Option row — `⌥Z` tools, `⌥X` colour, `⌥C` size, `⌥V`
   what you do *to* a drawing — all of them global, all of them hold-push-release, and nothing
   underneath them. The bare keys are gone (`docs/DECISIONS.md` 30): they only worked while a
   non-activating panel happened to be key, which is a state the user cannot see. `⌥V`'s hub is
-  undo, so a tap takes one thing back; a wheel only appears if the key is held past 180ms.
+  undo, so a tap takes one thing back; a wheel only appears if the key is held past 110ms.
 - **The pointer is drawn, not handed over.** An app that is presenting hides the system
   cursor, and nothing this app may do can detect or undo that, so the pointer is a layer and
   the window server gets a cursor that shows nothing (`docs/DECISIONS.md` 6). The cursor hold
