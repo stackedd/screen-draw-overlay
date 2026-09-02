@@ -641,7 +641,8 @@ final class OverlayController {
     // the way out.
     private func forceCloseOverlay(reason: String) {
         // Before anything else: the wheels belong to an overlay that is about to stop
-        // existing, and ⌥Z has to go back to typing what it types.
+        // existing, and ⌥X ⌥C ⌥V have to go back to typing what they type. ⌥Z stays
+        // registered for the life of the app, because it is the only way back in.
         stopWheels()
         stopHoldingCursor()
 

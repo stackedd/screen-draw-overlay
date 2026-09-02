@@ -196,8 +196,8 @@ final class DrawingView: NSView {
     // So the window server gets a cursor that shows nothing, and the pointer is a layer. The
     // failure this used to have - lose the cursor once and there are two pointers with no way
     // back - is answered by the cursor hold in OverlayController, which re-sets the invisible
-    // cursor twenty times a second: worst case is 50ms of a second pointer, against a pointer
-    // that was missing for the whole presentation.
+    // cursor sixty times a second: worst case is about a frame of a second pointer, against a
+    // pointer that was missing for the whole presentation.
     private func refreshPointer() {
         let extent = LaserDot.extent(for: tools.renderWidth)
         laserLayer.bounds = NSRect(x: 0, y: 0, width: extent, height: extent)
@@ -623,9 +623,10 @@ final class DrawingView: NSView {
         syncFadingInk()
     }
 
-    // The only timer in the app, and it exists only while temporary ink is on screen:
-    // it starts when one is drawn and stops the moment the last one is gone, so an idle
-    // overlay still costs nothing.
+    // Exists only while temporary ink is on screen: it starts when one is drawn and stops
+    // the moment the last one is gone. Like every other timer here (the pointer poll above,
+    // the cursor hold in OverlayController) it is tied to something being true, which is what
+    // keeps a closed overlay at nothing.
     private func startFadingIfNeeded() {
         guard fadeTimer == nil, canvas.hasTemporaryInk else {
             return

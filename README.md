@@ -13,7 +13,7 @@ access, no account.
 ## What it does
 
 - **Draws over everything**, including full-screen presentations: pen, marker, line, arrow,
-  rectangle, oval, eraser, and a laser pointer.
+  eraser, rectangle, oval, and a laser pointer.
 - **Steps aside in one gesture.** Clicks, scrolls and keystrokes go back to the app underneath
   while the drawing stays on screen; the same gesture again puts the drawing away and keeps it.
 - **Costs nothing to leave running.** No window, no Dock icon, and no CPU at all while the
@@ -24,34 +24,40 @@ access, no account.
 **From a release.** Download `ScreenDrawOverlay.zip` from the
 [Releases](../../releases) page, unzip it, and move the app to `/Applications`.
 
-The first launch is refused by macOS. The app is signed, but only ad-hoc signed — a local
-signature rather than a paid Developer ID — so Gatekeeper reports that it "cannot be opened
-because Apple cannot check it for malicious software". Clearing it once is enough:
+The first time you open it, macOS will refuse. The app is signed, but only ad-hoc signed — a
+local signature rather than a paid Developer ID — so you get "cannot be opened because Apple
+cannot check it for malicious software". You clear that once and never again:
 
-- Right-click the app and choose **Open**, then **Open** again in the dialog, **or**
-- open it normally, then go to **System Settings → Privacy & Security** and click
-  **Open Anyway**.
+- Right-click the app and choose **Open**, then **Open** again in the dialog. On macOS 15
+  and later this usually no longer works, so:
+- open it normally, let it be refused, then go to **System Settings → Privacy & Security**
+  and click **Open Anyway**.
 
-**From source.** One command, no Xcode project, no dependencies, and no Gatekeeper warning at
-all:
+**From source.** One command, no Xcode project, no dependencies, and no warning at all. You
+need Xcode or its command line tools (`xcode-select --install`):
 
 ```bash
 git clone https://github.com/stackedd/screen-draw-overlay.git
 cd screen-draw-overlay && ./build_app.sh && open dist/ScreenDrawOverlay.app
 ```
 
-Either way, a small scribble icon appears in the menu bar. That is the whole interface.
-**Open at Login** in that menu starts the app with the Mac.
+Either way, a small scribble icon appears in the menu bar. That is the whole interface. On
+macOS 13 and later the menu has **Open at Login**, which starts the app with the Mac; on 11
+and 12, add it under System Settings → General → Login Items.
 
 ## The first sixty seconds
 
 Four keys sit next to each other on the Option row. **Hold one, push the mouse, let go.** The
-wheel opens where the pointer already is and its slices are 45° wide, so there is nothing to
-aim at. All four are global shortcuts: they work whatever app is in front.
+wheel opens right where the pointer is, and each slice covers 45° — you push in a direction
+rather than hitting a target. They work whatever app is in front, because they are registered
+with the system rather than with a window.
+
+`⌥Z` works from the moment the app starts. The other three come and go with the overlay:
+while it is closed they are ordinary keys, and belong to whatever app you are using.
 
 | Hold | What opens |
 | --- | --- |
-| `⌥Z` | Tools: pen, marker, line, arrow, rectangle, oval, eraser, laser |
+| `⌥Z` | Tools: pen, marker, line, arrow, eraser, rectangle, oval, laser — in that order round the wheel, starting on the right |
 | `⌥X` | Colours |
 | `⌥C` | Size — of the pen, the marker, the hole the eraser takes out, or the laser's beam |
 | `⌥V` | What to do to a drawing: undo, redo, clear, temporary ink, hide |
@@ -76,7 +82,7 @@ Two rules and that is the interface:
 | Marker | Four times wider and see-through, like a highlighter over text. |
 | Line, arrow, rectangle, oval | Two-point shapes. Holding `Shift` while dragging snaps to 45°, or makes a square or a circle. |
 | Eraser | Rubs out the part of a stroke it passes over — it cuts strokes rather than deleting them. Its size is the hole it leaves. |
-| Laser | A glow that follows the pointer. Held down, it leaves a beam that thins out behind the hand and is gone in half a second. Nothing is left on the drawing. |
+| Laser | A glow that follows the pointer. Hold the button down and it leaves a beam of light that thins out behind your hand and is gone in about half a second. Nothing is left on the drawing. |
 
 **Temporary ink**, on the `⌥V` wheel, makes every mark fade out three seconds after it is
 finished, the way a presenter's pen does. While it is on, the badge in the corner wears an
@@ -134,9 +140,9 @@ full-screen apps and on every Space. Ink is drawn into a `CALayer` and only the 
 changed is repainted. The global shortcuts use Carbon's `RegisterEventHotKey`, which needs no
 Accessibility permission. Open at Login uses `SMAppService`.
 
-The frameworks are AppKit, Carbon, CoreGraphics and ServiceManagement — no third-party
-dependencies. The only thing written to disk is the small settings record (tool, colour, width)
-in the app's own preferences.
+The frameworks are AppKit, Carbon, QuartzCore and ServiceManagement — no third-party
+dependencies. The only thing written to disk is the small settings record (tool, colour,
+width) in the app's own preferences.
 
 ## Checking that it works
 

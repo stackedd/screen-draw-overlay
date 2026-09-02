@@ -41,7 +41,10 @@ happen in no process this probe can see, and they are most of the bill - see
 
 ## Looking at it
 
-`probes/cursor.swift`, `probes/eraser.swift` and `probes/wheel.swift` render to a PNG.
+Six probes render a PNG instead of passing or failing: `probes/badge.swift`,
+`probes/cursor.swift`, `probes/eraser.swift`, `probes/ink.swift`, `probes/laser.swift` and
+`probes/wheel.swift`. None of them is in `run.sh`; each is here because a picture is the only
+thing that can answer the question it asks.
 
 The cursor one draws every tool over a light background and a dark one. The suite can check
 that the hot spot is where the ink lands; it cannot tell whether a pen looks like a pen.
@@ -50,10 +53,11 @@ The eraser one exists because counting strokes proves it cut something and canno
 the hole is the size of the eraser, that a shape comes apart the way a line does, or that no
 crumbs are left in the gap. All three have been wrong at least once.
 
-`probes/wheel.swift` renders the wheels. It is not a pass or a fail, so it is not in
-`run.sh`; it exists because the suites cannot catch what goes wrong with a picture - blurry
+`probes/wheel.swift` renders the wheels, and `probes/badge.swift` the badge in each of its
+states. They exist because the suites cannot catch what goes wrong with a picture - blurry
 text, a swatch the same colour as the plate under it, a label too long for the hub it has to
-fit inside. The badge taught that twice.
+fit inside, a `TEMP` mark that pushes the line it sits on out of the plate. The badge taught
+that twice.
 
     python3 Testing/make_probe.py wheel WHEEL \
       && swift build --package-path .build/testing/wheel -c release \

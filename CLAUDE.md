@@ -19,7 +19,8 @@ taken by another app.
 ## Stack
 
 Swift 5.9, SwiftPM, no third-party dependencies. AppKit, Carbon (global hot keys),
-CoreGraphics, ServiceManagement (open at login). Universal binary, macOS 11+.
+QuartzCore (the layers everything is drawn on), ServiceManagement (open at login).
+Universal binary, macOS 11+.
 
 ## Layout
 
@@ -45,15 +46,17 @@ CoreGraphics, ServiceManagement (open at login). Universal binary, macOS 11+.
       PointerCursor.swift     one cursor per tool, in the colour in hand
       GlobalHotKey.swift      Carbon shortcuts and their ownership rules
       NSScreen+Display.swift  identifying a display across time
-    Testing/                  the two test suites (see below)
-    Packaging/Info.plist      bundle metadata
+      CursorLog.swift         what the screen showed, when asked: SDO_CURSOR_LOG=1
+    Testing/                  three suites and the by-hand probes (see below)
+    Packaging/                Info.plist, AppIcon.icns, icon-preview.png
+    Tools/makeicon.swift      draws the icon; build_app.sh runs it
     build_app.sh              builds dist/ScreenDrawOverlay.app + zip
     docs/ARCHITECTURE.md      what each piece owns, invariants, measurements
     docs/DECISIONS.md         why things are the way they are, and what was rejected
 
 The dependency runs one way: `OverlayController` → `DrawingView` → `Canvas`. What is drawn belongs
 in `Canvas`; how it appears belongs in the view. Nothing is painted through `NSView.draw(_:)`
-— the ink and the badge each have a `CALayer`, which is worth 4.3x on every repaint, and the
+— the ink and the badge each have a `CALayer`, which is worth about 4x on every repaint, and the
 pointer is a picture on a layer, because a presenting app can hide a cursor.
 
 ## Commands
@@ -64,7 +67,7 @@ pointer is a picture on a layer, because a presenting app can hide a cursor.
     open dist/ScreenDrawOverlay.app
 
 `./Testing/run.sh behaviour` drives the real app and checks the mode matrix, hide/show,
-tool keys, undo/redo and tap-versus-hold. `./Testing/run.sh rendering` paints a session
+every wheel and what its sectors and hub do, undo/redo and tap-versus-hold. `./Testing/run.sh rendering` paints a session
 incrementally and in one pass and compares the pixels. `./Testing/run.sh cost` times the
 painting of real sessions — and measures painting only, which is the smaller half of the
 bill. `Testing/experiments/` holds the on-screen measurement of what a repaint costs; it is
@@ -74,9 +77,11 @@ easy to repeat.
 ## Conventions
 
 - **Every tool brings its own context.** The width wheel shows widths, the eraser's cursor is
-  the size of what it rubs out, and the text tool will take the pen's colour as its colour and
-  its width as a point size. The same way the menu bar changes with the app in front: what is
-  in hand decides what the interface offers, rather than one interface offering everything.
+  the size of what it rubs out, and reaching for colour with the eraser in hand says so on the
+  badge instead of changing the tool. (A text tool, if one is ever added, would take the pen's
+  colour as its colour and its width as a point size — there is no text tool today.) The same
+  way the menu bar changes with the app in front: what is in hand decides what the interface
+  offers, rather than one interface offering everything.
 - **Measure, do not assume.** Every performance or platform claim in this repo has a number
   behind it. If you change something for speed, show the before and after; if you cannot
   measure it, say so instead of asserting it.
@@ -108,19 +113,23 @@ easy to repeat.
    Repainting everything cost 26x more, and the suite fails on `fullInkInvalidations > 0`.
    Better still, do not repaint at all: **the badge and the pointer are layers**, moved rather
    than painted. Painting the pointer through `draw(_:)` put a repaint on every mouse move —
-   22.5% of a core against a layer move.
+   22.9% of a core against 1.7% for a layer move.
 6. **Never call `invalidateCursorRects` from inside `cursorUpdate`.** It re-enters AppKit's
    tracking machinery and crashes — this was a shipped `SIGABRT` once.
 7. **Never put a modal dialog in front of the user.** `runModal` blocks a background app and
    can sit behind every window; failures are said in the menu.
 8. **Never leave a timer running when the overlay is closed.** Closed is 0.0% CPU and that
-   is a tested property. Three timers run while it is open, each tied to something being
-   true and each stopping with it: the fade tick (temporary ink on screen), the laser's poll
-   (the laser in hand), and the cursor hold (drawing mode taking the mouse, 0.1% of a core).
+   is a tested property. Each timer that runs while it is open is tied to something being
+   true and stops with it: the pointer poll at 60Hz and the cursor hold at 60Hz (both only
+   while drawing mode has the mouse — the hold is 0.3% of a core), the fade tick (only while
+   temporary ink is on screen), and two short-lived ones: the burst that takes the cursor
+   back for a third of a second after a panel appears, and the badge's notice. A wheel's own
+   poll lives and dies with the wheel.
 9. **Never make drawing mode interact with anything** — no key should escape it, no click
    should reach what is underneath. Interaction is what click-through is for.
 10. **Never let hiding erase.** The wheel's `HIDE` keeps the strokes **and the undo
-    history**; `C` is the only thing that erases, and even that is undoable.
+    history**; `CLEAR` on the `⌥V` wheel is the only thing that erases, and even that is
+    undoable.
 11. **Never let an edit point at a position.** Undo names strokes by `id`. `removeLast()`
     took back the wrong line whenever temporary ink faded out from under the history.
 12. **Never make a bitmap by hand.** `Picture.drawn(size:scale:)` is the one place that gets

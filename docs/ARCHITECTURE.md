@@ -66,8 +66,9 @@ non-activating panels happened to be key, which is a state the user cannot see.
 only thing that opens one. The menu bar item is the way in if it is ever taken.
 
 **Hiding is not erasing.** Leaving drawing mode lifts the strokes out of the panels and
-files them by display, together with the undo history; the next tool picked from the wheel puts both back. `C` (or Delete) is the only thing
-that erases, and even that is undoable.
+files them by display, together with the undo history; the next tool picked from the wheel
+puts both back. `CLEAR` on the `⌥V` wheel is the only thing that erases, and even that is
+undoable.
 
 ## Invariants
 
@@ -87,12 +88,13 @@ These exist because something went wrong once. Do not remove them without readin
 4. **`⌃⌥⌘Esc` ends the process.** Anything less can, in principle, still leave someone
    stuck. It is the one recovery that cannot fail.
 5. **`.accessory` activation policy** — no Dock icon, no app switcher entry.
-6. **Idle costs nothing.** No timers, no polling while the overlay is closed. Three timers
-   exist while it is open, each tied to something being true: the fade tick (only while
+6. **Idle costs nothing.** No timers, no polling while the overlay is closed. Every timer
+   that exists while it is open is tied to something being true: the fade tick (only while
    temporary ink is on screen), the pointer poll at 60Hz (only while drawing mode is taking
    the mouse — it is what carries the pointer and the laser's glow), and the cursor hold at
-   20Hz, 0.1% of a core (the same condition). All three stop with the thing that started
-   them.
+   60Hz, 0.3% of a core (the same condition). Two more are short-lived: the burst that takes
+   the cursor back for a third of a second after a panel appears, and the badge's notice.
+   Each stops with the thing that started it.
 7. **Drawing mode interacts with nothing.** Every key is swallowed (no beeps, no `⌘Q`, and
    nothing of its own either — the app's own commands are global hot keys), and clicks never
    reach what is underneath. Interaction is what click-through is for.
@@ -110,8 +112,10 @@ whenever the cursor went near the top of the screen.
 **Cost.** Idle with the overlay closed: 0.0% CPU, ~41MB, and 0.11s of CPU total since
 launch. 200 open/draw/hide cycles leave memory flat at ~45MB and no leaked panels. What the
 overlay costs while it is being used is measured below, and has moved a long way: drawing
-over a canvas of 200 strokes was 20.4% of a core and is 5.4%; moving the pointer over the
-same was 22.5% and is 0.5%.
+over a canvas of 200 strokes cost 23.4% of a core before anything moved onto a layer and
+costs 5.9% now; moving the pointer over the same cost 22.9% and costs 1.7% — it went down to
+0.5% when the pointer was a cursor and back up when it became a layer again, which is the
+trade in entry 6 of DECISIONS and the reason a pointer is visible during a presentation.
 
 **Repainting.** A drag invalidates only the new segment and `draw(_:)` skips strokes that
 do not meet `dirtyRect`; repainting the whole view per mouse move was 26x more expensive
@@ -224,19 +228,22 @@ events outrank the 60Hz poll instead of both doing the work, took it from 2.6% t
 wheel got cheaper at the same time, because its dot is a layer too — following the hand by
 repainting the whole wheel was 13.7%.
 
-Two more from the same probe, which the table above never covered:
+Two more from the same probe, measured while the pointer was still a cursor, which the first
+table never covered:
 
 - **The laser following the pointer costs 0.0%** — a layer move and no repaint, as designed.
-- **A wheel that is open and being swept costs 10.1%**, 9.4% of it the wheel itself: it
-  repaints its own 312pt view every time the highlight crosses into another sector. That is
-  the price of a key held for well under a second, and it is the one thing in this app that is
+- **A wheel that is open and being swept cost 10.1%**, 9.4% of it the wheel itself: it
+  repaints its own 312pt view every time the highlight crosses into another sector. It is
+  6.8% now (4.7% the wheel) because the dot that follows the hand became a layer. That is the
+  price of a key held for well under a second, and it is the one thing in this app that is
   allowed to be expensive, because nothing else is happening while it is up.
 
-The first row is the invariant holding: an overlay that is up and not being used costs
-nothing either way. The second and third are the ones worth staring at — **moving the mouse
-without drawing anything used to cost as much as drawing** (23.1% against 22.5%), because
-the crosshair was paint and paint meant a repaint of the whole overlay. It is now indexed to
-the idle number, because the window server draws the cursor and we do nothing at all.
+In the first table, the first row is the invariant holding: an overlay that is up and not
+being used costs nothing either way. The second and third are the ones worth staring at —
+**moving the mouse without drawing anything used to cost as much as drawing** (23.1% against
+22.5%), because the crosshair was paint and paint meant a repaint of the whole overlay. It is
+a layer move now: 0.5% for the round in which the window server drew the cursor, 1.7% since
+the pointer went back onto a layer of our own.
 
 **Cursor.** `NSCursor.hide()` is per application and only applies while that application is
 active, so a background app hides nothing — that attempt left two pointers on screen during a
@@ -247,8 +254,9 @@ can neither detect that (`NSCursor.currentSystem` reports a visible cursor eithe
 hiding process too) nor undo it (`CGDisplayShowCursor` from another process does nothing).
 
 So the pointer is a picture on a layer, the window server is handed a cursor that shows
-nothing, and the cursor hold re-sets that twenty times a second so a lost cursor cannot leave
-an arrow standing next to ours for more than about 50ms.
+nothing, and the cursor hold re-sets that sixty times a second so a lost cursor cannot leave
+an arrow standing next to ours for more than about a frame. It was twenty a second first, and
+a gap of up to 50ms — three frames — was still being reported as a flicker.
 
 Setting it is not the same as keeping it. A panel that appears under a stationary pointer is
 handed the plain arrow by the window server about 25ms later, whatever the app set before
@@ -309,24 +317,26 @@ Things that cannot be done without giving up the no-permissions promise:
 ## Testing
 
 There is no XCTest target. Tests are built by compiling the app's own sources into a probe
-that drives the real code and prints what happened. One builder, `make_probe.py`, makes all
-four: it copies every source file and widens `private` so the probe can see internals, then
-either splices the probe into `applicationDidFinishLaunching` (the behaviour suite, which
-runs inside the real app) or lets the probe stand in for `main.swift` (the other three,
-which drive a view or a panel directly).
+that drives the real code and prints what happened. One builder, `make_probe.py`, makes every
+one of them: it copies every source file and widens `private` so the probe can see internals,
+then either splices the probe into `applicationDidFinishLaunching` (the behaviour suite, which
+runs inside the real app) or lets the probe stand in for `main.swift` (all the others, which
+drive a view or a panel directly).
 
-Two suites carry the weight:
+Three suites run in `run.sh`; the rest of `probes/` is run by hand and described in
+`Testing/README.md`.
 
 - **Behaviour** — the mode matrix, hide/show keeping strokes with their tool attributes, the
-  unfinished-stroke commit, tool keys, `⌘Q` being swallowed, clear/undo/redo, undo across a
+  unfinished-stroke commit, every wheel and what its sectors and hub do, that the bare keys
+  the app used to have now do nothing, `⌘Q` being swallowed, clear/undo/redo, undo across a
   hide, undo stepping over faded temporary ink, the cursor's hot spot, tap versus hold.
-  22 checks. Every refactor is judged by whether
-  its output is byte-identical.
+  **91 checks.** Every refactor is judged by whether its output is identical line for line.
 - **Rendering** — the same session painted incrementally and in one pass, compared pixel by
-  pixel at 1x, 2x and 3x.
+  pixel at 1x, 2x and 3x. **0 differing bytes** at every scale.
 - **Cost** — the same view driven through real sessions with every repaint it asks for
-  painted and timed: one long unbroken stroke, pointer moves over a canvas holding 0, 50 and
-  200 strokes, a short drag over the same, and a fade tick. It measures painting only, which
+  painted and timed. Seven sweeps: one long unbroken stroke, pointer moves over a canvas
+  holding 0, 50 and 200 strokes, a short drag over the same, a fade tick, the laser's trail,
+  a drag with the marker at its widest, and a slow hand. It measures painting only, which
   is the point: it is how "does this get more expensive as the screen fills up?" gets an
   answer instead of an opinion.
 

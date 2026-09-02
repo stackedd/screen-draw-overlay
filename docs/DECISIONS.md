@@ -80,7 +80,12 @@ the app underneath.
 timer, a rate limiter, a menu-open flag, an "is any popover on screen" probe — existed only
 to keep Escape alive. All of it was deleted.
 
-## 4. `⌃⌥⌘D` hides, `⌃⌥⌘Esc` quits, `C` erases
+## 4. `⌃⌥⌘D` hides, `⌃⌥⌘Esc` quits, `C` erases *(reversed — see 30)*
+
+**None of these keys exist any more except `⌃⌥⌘Esc`.** Hiding is the middle of the `⌥Z`
+wheel, erasing is `CLEAR` on `⌥V`, and undo is that wheel's hub. What is still true is the
+shape of the reasoning below, which is why it is kept: the everyday way out must not destroy
+a drawing, and the panic key must end the process.
 
 The two shortcuts used to do nearly the same thing and both destroyed the drawing, so the
 everyday shortcut punished a mistyped keystroke with total loss and the panic key was no
@@ -99,7 +104,10 @@ Kept drawings are tied to the display layout they were made on and dropped when 
 rather than restored onto the wrong screen at the wrong scale. What is kept includes the undo
 history (entry 23).
 
-## 5. Holding the shortcut draws momentarily
+## 5. Holding the shortcut draws momentarily *(reversed — see 26 and 30)*
+
+**There is no momentary overlay now.** The key that would have been held opens a wheel
+instead, and the gesture that used to mean "hold to draw" means "hold, push, let go".
 
 A toggle asks the user to remember they left it on. Holding does not: press, scribble, let
 go. That is what makes the app something you leave running rather than something you switch
@@ -182,11 +190,11 @@ of CPU, once; the bound is what keeps an idle overlay at nothing.
 probe fires the real hot keys through the real handlers and walks all seven ways in and out,
 and none of them leaves an arrow. A symptom that survives a fix nobody can reproduce is worth
 answering at the symptom, so there is a second, slower half: `holdCursor()` re-sets the tool's
-cursor **twenty times a second for as long as drawing mode is on**, and stops on click-through
-and when the overlay goes away. Whatever hands the arrow out, it holds for at most 50ms.
+cursor **sixty times a second for as long as drawing mode is on**, and stops on click-through
+and when the overlay goes away. Whatever hands the arrow out, it holds for about a frame.
 
 That is a poll, and this app does not like polls, so it was measured before it was written:
-`NSCursor.set()` costs **0.049ms**, which is 0.1% of a core at 20Hz — and setting it blind is
+`NSCursor.set()` costs **0.049ms**, which is 0.3% of a core at 60Hz — and setting it blind is
 three times cheaper than asking `NSCursor.currentSystem` what is on screen first (0.157ms) and
 only setting it when it differs. The per-move version this replaces did the same work eight
 times a second but *only while the mouse was moving*, which is exactly the case that was not
@@ -234,9 +242,9 @@ is exactly what keeps the event rate at the refresh rate. More events would be m
 frame for a pointer that can only move once per frame.
 
 The failure this design had the first time — lose the cursor once and there are two pointers
-with no way back — is what the cursor hold above is for: the invisible cursor is re-set twenty
-times a second, so the worst case is about 50ms of a second pointer, against a pointer that was
-missing for an entire presentation. The wheel wears the same nothing and draws its own dot at
+with no way back — is what the cursor hold above is for: the invisible cursor is re-set sixty
+times a second, so the worst case is about a frame of a second pointer, against a pointer that
+was missing for an entire presentation. The wheel wears the same nothing and draws its own dot at
 the pointer, because it sits above the overlay and, with no overlay open at all, there is
 nothing else to draw one. And `takeCursorBack()` puts the ordinary arrow back whenever drawing
 mode is not on, which is the line that stops a wheel closing over no overlay from leaving
@@ -618,7 +626,10 @@ and the price is that they only get key events while this app is the active one.
 anything at all in another app and `⌘Z` inside the overlay is a silent no-op.
 
 **Chosen:** a fourth global shortcut, `⌃⌥⌘Z`, on Carbon like the other three, so it works
-whatever has focus. `⇧⌃⌥⌘Z` redoes, and comes with it rather than after it: an undo that
+whatever has focus. (Both of these keys are gone: undo is now the hub of `⌥V` and redo one of
+its sectors — entry 30. What follows is why undo had to leave the keyboard's focus behind at
+all, which is still the reason it sits on a global hot key.) `⇧⌃⌥⌘Z` redoes, and comes with
+it rather than after it: an undo that
 always works next to a redo that only sometimes does is a trap, because one press too many
 leaves the way back depending on a focus state the user cannot see. `⌘Z` still works when the
 panel is key. **Rejected:** making drawing mode activate the app. It would fix the shortcut
