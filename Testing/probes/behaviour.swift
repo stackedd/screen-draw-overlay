@@ -627,6 +627,53 @@
             check("and a tap with it still leaves a mark", inked > 100 ? "yes" : "no: \(inked)", "yes")
         }
 
+        // The two checks above ask a Stroke to paint itself. This one asks the *view*, which
+        // is a different question and was a different answer: drawInk had its own two lines
+        // of painting for a while, so a marker's tap left nothing on the ink layer and a beam
+        // was drawn as a flat line until it landed on its fading layer.
+        func inkPicture(_ view: DrawingView, in box: NSRect) -> CGImage? {
+            Picture.drawn(size: box.size, scale: 1) {
+                NSGraphicsContext.current?.cgContext.translateBy(x: -box.minX, y: -box.minY)
+                view.drawInk(in: box)
+            }
+        }
+
+        if let panel = controller.overlayWindowSnapshot().first {
+            let view = panel.drawingView
+            func mouse(_ type: NSEvent.EventType, _ at: NSPoint) -> NSEvent {
+                NSEvent.mouseEvent(with: type, location: at, modifierFlags: [], timestamp: 0,
+                                   windowNumber: panel.windowNumber, context: nil,
+                                   eventNumber: 0, clickCount: 1, pressure: 1)!
+            }
+
+            clearAll()
+            controller.tools.select(tool: .highlighter)
+            controller.tools.selectWidth(5)
+            view.mouseDown(with: mouse(.leftMouseDown, NSPoint(x: 500, y: 500)))
+            view.mouseUp(with: mouse(.leftMouseUp, NSPoint(x: 500, y: 500)))
+            let tapped = inkPicture(view, in: NSRect(x: 440, y: 440, width: 120, height: 120))
+                .map { alpha($0).filter { $0 > 0.1 }.count } ?? 0
+            check("a tap with the marker lands on the ink layer too",
+                  tapped > 100 ? "yes" : "no: \(tapped)", "yes")
+
+            // And the beam is light while the button is still down, not only once it has been
+            // handed to a layer of its own: the white core is what says so.
+            clearAll()
+            controller.tools.select(tool: .laser)
+            view.mouseDown(with: mouse(.leftMouseDown, NSPoint(x: 200, y: 700)))
+            view.mouseDragged(with: mouse(.leftMouseDragged, NSPoint(x: 320, y: 700)))
+            let beam = inkPicture(view, in: NSRect(x: 180, y: 660, width: 180, height: 80))
+            // The white core is the tell: a flat line of the pen's colour has none, and that
+            // is exactly what the ink layer used to draw while the button was down.
+            let core = beam.map { sample($0, 80, 40) }.map { $0.1 > 0.5 && $0.2 > 0.5 } ?? false
+            check("and a beam is drawn as light while the button is down",
+                  core ? "yes" : "no", "yes")
+            view.mouseUp(with: mouse(.leftMouseUp, NSPoint(x: 320, y: 700)))
+            controller.tools.select(tool: .pen)
+            controller.tools.selectWidth(2)
+            clearAll()
+        }
+
         // What the window server is handed is a cursor that shows nothing - so that nothing
         // else claims the pointer and draws an arrow beside ours - and the pointer itself is
         // a layer on the overlay, which is what a presenting app cannot hide.

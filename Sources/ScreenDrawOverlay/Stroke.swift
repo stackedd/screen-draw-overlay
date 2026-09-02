@@ -320,6 +320,29 @@ struct Stroke {
     // layer of its own, or a test's bitmap. It was two identical lines in two files, which is
     // how a beam could be given its own look in one of them and not the other.
     func paint() {
+        paint(path)
+    }
+
+    // The same, but only the part of the stroke that could put ink inside `dirtyRect`.
+    //
+    // Painting means rasterising every segment, so a five thousand point line cost five
+    // thousand segments' worth of work on every mouse move - including the moves that only
+    // touched its last inch. Walking the points to find the ones that reach into the rectangle
+    // is arithmetic, and arithmetic is orders cheaper than rasterisation.
+    //
+    // Below a few dozen points the walk and the path it builds cost more than they save, and a
+    // shape is not a polyline at all, so both are painted whole.
+    func paint(meeting dirtyRect: NSRect) {
+        guard !isShape, points.count > Stroke.worthTrimming,
+              let trimmed = trimmed(to: dirtyRect) else {
+            paint(path)
+            return
+        }
+
+        paint(trimmed)
+    }
+
+    private func paint(_ line: NSBezierPath) {
         guard style == .beam else {
             // A tap: one point, no length. With a round cap that paints a dot, and with the
             // marker's butt cap it paints nothing at all, so the mark a chisel would leave is
@@ -332,11 +355,47 @@ struct Stroke {
             }
 
             renderColor.setStroke()
-            path.stroke()
+            line.stroke()
             return
         }
 
-        StrokeStyle.paintBeam(path, width: width, colour: color)
+        StrokeStyle.paintBeam(line, width: width, colour: color)
+    }
+
+    static let worthTrimming = 48
+
+    // The segments whose paint could land in the rectangle, as one path. A run of them keeps
+    // its joins; where a run stops, the next segment could not have painted inside the
+    // rectangle anyway, so the cap that ends the run is outside it or against its edge.
+    private func trimmed(to dirtyRect: NSRect) -> NSBezierPath? {
+        let reach = style.reach(at: width)
+        let built = NSBezierPath()
+        built.lineWidth = path.lineWidth
+        built.lineCapStyle = path.lineCapStyle
+        built.lineJoinStyle = path.lineJoinStyle
+
+        var drawing = false
+        for index in 1..<points.count {
+            let from = points[index - 1]
+            let to = points[index]
+            // Grown by the reach, which also keeps a horizontal or vertical segment from
+            // being an empty rectangle - and an empty rectangle intersects nothing.
+            let box = NSRect(x: min(from.x, to.x), y: min(from.y, to.y),
+                             width: abs(to.x - from.x), height: abs(to.y - from.y))
+                .insetBy(dx: -reach, dy: -reach)
+            guard box.intersects(dirtyRect) else {
+                drawing = false
+                continue
+            }
+
+            if !drawing {
+                built.move(to: from)
+                drawing = true
+            }
+            built.line(to: to)
+        }
+
+        return built.isEmpty ? nil : built
     }
 
     // Distance from a point to the stroke's polyline. This is why a Stroke keeps its

@@ -546,13 +546,11 @@ final class DrawingView: NSView {
         // Temporary ink is not here: it is on a layer of its own, fading itself.
         for stroke in canvas.strokes
         where stroke.createdAt == nil && stroke.repaintBounds.intersects(dirtyRect) {
-            stroke.renderColor.setStroke()
-            stroke.path.stroke()
+            stroke.paint(meeting: dirtyRect)
         }
 
         if let inProgress = canvas.strokeInProgress, inProgress.repaintBounds.intersects(dirtyRect) {
-            inProgress.renderColor.setStroke()
-            inProgress.path.stroke()
+            inProgress.paint(meeting: dirtyRect)
         }
     }
 

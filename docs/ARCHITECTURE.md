@@ -157,9 +157,14 @@ next to the numbers above:
 - A 60-point drag costs **0.054 ms an event** on an empty canvas and **0.087 ms** with 200
   strokes already down. At 60 events a second that is 0.3–0.5% CPU. So the reported symptom
   — it gets worse as the screen fills — is real (+61%) but it is 61% of a very small number.
-- One unbroken stroke is **quadratic**: the per-event painting cost of a 5000-point line is
-  **5.5x** higher over its last tenth than its first (0.067 ms to 0.362 ms). Confirmed, but
-  it only reaches the size of a single repaint after a few thousand points.
+- One unbroken stroke used to be **quadratic**: painting means rasterising every segment, so
+  a 5000-point line cost five thousand segments' worth of work on every mouse move — including
+  the moves that only touched its last inch. A stroke now paints only the segments whose ink
+  could land inside the rectangle being repainted, which is a walk over its points instead:
+  arithmetic against rasterisation. Measured on the same 5000-point session: the last tenth
+  went from **0.309 ms an event to 0.025**, the ratio between first tenth and last from
+  **13.5x to 3.1x**, and the whole session from **833 ms to 83**. Below 48 points a stroke is
+  painted whole, because the walk costs more than it saves.
 - A fade paints **nothing at all** now, which is what the cost suite's fourth sweep exists
   to keep true.
 - **A wide marker asks for the area it draws on**, not twice it. The rectangle a mouse move
