@@ -74,12 +74,14 @@ final class WheelPanel {
     private static let level = NSWindow.Level(rawValue: NSWindow.Level.popUpMenu.rawValue + 1)
     private static let pollInterval: TimeInterval = 1.0 / 60
 
-    // How long a key has to be held before the wheel appears. Under this it is a tap, and a
-    // tap does the hub's job without anything appearing on screen at all - which matters most
-    // for ⌥V, whose hub is undo: a wheel flashing up on every undo would be the wrong thing
-    // for the one action people repeat. Pushing the mouse out of the dead zone shows it at
-    // once, however short the press, because at that point the user is plainly aiming.
-    private static let holdBeforeShowing: TimeInterval = 0.18
+    // How long a key has to be held before the wheel appears. Under this it is a tap. Pushing
+    // the mouse out of the dead zone shows it at once however short the press, because at that
+    // point the user is plainly aiming at something.
+    //
+    // A tenth of a second: long enough that a tap does not flash a wheel, short enough that
+    // holding one feels like it opened rather than like it thought about it. It was 0.18 and
+    // that was reported as slow.
+    private static let holdBeforeShowing: TimeInterval = 0.11
 
     private let view: WheelView = {
         let view = WheelView(frame: NSRect(x: 0, y: 0, width: Wheel.extent, height: Wheel.extent))
@@ -90,6 +92,9 @@ final class WheelPanel {
     private var poll: Timer?
     private var showTimer: Timer?
     private var isShowing = false
+    // Whether letting go before the wheel appeared does the hub's job. True only for the
+    // actions wheel, whose hub is undo - see open(_:centreLabel:actsOnTap:pick:).
+    private var actsOnTap = false
     private var centre: NSPoint = .zero
     private var pick: ((Int?) -> Void)?
     // Which showing of the wheel is the current one, so a fade that is still running cannot
@@ -125,7 +130,12 @@ final class WheelPanel {
     // would put half its sectors somewhere the pointer cannot reach.
     // The pick is handed nil for the hub rather than nothing at all, because the hub is not
     // always a cancel: on the tools wheel it is the way out to driving the system.
-    func open(_ wheel: Wheel, centreLabel: String? = nil, pick: @escaping (Int?) -> Void) {
+    // `actsOnTap` is what separates the wheel you use over and over from the three you use
+    // deliberately. Undo is a tap on ⌥V, because a gesture for each undo is the wrong shape.
+    // The other three do nothing at all on a tap: their hubs mean "leave" and "cancel", and a
+    // key pressed by accident should not move anybody's mode.
+    func open(_ wheel: Wheel, centreLabel: String? = nil, actsOnTap: Bool = false,
+              pick: @escaping (Int?) -> Void) {
         close()
 
         let pointer = NSEvent.mouseLocation
@@ -140,6 +150,7 @@ final class WheelPanel {
 
         view.wheel = wheel
         view.centreLabel = centreLabel
+        self.actsOnTap = actsOnTap
         view.highlighted = nil
         view.dotLayer.isHidden = true
         view.needsDisplay = true
@@ -202,8 +213,11 @@ final class WheelPanel {
     // The held key came up. Whatever the pointer is pushing towards is the answer; the dead
     // zone in the middle is how the user says never mind.
     func release() {
+        // Released before the wheel ever appeared: a tap. Only the wheel that asked for it
+        // does anything with that.
+        let tapped = !isShowing
         let chosen = view.highlighted
-        let answer = pick
+        let answer = tapped && !actsOnTap ? nil : pick
         pick = nil
         poll?.invalidate()
         poll = nil

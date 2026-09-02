@@ -252,7 +252,8 @@ final class OverlayController {
     // works whatever has the keyboard, which is the whole reason it exists: the keys it
     // replaces only worked while this app happened to be the one being typed at.
     private func openActionWheel() {
-        wheels.open(OverlayController.actionWheel(temporaryInk: tools.drawsTemporaryInk)) { [weak self] index in
+        wheels.open(OverlayController.actionWheel(temporaryInk: tools.drawsTemporaryInk),
+                    actsOnTap: true) { [weak self] index in
             guard let self else {
                 return
             }

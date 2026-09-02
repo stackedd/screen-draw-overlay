@@ -944,12 +944,18 @@ second and a half. The badge's second line, which is the only thing on screen te
 whose clicks have stopped working what to press, is untouched: the mark fits in the width the
 hint line already needed.
 
-**A wheel only appears if you hold the key.** Under 180ms it is a tap: the hub's job is done
-and nothing goes on the screen at all. That falls out of making undo the hub of `⌥V` — a wheel
-flashing up on every undo would be the wrong thing for the one action people repeat — and it
-improves the other three as well, because tapping `⌥Z` to step out no longer flashes a wheel
-of tools nobody was choosing from. Pushing the mouse out of the dead zone shows it at once,
-however short the press has been: at that point the user is plainly aiming at something.
+**A wheel only appears if you hold the key**, and under a tenth of a second it is a tap.
+Pushing the mouse out of the dead zone shows it at once however short the press has been,
+because at that point the user is plainly aiming at something. The threshold was 180ms first
+and that was reported as slow; 110ms is long enough that a tap does not flash a wheel and short
+enough that holding one feels like it opened rather than thought about it.
+
+**And a tap only does anything on `⌥V`.** That is the wheel you use over and over — undo — so
+letting go without pushing undoes, and a run of taps takes back a run of things. The other
+three do nothing at all on a tap. Their hubs mean "leave" and "cancel", these are keys the
+whole system now gives up to this app, and a key hit by accident must not move somebody's mode
+or their colour: leaving is worth the deliberate gesture of holding the wheel open and pushing
+at its middle.
 
 **Why `CLEAR` moved onto a wheel.** It was the bare letter `C`, and that was wrong twice over:
 it is easy to hit by accident for something that erases a whole drawing, and it only worked

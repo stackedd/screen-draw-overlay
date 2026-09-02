@@ -51,6 +51,11 @@ every one of them works whatever app you are in, because they are registered sys
 | `Option + C` | The size — of the pen, of the marker, of the hole the eraser takes out, or of the laser's beam |
 | `Option + V` | What you do *to* a drawing: redo, clear, temporary ink, hide |
 
+**A wheel appears when you hold the key** — about a tenth of a second, or the moment you push
+the mouse. Let go before that and nothing happens at all, except on `Option + V`, which is the
+one you tap: a tap undoes, and a run of taps undoes a run of things. The other three do nothing
+on a tap on purpose, so a key hit by accident never moves your mode or your colour.
+
 **The middle of a wheel is its default, and letting go there does it.** On the tools wheel the
 middle is the way out, one step at a time: first the screen goes back to the app underneath —
 click, scroll, type, with your drawing still on it — and again puts the overlay away, keeping

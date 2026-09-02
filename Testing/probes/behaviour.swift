@@ -37,6 +37,13 @@
         controller.wheels.release()
     }
 
+    // A wheel only appears if the key is held, and only a wheel that appeared does the hub's
+    // job - except ⌥V, which is the one you tap. So a check that lets go in the middle has to
+    // hold it open first, the way a hand does.
+    func heldOpen() {
+        RunLoop.current.run(until: Date().addingTimeInterval(WheelPanel.holdBeforeShowing + 0.05))
+    }
+
     func undoOnce() { pushAction(nil) }
     func redoOnce() { pushAction(0) }
     func clearAll() { pushAction(1) }
@@ -506,6 +513,7 @@
         // point of putting the mode on the same gesture as the tool: one thing to learn
         // instead of a tool picker and a mode shortcut.
         controller.openToolWheel()
+        heldOpen()
         controller.wheels.track(controller.wheels.centre)
         controller.wheels.release()
         check("wheel: let go in the middle and the system has the screen", state, "CLICK-THROUGH")
@@ -792,6 +800,20 @@
               controller.wheels.isShowing ? "a wheel" : "nothing", "nothing")
         controller.wheels.release()
 
+        // And a tap only *does* anything on the wheel you tap on purpose. ⌥V undoes, because
+        // that is the job people repeat; the other three mean "leave" and "cancel", and a key
+        // pressed by accident must not move somebody's mode or their colour.
+        let stateBeforeTap = state
+        controller.openToolWheel()
+        controller.wheels.release()
+        check("a tap on the tools wheel changes nothing", state, stateBeforeTap)
+
+        let colourBeforeTap = controller.tools.colorIndex
+        controller.openColourWheel()
+        controller.wheels.release()
+        check("and a tap on the colour wheel leaves the colour alone",
+              "\(controller.tools.colorIndex)", "\(colourBeforeTap)")
+
         controller.openActionWheel()
         controller.wheels.track(NSPoint(x: controller.wheels.centre.x + 120,
                                         y: controller.wheels.centre.y))
@@ -816,6 +838,7 @@
         // user with no pointer at all. Letting go in the middle with nothing open is exactly
         // that case.
         controller.openToolWheel()
+        heldOpen()
         controller.wheels.track(controller.wheels.centre)
         controller.wheels.release()
         check("a wheel that closes with no overlay hands a pointer back",
@@ -832,10 +855,12 @@
         stroke(y: 300)
         let beforeHiding = live
         controller.openToolWheel()
+        heldOpen()
         controller.wheels.track(controller.wheels.centre)
         controller.wheels.release()
         check("the hub hands the screen back first", state, "CLICK-THROUGH")
         controller.openToolWheel()
+        heldOpen()
         controller.wheels.track(controller.wheels.centre)
         controller.wheels.release()
         check("and the second time puts it away", state, "OFF")
