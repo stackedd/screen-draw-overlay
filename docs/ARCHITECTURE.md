@@ -167,6 +167,10 @@ next to the numbers above:
   painted whole, because the walk costs more than it saves.
 - A fade paints **nothing at all** now, which is what the cost suite's fourth sweep exists
   to keep true.
+- **A slow hand** — 1500 events less than a point apart, which is what drawing carefully at
+  sixty events a second actually produces — costs **0.0151 ms an event**, of which 0.0008 is
+  handling the event and the rest is paint. This is the sweep two rejected optimisations were
+  measured against; see below.
 - **A wide marker asks for the area it draws on**, not twice it. The rectangle a mouse move
   invalidates is the segment grown by the pen's own reach — half its width and a point of
   antialiasing — where it used to be a whole width either side. Measured on the marker at its
@@ -253,6 +257,21 @@ overlay used to leave an arrow on the screen until the user moved. `takeCursorBa
 it every 120th of a second for a third of a second after a panel appears, then stops.
 Measured with `Testing/probes/cursorflash.swift`, which samples `NSCursor.currentSystem` — what
 the screen shows, rather than what the app believes — every 4ms.
+
+**Two optimisations that were planned, measured and dropped.** Both were on the open list for
+months and both turned out to be worth nothing once measured:
+
+- **Caching `Stroke.repaintBounds`.** `NSBezierPath.bounds` is already cached by AppKit and
+  maintained incrementally: asking a 5000-point path for its bounds costs **0.00004 ms**, and
+  asking again right after appending a point costs **0.0001 ms**, whatever its length. There
+  was nothing to cache.
+- **Thinning points closer together than 1.5pt.** It works — a slow hand keeps 751 points
+  instead of 1501 and paints 0.2 Mpx instead of 0.5 — and it still made things slower, because
+  it overlaps with painting only the segments a repaint asked for. Measured four ways on the
+  same session: without trimming, thinning takes an event from 0.0504 ms to 0.0313; with
+  trimming, it takes it from **0.0151 to 0.0229**. Trimming already removes what thinning was
+  aimed at, and thinning then makes each remaining paint cover more ground. The cheaper one
+  wins alone.
 
 **`needsToDraw(_:)` is not a lever here.** It looked like a free win — AppKit hands
 `draw(_:)` the bounding box of every invalid rectangle, so a pointer that invalidates where

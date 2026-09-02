@@ -344,6 +344,43 @@ for model in [Bench.Model.rects, .union] {
                 mean(times[0...]), bench.paintedArea / 1_000_000))
 }
 
+// MARK: - Sweep 7: a slow hand
+//
+// The other end of the range from sweep 1. A hand moving slowly at sixty events a second puts
+// points less than a point apart, and every one of them is a segment to walk, a segment to
+// rasterise and a point the eraser has to measure against later. This is where dropping the
+// ones that land on top of each other shows.
+
+line("")
+line("== 7. a slow hand: 1500 events under a point apart (per-event ms, and points kept)")
+for model in [Bench.Model.rects, .union] {
+    let bench = Bench(model)
+    bench.tools.select(tool: .pen)
+
+    let start = NSPoint(x: 200, y: 500)
+    bench.view.mouseDown(with: bench.event(.leftMouseDown, start))
+    var times: [Double] = []
+    var handling: [Double] = []
+    for index in 1...1500 {
+        let t = CGFloat(index)
+        let point = NSPoint(x: start.x + t * 0.8, y: start.y + sin(t * 0.02) * 30)
+        let started = milliseconds()
+        bench.view.mouseDragged(with: bench.event(.leftMouseDragged, point))
+        let handled = milliseconds()
+        bench.paint()
+        times.append(milliseconds() - started)
+        handling.append(handled - started)
+    }
+    let kept = bench.view.canvas.strokeInProgress?.points.count ?? 0
+    bench.view.mouseUp(with: bench.event(.leftMouseUp, NSPoint(x: start.x + 1200, y: start.y)))
+
+    line(String(format: "   %-5@ %.4f ms/event (%.4f handling, %.4f painting)   %d points of 1500   %.1f Mpx",
+                model == .rects ? "rects" : "union" as NSString,
+                mean(times[0...]), mean(handling[0...]),
+                mean(times[0...]) - mean(handling[0...]), kept,
+                bench.paintedArea / 1_000_000))
+}
+
 line("")
 line("   Painting only. The backing store update and the window server's compositing of a")
 line("   full screen transparent surface are not in these numbers - measure those on the")

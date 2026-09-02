@@ -143,11 +143,14 @@ about making it one thing to learn and one thing to trust.
   cursor, and nothing this app may do can detect or undo that, so the pointer is a layer and
   the window server gets a cursor that shows nothing (`docs/DECISIONS.md` 6). The cursor hold
   runs at 60Hz while drawing mode has the mouse, which is what stops the arrow coming back.
-- **Still open, in order:** the in-progress stroke is re-stroked in full on every mouse move
-  (quadratic in its own length); `Stroke.repaintBounds` is recomputed per stroke per repaint;
-  points closer together than about 1.5pt are worth dropping; and the pointer poll could fall
-  back to a slower rate while the hand is still. Each of those is a measurement before it is
-  a change.
+- **Painting asks for what it needs.** A stroke paints only the segments whose ink could land
+  in the rectangle being repainted, which took a 5000-point line's last tenth from 0.309 ms an
+  event to 0.025 and the whole session from 833 ms to 83. The two other items that were on
+  this list — caching `repaintBounds` and thinning points — were measured and **dropped**:
+  AppKit already caches bounds, and thinning overlaps with the trimming above and loses to it
+  (`docs/ARCHITECTURE.md`).
+- **Still open:** the pointer poll could fall back to a slower rate while the hand is still
+  (idle is 0.9% of a core). Measure it before changing it.
 
 **Performance is measured rather than guessed** (`docs/ARCHITECTURE.md`, "Where the drawing
 bill actually goes"). Three numbers govern everything:
