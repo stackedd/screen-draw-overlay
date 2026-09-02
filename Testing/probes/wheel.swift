@@ -51,7 +51,14 @@ for row in 0..<40 {
 
 for (index, panel) in panels.enumerated() {
     let box = NSRect(x: CGFloat(index) * side, y: 0, width: side, height: side)
-    panel.1.draw(in: ctx, bounds: box, highlighted: panel.2)
+    // With a pointer, because the wheel draws one: it sits over the overlay, and with no
+    // overlay open there is nothing else to show where the hand is pushing.
+    let push = panel.2.map { sector -> NSPoint in
+        let angle = -CGFloat(sector) * .pi * 2 / CGFloat(panel.1.items.count)
+        let reach = (Wheel.innerRadius + Wheel.outerRadius) / 2
+        return NSPoint(x: cos(angle) * reach, y: sin(angle) * reach)
+    } ?? NSPoint(x: 12, y: -18)
+    panel.1.draw(in: ctx, bounds: box, highlighted: panel.2, pointer: push)
     NSAttributedString(string: panel.0, attributes: [
         .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .medium),
         .foregroundColor: NSColor.white.withAlphaComponent(0.9)

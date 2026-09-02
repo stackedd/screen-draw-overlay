@@ -25,6 +25,7 @@ view.applyDrawingCursor()
 
 func describeCursor(_ cursor: NSCursor?) -> String {
     guard let cursor else { return "none" }
+    if cursor === PointerCursor.invisible { return "the invisible one" }
     let size = cursor.image.size
     return String(format: "%.0fx%.0f", size.width, size.height)
 }
@@ -85,11 +86,11 @@ print("")
 print("=== the wheel and the cursor ===")
 tools.select(tool: .pen)
 settle()
-let overlayCursor = PointerCursor.cursor(for: tools)
+let overlayCursor = PointerCursor.invisible
 var closed = false
 let wheel = WheelPanel()
 wheel.onClose = { closed = true }
-wheel.open(OverlayController.toolWheel, cursor: overlayCursor) { _ in }
+wheel.open(OverlayController.toolWheel) { _ in }
 settle(0.4)
 print("  wheel open: the app's cursor is \(describeCursor(NSCursor.current)), "
       + "ours is \(describeCursor(overlayCursor)), same: \(NSCursor.current === overlayCursor)")
@@ -105,17 +106,15 @@ print("=== the cursor ===")
 tools.select(tool: .pen)
 settle()
 
-func describe(_ cursor: NSCursor?) -> String {
-    guard let cursor else { return "none" }
-    let size = cursor.image.size
-    return String(format: "%.0fx%.0f", size.width, size.height)
-}
-
 func report(_ what: String) {
-    let ours = PointerCursor.cursor(for: tools)
-    let current = NSCursor.current
-    print("  \(what): ours \(describe(ours)), the app's current is \(describe(current)), "
-          + "same object: \(current === ours)")
+    // Two halves now: what the window server was handed (nothing, on purpose) and what the
+    // user actually sees, which is a picture on a layer.
+    let picture = PointerCursor.picture(for: tools, scale: 2)
+    let layer = view.pointerLayer
+    print("  \(what): the window server has \(describeCursor(NSCursor.current)), "
+          + "the layer is \(layer.isHidden ? "hidden" : "showing") "
+          + "\(layer.contents == nil ? "nothing" : "a picture") "
+          + "at \(layer.position), wanted \(picture == nil ? "nothing" : "a picture")")
 }
 
 warp(to: middle)

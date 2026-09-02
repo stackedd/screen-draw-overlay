@@ -1,31 +1,34 @@
-// The pointer the user sees while drawing: one cursor per tool, in the colour in hand.
+// The pointer the user sees while drawing: one picture per tool, in the colour in hand.
 //
-// The history here is worth keeping, because it is a loop that has been walked twice.
+// The history here is worth keeping, because it is a loop that has been walked three times.
 //
-// **Tried:** `NSCursor.crosshair`, and `NSCursor.hide()` with `CGDisplayShowCursor`. Hiding
-// is per application and only applies while that application is active, so a background
+// **Tried:** `NSCursor.crosshair`, and `NSCursor.hide()` with `CGDisplayShowCursor`. Hiding is
+// per application and only applies while that application is active, so a background
 // `.accessory` app hides nothing; that attempt put two pointers on screen at once.
 //
-// **Tried:** a fully transparent cursor with the app painting its own crosshair underneath.
-// It works only while we own the window under the pointer, and the moment something else
-// takes the cursor - the menu bar does it reliably - the real arrow is back for good with
-// our crosshair still painted beside it. No failure mode between invisible and doubled.
+// **Tried:** a fully transparent cursor with the app painting its own crosshair underneath, in
+// `draw(_:)`. It worked and it cost 22.5% of a core, because painting a pointer meant
+// repainting a full screen transparent overlay on every mouse move.
 //
-// **Tried:** the system arrow with a coloured ring composited around its tip. Safe, and
-// nobody liked it: an arrow is what you get when nothing is happening, so an overlay that
-// is taking every click on the screen looked exactly like one that was not.
+// **Then:** each tool as a real `NSCursor`, handed to the window server. Free to follow, one
+// pointer always, and it degraded to the system arrow if something else took the cursor.
 //
-// **Now:** each tool draws its own pointer, in the colour it will draw with, with the point
-// that matters on the hot spot. A pen is a nib, a highlighter is a chisel, a shape tool is a
-// crosshair with the shape it makes beside it, the eraser is a ring the size of the hole it
-// leaves, and the laser has none at all because its glow is on the overlay and two marks are
-// worse than one. Losing cursor ownership degrades to the plain system arrow, which is a
-// thing the user can see and understand rather than a bug.
+// **Now:** the pictures below are painted onto a layer on the overlay, and the window server
+// is handed `invisible` - a cursor that exists so nothing else claims the pointer, and shows
+// nothing. That is a reversal, and the reason is the thing this app is for: **an app that is
+// presenting hides the pointer**, and a cursor of ours is then not drawn at all. During a
+// slideshow every tool's pointer vanished and the laser's glow - which was always a layer -
+// was the only one left. Measured with a stand-in for a presentation: a frontmost app that
+// calls `NSCursor.hide()` leaves `NSCursor.currentSystem` reporting a visible cursor, so we
+// cannot detect it, and `CGDisplayShowCursor` from here does not undo it (docs/DECISIONS.md 6).
+//
+// A pen is a nib, a highlighter is a chisel, a shape tool is a crosshair, the eraser is a ring
+// the size of the hole it leaves, and the laser has no picture at all because its glow is its
+// pointer and two marks are worse than one.
 //
 // Everything is drawn light-cased over a dark core, or the reverse, so it reads on a white
-// slide and a black one. The hot spot is the centre of the image in every case, which the
-// behaviour suite checks: hot spot, the point the tool works from, and the point the ink
-// lands on all have to be the same point.
+// slide and a black one. Every picture is square and drawn from its middle, which is what puts
+// the point the tool works from under the pointer: the layer carries it centred.
 
 import AppKit
 
@@ -37,25 +40,51 @@ enum PointerCursor {
         let colour: Int
         let width: CGFloat
         let eraserRadius: CGFloat
+        let scale: CGFloat
     }
 
-    // Rebuilt only when the tool, colour or width changes, which is a keypress, never a
-    // mouse move.
-    private static var cache: [Key: NSCursor] = [:]
+    // Rebuilt only when the tool, colour, width or display changes - a keypress or a wheel,
+    // never a mouse move.
+    private static var pictures: [Key: (image: CGImage, size: NSSize)] = [:]
 
-    static func cursor(for tools: ToolSettings) -> NSCursor {
-        let key = Key(tool: tools.tool, colour: tools.colorIndex,
-                      width: tools.renderWidth, eraserRadius: tools.eraserRadius)
-        if let cached = cache[key] {
+    // The tool's picture, and how big it is in points. This is what the overlay shows: the
+    // window server is handed `invisible` and the pointer is painted on a layer.
+    //
+    // nil for the laser, whose glow is its pointer and always was.
+    static func picture(for tools: ToolSettings, scale: CGFloat) -> (image: CGImage, size: NSSize)? {
+        guard tools.tool != .laser else {
+            return nil
+        }
+
+        let key = Key(tool: tools.tool, colour: tools.colorIndex, width: tools.renderWidth,
+                      eraserRadius: tools.eraserRadius, scale: scale)
+        if let cached = pictures[key] {
             return cached
         }
 
-        let made = make(tool: tools.tool, colour: tools.color,
-                        width: tools.renderWidth, eraserRadius: tools.eraserRadius)
-        cache[key] = made
+        let side = ceil(reach(of: tools.tool, width: tools.renderWidth,
+                              eraserRadius: tools.eraserRadius)) * 2
+        let size = NSSize(width: side, height: side)
+        guard let image = Picture.drawn(size: size, scale: scale, {
+            draw(tools.tool, colour: tools.color, width: tools.renderWidth,
+                 eraserRadius: tools.eraserRadius, at: NSPoint(x: side / 2, y: side / 2))
+        }) else {
+            return nil
+        }
 
-        return made
+        pictures[key] = (image, size)
+
+        return (image, size)
     }
+
+    // What the window server draws while the overlay draws its own pointer: nothing. It is a
+    // cursor rather than `NSCursor.hide()` because hiding is per application and only applies
+    // while that application is active - a background app hides nothing, which is how this app
+    // once put two pointers on a screen.
+    static let invisible: NSCursor = {
+        let image = NSImage(size: NSSize(width: 8, height: 8), flipped: false) { _ in true }
+        return NSCursor(image: image, hotSpot: NSPoint(x: 4, y: 4))
+    }()
 
     // The pen's geometry, from the width in hand. Everything else is derived from this, so
     // the picture and the space it needs cannot disagree - and a fat pen looks fat, which is
@@ -89,21 +118,6 @@ enum PointerCursor {
         case .highlighter: return Barrel(width: width, chisel: true).length + casing + 2
         default: return 18
         }
-    }
-
-    private static func make(tool: DrawingTool, colour: NSColor,
-                             width: CGFloat, eraserRadius: CGFloat) -> NSCursor {
-        let side = ceil(reach(of: tool, width: width, eraserRadius: eraserRadius)) * 2
-        let centre = NSPoint(x: side / 2, y: side / 2)
-
-        // Drawn through a handler rather than into a bitmap, so the cursor is redrawn at
-        // whatever resolution the display it lands on needs.
-        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { _ in
-            draw(tool, colour: colour, width: width, eraserRadius: eraserRadius, at: centre)
-            return true
-        }
-
-        return NSCursor(image: image, hotSpot: centre)
     }
 
     private static func draw(_ tool: DrawingTool, colour: NSColor,

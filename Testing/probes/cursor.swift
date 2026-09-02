@@ -1,6 +1,9 @@
 import AppKit
 
-// Every cursor, on a light background and a dark one, rendered so somebody can look at it.
+// Every pointer, on a light background and a dark one, rendered so somebody can look at it.
+//
+// They are pictures on a layer now rather than cursors handed to the window server, because a
+// presenting app can hide a cursor (docs/DECISIONS.md 6). What is drawn is the same.
 //
 // Not a pass or a fail, so it is not in run.sh. The behaviour suite can check that the hot
 // spot is where the ink lands; it cannot tell whether a pen looks like a pen, whether the
@@ -46,8 +49,10 @@ for (index, entry) in shown.enumerated() {
     tools.select(tool: entry.0)
     tools.selectColor(entry.1)
     tools.selectWidth(entry.2)
-    let cursor = PointerCursor.cursor(for: tools)
-    let size = cursor.image.size
+    guard let picture = PointerCursor.picture(for: tools, scale: scale) else {
+        continue
+    }
+    let size = picture.size
     let x = Double(index) * cell + cell / 2
 
     for (row, ink) in [(1, NSColor.black), (0, NSColor.white)] {
@@ -62,8 +67,10 @@ for (index, entry) in shown.enumerated() {
         mark.lineWidth = 1
         mark.stroke()
 
-        cursor.image.draw(in: NSRect(x: centre.x - size.width / 2, y: centre.y - size.height / 2,
-                                     width: size.width, height: size.height))
+        NSGraphicsContext.current?.cgContext
+            .draw(picture.image, in: CGRect(x: centre.x - size.width / 2,
+                                            y: centre.y - size.height / 2,
+                                            width: size.width, height: size.height))
     }
 
     NSAttributedString(string: entry.0.label + " " + String(Int(ToolSettings.widths[entry.2])),

@@ -69,8 +69,6 @@ final class OverlayController {
     }
 
     private let wheels = WheelPanel()
-    // The cursor the wheel should wear, so it does not hand the pointer back as an arrow.
-    private var toolCursor: NSCursor { PointerCursor.cursor(for: tools) }
     private let shortcuts = Shortcuts()
     private var menuBar: MenuBarItem?
     private var overlayWindows: [OverlayPanel] = []
@@ -92,11 +90,6 @@ final class OverlayController {
     // stay for the life of the app; the panels come and go.
     @discardableResult
     func start() -> [String] {
-        // The pointer does not move when a wheel closes, so nothing would ask the overlay
-        // for its cursor again.
-        wheels.cursorNow = { [weak self] in
-            self?.toolCursor ?? .arrow
-        }
         wheels.onClose = { [weak self] in
             self?.takeCursorBack()
         }
@@ -158,7 +151,7 @@ final class OverlayController {
     }
 
     private func openToolWheel() {
-        wheels.open(OverlayController.toolWheel, centreLabel: hubLabel, cursor: toolCursor) { [weak self] index in
+        wheels.open(OverlayController.toolWheel, centreLabel: hubLabel) { [weak self] index in
             guard let self else {
                 return
             }
@@ -202,14 +195,13 @@ final class OverlayController {
             return
         }
 
-        wheels.open(OverlayController.colourWheel, cursor: toolCursor) { [weak self] index in
+        wheels.open(OverlayController.colourWheel) { [weak self] index in
             index.map { self?.tools.selectColor($0) }
         }
     }
 
     private func openWidthWheel() {
-        wheels.open(OverlayController.widthWheel(for: tools.tool, in: tools.color),
-                    cursor: toolCursor) { [weak self] index in
+        wheels.open(OverlayController.widthWheel(for: tools.tool, in: tools.color)) { [weak self] index in
             index.map { self?.tools.selectWidth($0) }
         }
     }
@@ -463,6 +455,15 @@ final class OverlayController {
     private static let cursorSettleTicks = 42
 
     private func takeCursorBack() {
+        // No overlay, or the screen handed back: the pointer belongs to whatever is
+        // underneath, and it has to be a pointer somebody can see. This is load-bearing now
+        // that the wheel wears a cursor that shows nothing - without it, closing a wheel with
+        // no overlay open would leave the user with no pointer at all.
+        guard isDrawingMode, !isInteractionMode else {
+            NSCursor.arrow.set()
+            return
+        }
+
         setDrawingCursor()
         holdCursor()
         cursorSettling?.invalidate()

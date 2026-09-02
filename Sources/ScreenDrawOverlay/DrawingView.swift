@@ -53,11 +53,14 @@ final class DrawingView: NSView {
     private let badgeLayer = CALayer()
     private let inkPainter = InkPainter()
 
-    // The laser, when it is the tool in hand. On the overlay rather than on the cursor,
-    // because the one thing a laser has to do is be there whoever owns the cursor.
+    // The laser, when it is the tool in hand, and the pointer whatever the tool is. Both are
+    // on the overlay rather than on the cursor, because the one thing either has to do is be
+    // there - and an app that is presenting can hide a cursor (docs/DECISIONS.md 6).
     private let laserLayer = LaserDot.makeLayer()
-    private var laserPoll: Timer?
-    private var lastLaserPoint: NSPoint?
+    private let pointerLayer = LaserDot.makeLayer()
+    private var pointerPoll: Timer?
+    private var lastPointerPoint: NSPoint?
+    private var lastPointerUpdate = Date.distantPast
 
     // Temporary ink, once it is finished: one self-fading layer each, above the ink.
     private let fadingInk = FadingInk()
@@ -81,9 +84,9 @@ final class DrawingView: NSView {
             // The badge changes text, size and colour with the mode. It used to cost a
             // repaint of the whole view; now it is a new picture on a layer.
             refreshBadge()
-            // Click-through hands the screen back, and a laser dot sitting on top of an app
-            // the user is now driving is just something in the way.
-            showLaserIfSelected()
+            // Click-through hands the screen back, and neither the pointer nor a laser dot
+            // belongs on top of an app the user is now driving.
+            showPointer()
             if isInteractionMode {
                 releaseDrawingCursor()
             } else {
@@ -113,7 +116,7 @@ final class DrawingView: NSView {
         inkLayer.frame = NSRect(origin: .zero, size: frameRect.size)
         attachLayers()
         refreshBadge()
-        refreshLaser()
+        refreshPointer()
     }
 
     required init?(coder: NSCoder) {
@@ -122,7 +125,7 @@ final class DrawingView: NSView {
 
     deinit {
         fadeTimer?.invalidate()
-        laserPoll?.invalidate()
+        pointerPoll?.invalidate()
         noticeTimer?.invalidate()
     }
 
@@ -138,7 +141,7 @@ final class DrawingView: NSView {
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
         refreshBadge()
-        refreshLaser()
+        refreshPointer()
         // A layer keeps its pixels through a scale change, so they have to be redrawn or
         // the drawing stays at the old display's resolution.
         inkLayer.contentsScale = backingScale
@@ -152,7 +155,9 @@ final class DrawingView: NSView {
             return
         }
 
-        for sublayer in [inkLayer, badgeLayer, laserLayer] where sublayer.superlayer !== layer {
+        // Bottom to top, and the pointer is on top of everything, where a pointer belongs.
+        for sublayer in [inkLayer, badgeLayer, laserLayer, pointerLayer]
+        where sublayer.superlayer !== layer {
             layer.addSublayer(sublayer)
         }
     }
@@ -175,82 +180,136 @@ final class DrawingView: NSView {
         window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
     }
 
-    // Same story: a new picture on a tool, colour or mode change, and nothing at all on a
-    // mouse move.
-    // The glow is redrawn only when the colour or the display's scale changes, and shown
-    // only while the laser is the tool and the overlay is taking the mouse.
-    private func refreshLaser() {
+    // The pointer, as a picture on a layer, and the laser's glow beside it. Both are redrawn
+    // only when the tool, the colour, the width or the display's scale changes - never on a
+    // mouse move, which only moves them.
+    //
+    // The pointer is drawn here rather than handed to the window server as a cursor, and that
+    // reverses a decision this app held for a long time (docs/DECISIONS.md 6). The reason is
+    // the thing this app exists for: **an app that is presenting hides the pointer**, and a
+    // cursor of ours is then not drawn at all. Measured, with a stand-in for a slideshow: a
+    // frontmost app that calls NSCursor.hide leaves NSCursor.currentSystem reporting a
+    // perfectly visible cursor, so we cannot even tell it happened - and CGDisplayShowCursor
+    // from here does not undo it. During a presentation every tool's pointer vanished and the
+    // laser's glow was the only one left, which is exactly what was reported.
+    //
+    // So the window server gets a cursor that shows nothing, and the pointer is a layer. The
+    // failure this used to have - lose the cursor once and there are two pointers with no way
+    // back - is answered by the cursor hold in OverlayController, which re-sets the invisible
+    // cursor twenty times a second: worst case is 50ms of a second pointer, against a pointer
+    // that was missing for the whole presentation.
+    private func refreshPointer() {
         let extent = LaserDot.extent(for: tools.renderWidth)
         laserLayer.bounds = NSRect(x: 0, y: 0, width: extent, height: extent)
         laserLayer.contentsScale = backingScale
         laserLayer.contents = LaserDot.glow(tools.color, width: tools.renderWidth,
                                             scale: backingScale)
-        showLaserIfSelected()
+
+        if let picture = PointerCursor.picture(for: tools, scale: backingScale) {
+            pointerLayer.bounds = NSRect(origin: .zero, size: picture.size)
+            pointerLayer.contentsScale = backingScale
+            pointerLayer.contents = picture.image
+        } else {
+            // The laser's pointer is its glow, and two marks an inch apart are worse than one.
+            pointerLayer.contents = nil
+        }
+
+        showPointer()
     }
 
-    private func showLaserIfSelected() {
-        guard tools.tool == .laser, !isInteractionMode else {
+    private func showPointer() {
+        guard !isInteractionMode else {
+            // Click-through hands the screen back: the pointer belongs to the app underneath,
+            // and a glow sitting on top of what the user is now driving is in the way.
             laserLayer.isHidden = true
-            stopLaserPoll()
+            pointerLayer.isHidden = true
+            stopPointerPoll()
             return
         }
 
-        // Placed before it is shown: followPointerWithLaser does both, in that order, so the
-        // glow cannot appear for a frame wherever it was last left.
-        followPointerWithLaser()
-        startLaserPoll()
+        // Placed before it is shown: followPointer does both, in that order, so nothing can
+        // appear for a frame wherever it was last left.
+        followPointer(force: true)
+        startPointerPoll()
     }
 
     // Polled as well as driven by events, because neither is enough on its own. Mouse-moved
     // events only reach the key window and these panels are non-activating, so the moment the
-    // user has clicked anything in another app the events stop and the glow hangs in the air
-    // where it was last lit. The poll works whoever has focus; the events keep the glow level
+    // user has clicked anything in another app the events stop and the pointer hangs in the
+    // air where it was last drawn. The poll works whoever has focus; the events keep it level
     // with the ink it is drawing, which a poll on its own does not.
     //
-    // The timer exists only while the laser is the tool in hand, so an idle overlay still
-    // costs nothing.
-    private func startLaserPoll() {
-        guard laserPoll == nil else {
+    // It runs while the overlay is taking the mouse and stops with click-through and with the
+    // overlay, so a closed overlay still costs nothing.
+    private func startPointerPoll() {
+        guard pointerPoll == nil else {
             return
         }
 
         let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
-            self?.followPointerWithLaser()
+            self?.followPointer()
         }
         RunLoop.main.add(timer, forMode: .common)
-        laserPoll = timer
+        pointerPoll = timer
     }
 
-    private func stopLaserPoll() {
-        laserPoll?.invalidate()
-        laserPoll = nil
+    private func stopPointerPoll() {
+        pointerPoll?.invalidate()
+        pointerPoll = nil
     }
 
-    // Where the glow goes, and whether this screen is the one that shows it. Called with a
+    // Where the pointer is, and whether this screen is the one that shows it. Called with a
     // point by everything that already has one - a move, a press, a drag - and without one by
     // the poll, which asks the window server instead.
     //
-    // Whether it is lit is decided here, from where the pointer is, rather than by
-    // mouseEntered and mouseExited. Those were doing it, and an exit with no matching entry -
-    // a menu opening over the panel is enough - put the laser out for good, because nothing
-    // else ever turned it back on. Decided from the pointer's position it heals itself on the
-    // next tick, whatever was missed.
-    private func followPointerWithLaser(to point: NSPoint? = nil) {
-        guard let window, tools.tool == .laser, !isInteractionMode else {
+    // Whether anything is shown is decided here, from where the pointer is, rather than by
+    // mouseEntered and mouseExited. Those were doing it for the laser, and an exit with no
+    // matching entry - a menu opening over the panel is enough - put the glow out for good,
+    // because nothing else ever turned it back on. Decided from the pointer's position it
+    // heals itself on the next tick, whatever was missed.
+    private func followPointer(to point: NSPoint? = nil, force: Bool = false) {
+        guard let window, !isInteractionMode else {
             return
         }
 
+        // The poll is the fallback, not the driver. While events are arriving they are ahead
+        // of it and both were doing the work, which is two layer moves a frame instead of
+        // one: measured, following the pointer went from 0.5% of a core to 2.6% when the
+        // pointer became a layer, and a good part of that was this. `force` is for the things
+        // that change what should be showing rather than where it is - a tool, a mode - which
+        // must not be skipped because an event happened to arrive a moment ago.
+        let now = Date()
+        if point == nil, !force, now.timeIntervalSince(lastPointerUpdate) < 1.0 / 90 {
+            return
+        }
+        lastPointerUpdate = now
+
         let here = point ?? convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
-        if here != lastLaserPoint {
-            lastLaserPoint = here
+
+        // One pointer, on the screen it is actually over. Every panel polls, so without this
+        // each of them would draw one at the edge nearest the pointer.
+        let mine = bounds.contains(here)
+        let laserWanted = mine && tools.tool == .laser
+        let pointerWanted = mine && pointerLayer.contents != nil
+
+        // Only what is going to be seen is moved: the other layer is hidden, and moving a
+        // hidden layer is a layer move nobody asked for. A layer that is *about* to be shown
+        // is placed whether or not the pointer moved - picking the laser without moving the
+        // mouse would otherwise light it wherever it was last left.
+        let moved = here != lastPointerPoint
+        lastPointerPoint = here
+        if laserWanted, moved || laserLayer.isHidden {
             laserLayer.position = here
         }
+        if pointerWanted, moved || pointerLayer.isHidden {
+            pointerLayer.position = here
+        }
 
-        // One glow, on the screen the pointer is actually over. Every panel polls, so without
-        // this each of them would light one at the edge nearest the pointer.
-        let mine = bounds.contains(here)
-        if laserLayer.isHidden == mine {
-            laserLayer.isHidden = !mine
+        if laserLayer.isHidden == laserWanted {
+            laserLayer.isHidden = !laserWanted
+        }
+        if pointerLayer.isHidden == pointerWanted {
+            pointerLayer.isHidden = !pointerWanted
         }
     }
 
@@ -285,7 +344,7 @@ final class DrawingView: NSView {
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         updateBadgeHover(at: point)
-        followPointerWithLaser(to: point)
+        followPointer(to: point)
 
         guard tools.tool != .eraser else {
             // One drag is one thing to take back, however many strokes it cuts through.
@@ -306,7 +365,7 @@ final class DrawingView: NSView {
         updateBadgeHover(at: point)
         // The beam is drawn where the event says the pointer is, so the glow is told the same
         // thing: left to the poll, the light trailed the ink it is supposed to be making.
-        followPointerWithLaser(to: point)
+        followPointer(to: point)
 
         guard tools.tool != .eraser else {
             erase(at: point)
@@ -338,12 +397,12 @@ final class DrawingView: NSView {
     override func mouseMoved(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         updateBadgeHover(at: point)
-        followPointerWithLaser(to: point)
+        followPointer(to: point)
     }
 
     override func mouseEntered(with event: NSEvent) {
         applyDrawingCursor()
-        followPointerWithLaser(to: convert(event.locationInWindow, from: nil))
+        followPointer(to: convert(event.locationInWindow, from: nil))
     }
 
     // Three ways to claim the cursor, because any one of them can be missed: the cursor
@@ -355,7 +414,7 @@ final class DrawingView: NSView {
             return
         }
 
-        addCursorRect(bounds, cursor: PointerCursor.cursor(for: tools))
+        addCursorRect(bounds, cursor: PointerCursor.invisible)
     }
 
     override func cursorUpdate(with event: NSEvent) {
@@ -371,12 +430,15 @@ final class DrawingView: NSView {
     // and the case that was actually reported is the pointer standing still. It is
     // OverlayController's cursor hold now, on a timer, so a stationary pointer is covered and
     // a moving one costs nothing to handle.
+    // What the window server draws while the overlay is taking the mouse: nothing. The
+    // pointer the user sees is the layer above, and this is only here so that nothing else
+    // claims the cursor and draws an arrow next to ours.
     func applyDrawingCursor() {
         guard !isInteractionMode else {
             return
         }
 
-        PointerCursor.cursor(for: tools).set()
+        PointerCursor.invisible.set()
     }
 
     func releaseDrawingCursor() {
@@ -585,7 +647,7 @@ final class DrawingView: NSView {
         // cursor rects is only forbidden from inside cursorUpdate, and this is a keypress.
         refreshCursorRects()
         applyDrawingCursor()
-        refreshLaser()
+        refreshPointer()
         refreshBadge()
     }
 

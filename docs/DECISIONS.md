@@ -198,10 +198,35 @@ inside `cursorUpdate`. That re-enters AppKit's tracking machinery and throws —
 moment the pointer moved over the panel. Rebuilding cursor rects lives in its own method that
 only mode and tool changes call.
 
-**Unverified:** whether a presenting app that hides the pointer can hide this one too. The
-original note said a Keynote slideshow did, but that was measured with the overlay at window
-level 3, underneath Keynote, where Keynote owned the window under the pointer. At level 101 we
-own it.
+**And then the whole thing was reversed, because of the one case this app exists for.** The
+note that used to sit here said it was *unverified* whether a presenting app that hides the
+pointer hides ours too. It does. Reported from a real presentation: the wheel opened, no
+pointer was visible anywhere, and of all the tools only the laser could be seen — which is
+exactly the shape of the answer, because the laser's glow was always a layer on the overlay
+and every other tool was a cursor.
+
+Two things were measured before changing anything, with a stand-in for a slideshow (a
+frontmost app that hides the pointer, and a background app that tries to see and undo it):
+
+- **We cannot tell.** `NSCursor.currentSystem` reports a perfectly visible cursor while the
+  pointer is hidden — in the hiding process as well as in the watching one. There is no public
+  way to detect it, so there is no way to fall back only when it happens.
+- **We cannot undo it.** `CGDisplayShowCursor` and `NSCursor.unhide()` from another process
+  change nothing. Hiding is per application, and so is unhiding.
+
+So the pointer is a **picture on a layer** now, like the laser's glow, and the window server is
+handed `PointerCursor.invisible` — a cursor that exists so nothing else claims the pointer and
+draws an arrow beside ours, and that shows nothing. What is drawn is unchanged: the same nib,
+chisel, crosshair and ring, from the same code, at the display's own scale.
+
+The failure this design had the first time — lose the cursor once and there are two pointers
+with no way back — is what the cursor hold above is for: the invisible cursor is re-set twenty
+times a second, so the worst case is about 50ms of a second pointer, against a pointer that was
+missing for an entire presentation. The wheel wears the same nothing and draws its own dot at
+the pointer, because it sits above the overlay and, with no overlay open at all, there is
+nothing else to draw one. And `takeCursorBack()` puts the ordinary arrow back whenever drawing
+mode is not on, which is the line that stops a wheel closing over no overlay from leaving
+somebody with no pointer at all. The behaviour suite checks that last one by name.
 
 ## 7. Repainting is incremental
 

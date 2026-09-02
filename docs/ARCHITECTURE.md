@@ -20,7 +20,7 @@ tried and rejected on the way; [../CLAUDE.md](../CLAUDE.md) is the short operati
 | `Shortcuts.swift` | The global shortcuts as one set: what each is, and reporting the ones macOS refused. |
 | `MenuBarItem.swift` | The menu bar presence: icon, menu, Open at Login, and the "shortcut unavailable" line. |
 | `OverlayPanel.swift` | The transparent window, one per screen: its level, its collection behaviour, and the fact that it swallows key equivalents. |
-| `DrawingView.swift` | The view: events in, paint out. It owns three layers — ink, badge and the laser's glow — paints nothing through `draw(_:)`, and keeps the timer that drops ink which has run out of life. |
+| `DrawingView.swift` | The view: events in, paint out. It owns four layers — ink, badge, the laser's glow and the pointer — paints nothing through `draw(_:)`, and keeps the timers that follow the pointer and drop ink which has run out of life. |
 | `InkPainter.swift` | The ink layer's delegate, which is why the ink is not painted through the view. |
 | `Picture.swift` | Painting a bitmap for a layer, at the scale of the display it will appear on. The badge, the glow and fading ink all go through it. |
 | `Glyph.swift` | An SF Symbol painted in a colour, cached. The wheel's sectors and the badge's tool column share it. |
@@ -30,7 +30,7 @@ tried and rejected on the way; [../CLAUDE.md](../CLAUDE.md) is the short operati
 | `Stroke.swift` | What a mark is made of, what each tool does with two points, and how each style is painted — a pen line, a marker, or a beam of light. |
 | `ToolSettings.swift` | The pen in hand: colour, width, tool. Shared across screens, remembered between launches. |
 | `ModeBadge.swift` | The badge in the corner — the app's entire on-screen interface. It hands over a picture, snapped to whole pixels; the view carries it on a layer. |
-| `PointerCursor.swift` | The cursor drawing mode hands the window server: one per tool, in the colour in hand. |
+| `PointerCursor.swift` | The pointer's picture, one per tool in the colour in hand — painted onto a layer, plus the cursor that shows nothing which the window server is handed instead. |
 | `GlobalHotKey.swift` | The global shortcuts, on Carbon, and the ownership rules that keep the callback safe. |
 | `Wheel.swift` | A radial menu: its sectors, which one a direction picks, and how it paints itself. |
 | `WheelPanel.swift` | The window a wheel appears in, and the hold-push-release that drives it. |
@@ -84,9 +84,10 @@ These exist because something went wrong once. Do not remove them without readin
 5. **`.accessory` activation policy** — no Dock icon, no app switcher entry.
 6. **Idle costs nothing.** No timers, no polling while the overlay is closed. Three timers
    exist while it is open, each tied to something being true: the fade tick (only while
-   temporary ink is on screen), the laser's poll (only while the laser is in hand), and the
-   cursor hold at 20Hz, 0.1% of a core (only while drawing mode is taking the mouse). All
-   three stop with the thing that started them.
+   temporary ink is on screen), the pointer poll at 60Hz (only while drawing mode is taking
+   the mouse — it is what carries the pointer and the laser's glow), and the cursor hold at
+   20Hz, 0.1% of a core (the same condition). All three stop with the thing that started
+   them.
 7. **Drawing mode interacts with nothing.** Keys are swallowed (no beeps, no `⌘Q`), clicks
    never reach what is underneath. Interaction is what click-through is for.
 
@@ -180,9 +181,27 @@ each moved onto a `CALayer`; nothing about what is painted changed.
 | 50 temporary strokes fading | — | 3.8% | **0.7%** |
 
 Both columns are single runs of the same probe on the same machine; run to run these move by
-a point or two, which is smaller than anything the table is being used to claim. Re-run after
-the picture, laser and cursor work (2026-09-01) it lands on the same numbers: 0.4% idle, 0.7%
-and 0.8% moving the pointer over 0 and 200 strokes, 3.8% and 5.5% drawing, 0.2–0.8% fading.
+a point or two, which is smaller than anything the table is being used to claim.
+
+**And then the pointer went back onto a layer** (entry 6 in DECISIONS, the presentation case),
+which is the one change in this whole round that costs something. Same probe, same machine:
+
+| what the user is doing | as a cursor | as a layer |
+| --- | --- | --- |
+| nothing, the overlay is just up | 0.4% | **0.9%** |
+| moving the pointer, drawing nothing (200 strokes) | 0.5% | **1.7%** |
+| drawing one long unbroken stroke | 4.1% | 4.5% |
+| drawing over a canvas that already has ink | 5.2% | 5.9% |
+| 50 temporary strokes fading | 0.6% | 1.3% |
+| a wheel open and being swept | 10.3% | **6.8%** (4.7% of it the wheel) |
+
+A point and a bit of a core to have a pointer at all during a presentation, which is what the
+app is for. It is still eight times cheaper than the version that painted the pointer through
+`draw(_:)` (22.9%), and two things were measured on the way to that number rather than
+guessed: moving only the layer that is actually visible instead of both, and letting the mouse
+events outrank the 60Hz poll instead of both doing the work, took it from 2.6% to 1.7%. The
+wheel got cheaper at the same time, because its dot is a layer too — following the hand by
+repainting the whole wheel was 13.7%.
 
 Two more from the same probe, which the table above never covered:
 
@@ -200,10 +219,15 @@ the idle number, because the window server draws the cursor and we do nothing at
 
 **Cursor.** `NSCursor.hide()` is per application and only applies while that application is
 active, so a background app hides nothing — that attempt left two pointers on screen during a
-presentation. Handing the window a transparent cursor and painting our own removed the system
-one, but only while we owned the window under the pointer: lose that once, to the menu bar,
-and there are two pointers again with no way back. The pointer is now one cursor per tool,
-drawn in the colour in hand, which cannot double.
+presentation. A cursor per tool, handed to the window server, replaced it and worked
+everywhere except the case this app is for: **an app that is presenting hides the pointer, and
+then a cursor of ours is not drawn at all.** Measured against a stand-in for a slideshow, we
+can neither detect that (`NSCursor.currentSystem` reports a visible cursor either way, in the
+hiding process too) nor undo it (`CGDisplayShowCursor` from another process does nothing).
+
+So the pointer is a picture on a layer, the window server is handed a cursor that shows
+nothing, and the cursor hold re-sets that twenty times a second so a lost cursor cannot leave
+an arrow standing next to ours for more than about 50ms.
 
 Setting it is not the same as keeping it. A panel that appears under a stationary pointer is
 handed the plain arrow by the window server about 25ms later, whatever the app set before

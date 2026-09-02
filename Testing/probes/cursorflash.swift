@@ -90,12 +90,13 @@ func watch(_ what: String, seconds: Double, script: [(Double, () -> Void)]) {
     // The verdict, which is the line worth reading: what the screen ended up showing, against
     // the cursor that mode is supposed to have. In click-through the answer is the system
     // arrow, on purpose - the pointer belongs to the app underneath there.
-    let tool = name(PointerCursor.cursor(for: controller.tools))
+    // The overlay's pointer is a layer now, so what the window server should be showing while
+    // drawing mode is on is the cursor that shows nothing. In click-through the pointer
+    // belongs to the app underneath, so there the only wrong answer is ours.
+    let invisible = name(PointerCursor.invisible)
     let shown = name(NSCursor.currentSystem)
-    // In click-through the pointer belongs to the app underneath, so the only wrong answer
-    // there is ours.
-    let ours = controller.isInteractionMode ? "anything but \(tool)" : tool
-    let right = controller.isInteractionMode ? shown != tool : shown == tool
+    let ours = controller.isInteractionMode ? "anything but \(invisible)" : invisible
+    let right = controller.isInteractionMode ? shown != invisible : shown == invisible
     print("      => the screen shows \(shown), this mode wants \(ours)"
           + (right ? "" : "   <-- WRONG"))
 }

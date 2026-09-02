@@ -51,7 +51,7 @@ CoreGraphics, ServiceManagement (open at login). Universal binary, macOS 11+.
 The dependency runs one way: `OverlayController` → `DrawingView` → `Canvas`. What is drawn belongs
 in `Canvas`; how it appears belongs in the view. Nothing is painted through `NSView.draw(_:)`
 — the ink and the badge each have a `CALayer`, which is worth 4.3x on every repaint, and the
-pointer is a cursor the window server draws for us.
+pointer is a picture on a layer, because a presenting app can hide a cursor.
 
 ## Commands
 
@@ -103,9 +103,9 @@ easy to repeat.
    the guarantee is that it always works, and everything else leans on it.
 5. **Never repaint the whole drawing on a mouse move.** Invalidate the rect you changed.
    Repainting everything cost 26x more, and the suite fails on `fullInkInvalidations > 0`.
-   Better still, do not repaint at all: **the badge is a layer and the pointer is a real
-   cursor**. Painting either put a repaint on every mouse move — 22.5% of a core against the
-   0.5% it costs now.
+   Better still, do not repaint at all: **the badge and the pointer are layers**, moved rather
+   than painted. Painting the pointer through `draw(_:)` put a repaint on every mouse move —
+   22.5% of a core against a layer move.
 6. **Never call `invalidateCursorRects` from inside `cursorUpdate`.** It re-enters AppKit's
    tracking machinery and crashes — this was a shipped `SIGABRT` once.
 7. **Never put a modal dialog in front of the user.** `runModal` blocks a background app and

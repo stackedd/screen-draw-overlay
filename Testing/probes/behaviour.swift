@@ -255,7 +255,7 @@
                                               context: nil, eventNumber: 0, trackingNumber: 0,
                                               userData: nil)!
             view.mouseExited(with: exit)
-            view.followPointerWithLaser(to: NSPoint(x: 300, y: 300))
+            view.followPointer(to: NSPoint(x: 300, y: 300))
             check("the laser comes back when the pointer does",
                   view.laserLayer.isHidden ? "still out" : "lit", "lit")
 
@@ -485,16 +485,17 @@
               controller.tools.tool.label + "/" + state, "ERASER/DRAWING")
         controller.tools.select(tool: .pen)
 
-        // Each tool draws its own pointer, in the colour in hand. Two things have to hold
-        // and neither is visible from a screenshot: the hot spot has to be the middle of
-        // the image - which is the point the tool works from and the point the ink lands on
-        // - and the tools have to actually differ, or "per tool" is a claim and not a fact.
-        // Compared by painting them, not by asking for their data: these images draw
-        // through a handler, and tiffRepresentation hands back a blank of the right size
-        // rather than running it - which made a first version of this check believe four
-        // different tools drew the same cursor.
+        // Each tool draws its own pointer, in the colour in hand - onto a layer, not into a
+        // cursor, because an app that is presenting hides the pointer and then a cursor of
+        // ours is not drawn at all (docs/DECISIONS.md 6). Two things have to hold and neither
+        // is visible from a screenshot: every picture is square, which is what puts the point
+        // the tool works from under the pointer when the layer carries it centred, and the
+        // tools have to actually differ, or "per tool" is a claim and not a fact.
         func painted(_ tools: ToolSettings) -> Data {
-            let cursor = PointerCursor.cursor(for: tools)
+            guard let picture = PointerCursor.picture(for: tools, scale: 1) else {
+                return Data()
+            }
+
             let side = 64
             let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side,
                                        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
@@ -502,7 +503,8 @@
                                        bytesPerRow: 0, bitsPerPixel: 0)!
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-            cursor.image.draw(in: NSRect(x: 0, y: 0, width: side, height: side))
+            NSGraphicsContext.current?.cgContext
+                .draw(picture.image, in: CGRect(x: 0, y: 0, width: side, height: side))
             NSGraphicsContext.restoreGraphicsState()
             return Data(bytes: rep.bitmapData!, count: rep.bytesPerRow * side)
         }
@@ -511,13 +513,12 @@
         var centred = true
         for tool in [DrawingTool.pen, .highlighter, .line, .arrow, .rectangle, .ellipse, .eraser] {
             controller.tools.select(tool: tool)
-            let cursor = PointerCursor.cursor(for: controller.tools)
-            centred = centred
-                && cursor.hotSpot.x == cursor.image.size.width / 2
-                && cursor.hotSpot.y == cursor.image.size.height / 2
+            let picture = PointerCursor.picture(for: controller.tools, scale: 2)
+            centred = centred && picture != nil && picture!.size.width == picture!.size.height
             pictures.insert(painted(controller.tools))
         }
-        check("every tool's cursor points from its own hot spot", centred ? "yes" : "no", "yes")
+        check("every tool's pointer is drawn around the point it works from",
+              centred ? "yes" : "no", "yes")
 
         // Four pictures from seven tools, on purpose: a pen, a marker, an eraser, and one
         // crosshair shared by the four that place a corner. Those four do the same thing
@@ -525,18 +526,25 @@
         // in one place - which is what "the pens should be pens" was about.
         check("the tools that draw differently look different", "\(pictures.count)", "4")
 
-        // And size shows, which is the whole reason for drawing a tool rather than an arrow.
+        // The laser is the one tool with no picture: its glow is its pointer, and two marks
+        // an inch apart are worse than one.
+        controller.tools.select(tool: .laser)
+        check("the laser's pointer is its glow, and nothing else",
+              PointerCursor.picture(for: controller.tools, scale: 2) == nil ? "nothing" : "a picture",
+              "nothing")
         controller.tools.select(tool: .pen)
+
+        // And size shows, which is the whole reason for drawing a tool rather than an arrow.
         controller.tools.selectWidth(0)
-        let thin = PointerCursor.cursor(for: controller.tools).image.size.width
+        let thin = PointerCursor.picture(for: controller.tools, scale: 2)!.size.width
         controller.tools.selectWidth(5)
-        let thick = PointerCursor.cursor(for: controller.tools).image.size.width
-        check("a fat pen has a fatter cursor", thick > thin ? "yes" : "no", "yes")
+        let thick = PointerCursor.picture(for: controller.tools, scale: 2)!.size.width
+        check("a fat pen has a fatter pointer", thick > thin ? "yes" : "no", "yes")
         controller.tools.select(tool: .eraser)
         controller.tools.selectWidth(0)
-        let small = PointerCursor.cursor(for: controller.tools).image.size.width
+        let small = PointerCursor.picture(for: controller.tools, scale: 2)!.size.width
         controller.tools.selectWidth(5)
-        let big = PointerCursor.cursor(for: controller.tools).image.size.width
+        let big = PointerCursor.picture(for: controller.tools, scale: 2)!.size.width
         check("and a big eraser a bigger one", big > small ? "yes" : "no", "yes")
         controller.tools.selectWidth(2)
 
@@ -546,14 +554,41 @@
         let red = painted(controller.tools)
         controller.tools.selectColor(4)
         let blue = painted(controller.tools)
-        check("the cursor carries the colour", red == blue ? "same" : "different", "different")
+        check("the pointer carries the colour", red == blue ? "same" : "different", "different")
         controller.tools.selectColor(0)
+
+        // What the window server is handed is a cursor that shows nothing - so that nothing
+        // else claims the pointer and draws an arrow beside ours - and the pointer itself is
+        // a layer on the overlay, which is what a presenting app cannot hide.
+        if let view = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot()).first {
+            view.applyDrawingCursor()
+            check("the window server is handed a cursor that shows nothing",
+                  NSCursor.current === PointerCursor.invisible ? "yes" : "no", "yes")
+            view.followPointer(to: NSPoint(x: 320, y: 240))
+            check("and the pointer the user sees is a layer, under the hand",
+                  !view.pointerLayer.isHidden && view.pointerLayer.contents != nil
+                    && view.pointerLayer.position == NSPoint(x: 320, y: 240) ? "yes" : "no", "yes")
+            controller.toggleInteractionMode()
+            check("which goes out when the screen is handed back",
+                  view.pointerLayer.isHidden ? "yes" : "no", "yes")
+            controller.toggleInteractionMode()
+        }
 
         // The wheel is the only way in now, so it has to be able to open an overlay that
         // is not there - and the eighth sector has to be able to put it away again, keeping
         // the drawing, which is what ⌃⌥⌘D used to do.
         controller.toggleDrawingMode()
         check("hidden to start with", state, "OFF")
+
+        // The wheel wears a cursor that shows nothing, like the overlay - so the one thing
+        // that must never happen is a wheel closing with no overlay behind it and leaving the
+        // user with no pointer at all. Letting go in the middle with nothing open is exactly
+        // that case.
+        controller.openToolWheel()
+        controller.wheels.track(controller.wheels.centre)
+        controller.wheels.release()
+        check("a wheel that closes with no overlay hands a pointer back",
+              NSCursor.current === PointerCursor.invisible ? "nothing" : "a pointer", "a pointer")
         controller.openToolWheel()
         controller.wheels.track(NSPoint(x: controller.wheels.centre.x + 120,
                                         y: controller.wheels.centre.y))
