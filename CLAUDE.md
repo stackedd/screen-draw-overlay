@@ -1,18 +1,18 @@
 # ScreenDrawOverlay
 
 A macOS menu bar app that puts a transparent overlay over every screen and lets you draw on
-it — over a presentation, a document, anything. No window of its own, no Dock icon, and
+it: over a presentation, a document, anything. No window of its own, no Dock icon, and
 **no system permissions of any kind**.
 
 **The Option row is the whole interface.** Hold one of four keys, push the mouse at what you
-want, let go. `⌥Z` is the tools — a tool opens the overlay and hands it to you, and the middle
+want, let go. `⌥Z` is the tools; a tool opens the overlay and hands it to you, and the middle
 is the way out, one step at a time. `⌥X` is colour, `⌥C` is size, and `⌥V` is what you do *to*
 a drawing: its middle undoes, so a tap of it takes one thing back, and its sectors are redo,
 clear, temporary ink and hide. `⌃⌥⌘Esc` quits.
 
 Every one of them is a global hot key, and that is the point: a non-activating panel only gets
 the keyboard while this app is the active one, so the bare keys this app used to have (`P` for
-pen, `C` to clear, `⌘Z` to undo) worked only sometimes — which is worse than not existing
+pen, `C` to clear, `⌘Z` to undo) worked only sometimes, which is worse than not existing
 (`docs/DECISIONS.md` 30). There are none left. The menu bar item is the way in if `⌥Z` is ever
 taken by another app.
 
@@ -55,8 +55,8 @@ Universal binary, macOS 11+.
     docs/DECISIONS.md         why things are the way they are, and what was rejected
 
 The dependency runs one way: `OverlayController` → `DrawingView` → `Canvas`. What is drawn belongs
-in `Canvas`; how it appears belongs in the view. Nothing is painted through `NSView.draw(_:)`
-— the ink and the badge each have a `CALayer`, which is worth about 4x on every repaint, and the
+in `Canvas`; how it appears belongs in the view. Nothing is painted through `NSView.draw(_:)`:
+the ink and the badge each have a `CALayer`, which is worth about 4x on every repaint, and the
 pointer is a picture on a layer, because a presenting app can hide a cursor.
 
 ## Commands
@@ -69,9 +69,9 @@ pointer is a picture on a layer, because a presenting app can hide a cursor.
 `./Testing/run.sh behaviour` drives the real app and checks the mode matrix, hide/show,
 every wheel and what its sectors and hub do, undo/redo and tap-versus-hold. `./Testing/run.sh rendering` paints a session
 incrementally and in one pass and compares the pixels. `./Testing/run.sh cost` times the
-painting of real sessions — and measures painting only, which is the smaller half of the
+painting of real sessions, and measures painting only, which is the smaller half of the
 bill. `Testing/experiments/` holds the on-screen measurement of what a repaint costs; it is
-run by hand. Read `Testing/README.md` before writing a new probe — two mistakes in there are
+run by hand. Read `Testing/README.md` before writing a new probe: two mistakes in there are
 easy to repeat.
 
 ## Conventions
@@ -79,7 +79,7 @@ easy to repeat.
 - **Every tool brings its own context.** The width wheel shows widths, the eraser's cursor is
   the size of what it rubs out, and reaching for colour with the eraser in hand says so on the
   badge instead of changing the tool. (A text tool, if one is ever added, would take the pen's
-  colour as its colour and its width as a point size — there is no text tool today.) The same
+  colour as its colour and its width as a point size; there is no text tool today.) The same
   way the menu bar changes with the app in front: what is in hand decides what the interface
   offers, rather than one interface offering everything.
 - **Measure, do not assume.** Every performance or platform claim in this repo has a number
@@ -92,8 +92,8 @@ easy to repeat.
 - **Behaviour is proved unchanged, not assumed.** Refactors are judged by the behaviour
   suite's output being identical line for line, and by the rendering comparison not moving.
 - No third-party dependencies. No new frameworks without a reason worth writing down.
-- Anything that cannot be injected without Accessibility — real key presses, real clicks, a
-  second monitor, the wallpaper click — is a **manual** check. Report it as such.
+- Anything that cannot be injected without Accessibility (real key presses, real clicks, a
+  second monitor, the wallpaper click) is a **manual** check. Report it as such.
 
 ## Never
 
@@ -106,26 +106,26 @@ easy to repeat.
    and still eating clicks is the worst thing this app can do to someone.
 3. **Never remove the `NSApp.windows` re-scan** in `overlayWindowSnapshot()`. It finds
    panels that are on screen but have fallen out of our own arrays. It filters on
-   `isVisible` — closed panels linger, and counting them once made hiding destroy a drawing.
+   `isVisible`: closed panels linger, and counting them once made hiding destroy a drawing.
 4. **Never make `⌃⌥⌘Esc` anything less than quitting the process.** It is the panic key;
    the guarantee is that it always works, and everything else leans on it.
 5. **Never repaint the whole drawing on a mouse move.** Invalidate the rect you changed.
    Repainting everything cost 26x more, and the suite fails on `fullInkInvalidations > 0`.
    Better still, do not repaint at all: **the badge and the pointer are layers**, moved rather
-   than painted. Painting the pointer through `draw(_:)` put a repaint on every mouse move —
+   than painted. Painting the pointer through `draw(_:)` put a repaint on every mouse move,
    22.9% of a core against 1.7% for a layer move.
 6. **Never call `invalidateCursorRects` from inside `cursorUpdate`.** It re-enters AppKit's
-   tracking machinery and crashes — this was a shipped `SIGABRT` once.
+   tracking machinery and crashes; this was a shipped `SIGABRT` once.
 7. **Never put a modal dialog in front of the user.** `runModal` blocks a background app and
    can sit behind every window; failures are said in the menu.
 8. **Never leave a timer running when the overlay is closed.** Closed is 0.0% CPU and that
    is a tested property. Each timer that runs while it is open is tied to something being
    true and stops with it: the pointer poll at 60Hz and the cursor hold at 60Hz (both only
-   while drawing mode has the mouse — the hold is 0.3% of a core), the fade tick (only while
+   while drawing mode has the mouse, the hold costing 0.3% of a core), the fade tick (only while
    temporary ink is on screen), and two short-lived ones: the burst that takes the cursor
    back for a third of a second after a panel appears, and the badge's notice. A wheel's own
    poll lives and dies with the wheel.
-9. **Never make drawing mode interact with anything** — no key should escape it, no click
+9. **Never make drawing mode interact with anything.** No key should escape it, no click
    should reach what is underneath. Interaction is what click-through is for.
 10. **Never let hiding erase.** The wheel's `HIDE` keeps the strokes **and the undo
     history**; `CLEAR` on the `⌥V` wheel is the only thing that erases, and even that is
@@ -133,7 +133,7 @@ easy to repeat.
 11. **Never let an edit point at a position.** Undo names strokes by `id`. `removeLast()`
     took back the wrong line whenever temporary ink faded out from under the history.
 12. **Never make a bitmap by hand.** `Picture.drawn(size:scale:)` is the one place that gets
-    the order right — an `NSBitmapImageRep` measures itself in pixels until it is told
+    the order right: an `NSBitmapImageRep` measures itself in pixels until it is told
     otherwise, and the graphics context takes that measurement when it is made. Three copies
     of this code each set the size afterwards, and everything they painted came out at half
     scale in the corner of its own frame (`docs/DECISIONS.md` 28).
@@ -144,8 +144,8 @@ easy to repeat.
 about making it one thing to learn and one thing to trust. It is MIT-licensed and given
 away, so there is nothing in the code that checks, counts, phones home or asks for money.
 
-- **One mechanic.** Four keys on the Option row — `⌥Z` tools, `⌥X` colour, `⌥C` size, `⌥V`
-  what you do *to* a drawing — all of them global, all of them hold-push-release, and nothing
+- **One mechanic.** Four keys on the Option row (`⌥Z` tools, `⌥X` colour, `⌥C` size, `⌥V`
+  what you do *to* a drawing), all of them global, all of them hold-push-release, with nothing
   underneath them. The bare keys are gone (`docs/DECISIONS.md` 30): they only worked while a
   non-activating panel happened to be key, which is a state the user cannot see. `⌥V`'s hub is
   undo, so a tap takes one thing back; a wheel only appears if the key is held past 110ms.
@@ -156,11 +156,11 @@ away, so there is nothing in the code that checks, counts, phones home or asks f
 - **Painting asks for what it needs.** A stroke paints only the segments whose ink could land
   in the rectangle being repainted, which took a 5000-point line's last tenth from 0.309 ms an
   event to 0.025 and the whole session from 833 ms to 83. The two other items that were on
-  this list — caching `repaintBounds` and thinning points — were measured and **dropped**:
+  this list, caching `repaintBounds` and thinning points, were measured and **dropped**:
   AppKit already caches bounds, and thinning overlaps with the trimming above and loses to it
   (`docs/ARCHITECTURE.md`).
 - **Nothing is open on the painting side.** The pointer poll was the last candidate and it
-  measured at 0.00008 ms a tick — the 0.9% an idle overlay costs is the cursor hold (0.3%) and
+  measured at 0.00008 ms a tick: the 0.9% an idle overlay costs is the cursor hold (0.3%) and
   the run loop, not the poll. The next thing worth measuring is the release itself.
 
 **Performance is measured rather than guessed** (`docs/ARCHITECTURE.md`, "Where the drawing
@@ -168,13 +168,13 @@ bill actually goes"). Three numbers govern everything:
 
 - Asking this overlay to repaint 60 times a second through `NSView` costs **15.7% CPU**,
   whatever the dirty rect's size. The bill is the number of repaints.
-- The same repaint asked for through a **`CALayer` costs 3.8%** — 4x less, for identical
-  output — **but only while the dirty rect is small.** A layer repaint costs 21.0% at
+- The same repaint asked for through a **`CALayer` costs 3.8%**, 4x less for identical
+  output, **but only while the dirty rect is small.** A layer repaint costs 21.0% at
   400x400 and 50.7% for the whole screen, where the view path stays flat. Small rects: use a
   layer. Whole-screen ones: do not repaint at all. This is also why a stroke asks to repaint
   its own reach and not twice it: a fat marker went from 4.01 Mpx to 1.13 Mpx a drag.
 - Moving a sublayer, which is not a repaint, costs **1.6%**. Drawing the pointer that way
-  costs about a point of a core against a cursor the window server draws — and it is the only
+  costs about a point of a core against a cursor the window server draws, and it is the only
   pointer that survives a presentation.
 
 Measured end to end on a real panel (`Testing/probes/onscreen.swift`): idle 0.9%, moving the

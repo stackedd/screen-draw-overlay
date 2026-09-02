@@ -1,7 +1,7 @@
 # Cutting a release
 
 ScreenDrawOverlay is free software under the MIT licence. A release is a tag, a built app, and
-a GitHub Release with the zip attached — plus, if you want, a pay-what-you-want page pointing
+a GitHub Release with the zip attached - plus, if you want, a pay-what-you-want page pointing
 at the same download. Nothing in the app knows or cares about any of that.
 
 ## Before anything
@@ -45,7 +45,7 @@ The profile is made once:
       --apple-id you@example.com --team-id TEAMID --password <app-specific-password>
 
 That signs with the hardened runtime, submits to Apple, waits, staples the ticket to the app,
-and rebuilds the zip — so the copy people download opens with no warning and no network.
+and rebuilds the zip - so the copy people download opens with no warning and no network.
 
 ## What an unsigned copy costs
 
@@ -57,7 +57,7 @@ release page and the download page, in these words, above the link:
 > 15 and later: try to open it once, then go to **System Settings → Privacy & Security** and
 > click **Open Anyway**. You only do this once.
 
-People who build from source do not hit this at all, which is worth saying too — it is one
+People who build from source do not hit this at all, which is worth saying too - it is one
 command.
 
 ## Publishing
@@ -75,7 +75,7 @@ command.
 The README has room for one short clip, and it is the single most convincing thing on the page.
 Twenty seconds, one take, no narration:
 
-1. A slide or a document on screen. Hold `⌥Z`, the wheel opens, push right, let go — the pen.
+1. A slide or a document on screen. Hold `⌥Z`, the wheel opens, push right, let go - the pen.
 2. Underline a word. Circle something.
 3. Hold `⌥X`, push at another colour, draw one more mark.
 4. Tap `⌥V` twice: the last two marks go.
@@ -87,7 +87,7 @@ Record with QuickTime (File → New Screen Recording), then:
 
     ffmpeg -i demo.mov -vf "fps=12,scale=900:-1:flags=lanczos" -loop 0 docs/demo.gif
 
-No ffmpeg? Keep the `.mov`, or export a smaller `.mp4` from QuickTime and link it instead —
+No ffmpeg? Keep the `.mov`, or export a smaller `.mp4` from QuickTime and link it instead -
 GitHub plays uploaded video in a README, it just cannot be committed as easily.
 
 Still shots worth having next to it: the tools wheel open over something real, the badge in the

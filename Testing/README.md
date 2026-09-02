@@ -66,14 +66,14 @@ that twice.
 `probes/ink.swift` renders a stroke at both ends of the width range: a fat marker with the
 cap it used to have and the one it has now, with a cross where the hand actually stopped, and
 a quick line sampled fifteen times against sixty. It is what said the cap was the fault and
-smoothing was not worth it — neither is a thing a counting test can answer.
+smoothing was not worth it - neither is a thing a counting test can answer.
 
     python3 Testing/make_probe.py ink INK \
       && swift build --package-path .build/testing/ink -c release \
       && OUT=/tmp/ink.png .build/testing/ink/.build/release/INK
 
 `probes/laser.swift` renders the laser: the trail as light, the pen line it used to be
-underneath it for comparison, and three of the six sizes with their glow — over a dark slide
+underneath it for comparison, and three of the six sizes with their glow - over a dark slide
 and a light one, because the halo is the part that stops reading on white first.
 
     python3 Testing/make_probe.py laser LASER \

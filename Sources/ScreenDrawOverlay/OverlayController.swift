@@ -278,8 +278,8 @@ final class OverlayController {
                 let seconds = Int(Stroke.fadeDuration)
                 let on = self.tools.drawsTemporaryInk
                 self.drawingViews.forEach {
-                    $0.flash(on ? "Temporary ink on — strokes fade after \(seconds) seconds"
-                               : "Temporary ink off — strokes stay")
+                    $0.flash(on ? "Temporary ink on - strokes fade after \(seconds) seconds"
+                               : "Temporary ink off - strokes stay")
                 }
             case .hide:
                 self.hideOverlay(reason: "hidden from the actions wheel")

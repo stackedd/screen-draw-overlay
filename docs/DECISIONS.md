@@ -2,7 +2,7 @@
 
 Why the code looks the way it does. Most of these were arrived at by measuring, several by
 getting it wrong first. Each entry says what was chosen, what was tried instead, and the
-number or the failure that decided it — so nobody has to run the experiment twice.
+number or the failure that decided it - so nobody has to run the experiment twice.
 
 Ordered roughly by how much they constrain everything else.
 
@@ -16,7 +16,7 @@ for window geometry, and nothing that triggers a TCC prompt.
 **Rejected:** `CGEventTap` and `NSEvent.addGlobalMonitorForEvents` (Accessibility),
 `CGWindowListCreateImage` and window titles (Screen Recording), Apple Events (Automation).
 
-Asking for nothing is the app's defining property — it installs and runs without a single
+Asking for nothing is the app's defining property - it installs and runs without a single
 system dialog. Verified rather than assumed: no permission-triggering API appears in the
 sources, `Info.plist` carries no usage descriptions, and the binary links only AppKit,
 Carbon, CoreGraphics, Foundation and ServiceManagement.
@@ -33,7 +33,7 @@ Carbon, CoreGraphics, Foundation and ServiceManagement.
 - Real key presses and clicks cannot be injected, so those parts of testing are manual.
 
 **A whole direction was turned down over this.** Making the drawing a real edit in the
-target app's document — an annotation written into a PDF, a shape added to a Keynote slide —
+target app's document - an annotation written into a PDF, a shape added to a Keynote slide -
 needs a coordinate bridge from screen space to document space. There are only three ways to
 get one: ask the app (Automation/Accessibility), render the document yourself (become a
 viewer), or look at the screen (Screen Recording). Each ends the no-permissions promise, and
@@ -47,11 +47,11 @@ level 9 and its fade at 26; the menu bar is 24, status items 25.
 
 **Tried and rejected:**
 
-- `.floating` (3) — the original. Invisible over a Keynote slideshow, which is the app's
+- `.floating` (3) - the original. Invisible over a Keynote slideshow, which is the app's
   main use case. This was the bug that started the whole investigation.
-- `CGShieldingWindowLevel()` (2147483628) — chosen defensively before anything was measured.
+- `CGShieldingWindowLevel()` (2147483628) - chosen defensively before anything was measured.
   Works, but the extra two billion levels buy nothing except covering more system UI.
-- Level 23, one below the menu bar — chosen deliberately so the menu bar item stayed
+- Level 23, one below the menu bar - chosen deliberately so the menu bar item stayed
   clickable while drawing. It was worse in practice: the menu bar and its status items are
   above 23, so whenever the pointer went near the top of the screen they took both the
   cursor and the clicks. The real pointer flickered back into view and menus could be opened
@@ -65,22 +65,22 @@ the panic key quits the process.
 
 **Was:** Escape left drawing mode.
 
-**Problem:** it only worked while the panel happened to be the key window — a state nothing
-on screen shows — so the same keypress worked or did nothing depending on where the user had
+**Problem:** it only worked while the panel happened to be the key window - a state nothing
+on screen shows - so the same keypress worked or did nothing depending on where the user had
 last clicked. And it was actively harmful: Escape is how you leave a slideshow, and pressing
 it threw the drawing away.
 
 **Now:** `keyDown` returns without calling `super` (which also stops AppKit's "no responder"
 beep), and `cancelOperation` is overridden for the same reason. Switching to click-through
-calls `NSApp.deactivate()`, because handing over the mouse was not enough — the panel stayed
+calls `NSApp.deactivate()`, because handing over the mouse was not enough - the panel stayed
 key, so Escape was still being swallowed in the one mode whose point is that input belongs to
 the app underneath.
 
-**Knock-on:** 82 lines of key-focus reclaiming machinery — a resign-key observer, a settling
-timer, a rate limiter, a menu-open flag, an "is any popover on screen" probe — existed only
+**Knock-on:** 82 lines of key-focus reclaiming machinery - a resign-key observer, a settling
+timer, a rate limiter, a menu-open flag, an "is any popover on screen" probe - existed only
 to keep Escape alive. All of it was deleted.
 
-## 4. `⌃⌥⌘D` hides, `⌃⌥⌘Esc` quits, `C` erases *(reversed — see 30)*
+## 4. `⌃⌥⌘D` hides, `⌃⌥⌘Esc` quits, `C` erases *(reversed - see 30)*
 
 **None of these keys exist any more except `⌃⌥⌘Esc`.** Hiding is the middle of the `⌥Z`
 wheel, erasing is `CLEAR` on `⌥V`, and undo is that wheel's hub. What is still true is the
@@ -98,13 +98,13 @@ more decisive than it.
   someone stuck; `applicationWillTerminate` releases the mouse and closes the panels on the
   way out.
 - `⌃⌥⌘Z` **takes the last thing back**, `⇧⌃⌥⌘Z` puts it forward again (entry 23).
-- `C` (or Delete) is the only thing that erases — and it is undoable.
+- `C` (or Delete) is the only thing that erases - and it is undoable.
 
 Kept drawings are tied to the display layout they were made on and dropped when it changes,
 rather than restored onto the wrong screen at the wrong scale. What is kept includes the undo
 history (entry 23).
 
-## 5. Holding the shortcut draws momentarily *(reversed — see 26 and 30)*
+## 5. Holding the shortcut draws momentarily *(reversed - see 26 and 30)*
 
 **There is no momentary overlay now.** The key that would have been held opens a wheel
 instead, and the gesture that used to mean "hold to draw" means "hold, push, let go".
@@ -114,12 +114,12 @@ go. That is what makes the app something you leave running rather than something
 on for a task.
 
 Tap and hold share `⌃⌥⌘D`, split at **400 ms**. Momentary applies only when the press is what
-opened the overlay — holding while already drawing would have to undo the tap action
+opened the overlay - holding while already drawing would have to undo the tap action
 mid-hold, which reads as the shortcut fighting you. Stepping into click-through during the
 hold means you meant to stay, so the release leaves it alone.
 
 This needed `GlobalHotKey` to carry the release half of the keypress
-(`kEventHotKeyReleased`). If a system ever fails to deliver it, the hold degrades to a tap —
+(`kEventHotKeyReleased`). If a system ever fails to deliver it, the hold degrades to a tap -
 the old behaviour, not a broken one.
 
 ## 6. Each tool draws its own pointer
@@ -132,7 +132,7 @@ per application and only applies while that application is active, so a backgrou
 
 **Tried:** a fully transparent cursor with the app painting its own crosshair underneath. It
 holds only while we own the window under the pointer, and the moment something else takes the
-cursor — the menu bar does it reliably — the real arrow is back for good with our crosshair
+cursor - the menu bar does it reliably - the real arrow is back for good with our crosshair
 still painted beside it. There is no failure mode between invisible and doubled.
 
 **Tried:** the system arrow with a coloured ring composited around its tip. Safe, and nobody
@@ -141,8 +141,8 @@ on the screen looked exactly like one that was not.
 
 **Now:** each tool draws its own pointer in the colour it will draw with. A pen is a nib, a
 highlighter is a chisel, the shape tools are a fine crosshair with the shape they make beside
-it, the eraser is a ring the size of the hole it leaves — the only cursor that changes size,
-because its size is the whole point of it — and the laser has none at all, since its glow is
+it, the eraser is a ring the size of the hole it leaves - the only cursor that changes size,
+because its size is the whole point of it - and the laser has none at all, since its glow is
 on the overlay and two marks are worse than one. Losing cursor ownership degrades to the plain
 system arrow: something a user can see and understand, rather than a bug.
 
@@ -170,12 +170,12 @@ a tenth of that and heals inside 150ms.
 
 **And the arrow that was left was the window server's, not ours.** The report was "picking a
 tool shows the system arrow for a moment first", and every offscreen test disagreed, because
-`NSCursor.current` — this app's own idea of the cursor — was right the whole time.
+`NSCursor.current` - this app's own idea of the cursor - was right the whole time.
 `Testing/probes/cursorflash.swift` samples `NSCursor.currentSystem`, which is what is actually
 on the screen, every four milliseconds through the whole gesture, and the answer was plain:
 
 - **A panel that appears under a stationary pointer is handed the plain arrow**, by the window
-  server, about 25ms after it appears — whatever the app set before that. Nothing asks the app
+  server, about 25ms after it appears - whatever the app set before that. Nothing asks the app
   again until the mouse next moves, so picking the *first* tool, the pick that creates the
   panels, left the system arrow on the screen for as long as the user held still.
 - **Closing the wheel over an overlay that already exists does not do it.** Only a window
@@ -194,7 +194,7 @@ cursor **sixty times a second for as long as drawing mode is on**, and stops on 
 and when the overlay goes away. Whatever hands the arrow out, it holds for about a frame.
 
 That is a poll, and this app does not like polls, so it was measured before it was written:
-`NSCursor.set()` costs **0.049ms**, which is 0.3% of a core at 60Hz — and setting it blind is
+`NSCursor.set()` costs **0.049ms**, which is 0.3% of a core at 60Hz - and setting it blind is
 three times cheaper than asking `NSCursor.currentSystem` what is on screen first (0.157ms) and
 only setting it when it differs. The per-move version this replaces did the same work eight
 times a second but *only while the mouse was moving*, which is exactly the case that was not
@@ -202,14 +202,14 @@ being reported. It is gone from the event path, so a mouse move is one `Date()` 
 comparison cheaper than it was.
 
 **A crash to not repeat:** the first version called `window.invalidateCursorRects(for:)` from
-inside `cursorUpdate`. That re-enters AppKit's tracking machinery and throws — `SIGABRT` the
+inside `cursorUpdate`. That re-enters AppKit's tracking machinery and throws - `SIGABRT` the
 moment the pointer moved over the panel. Rebuilding cursor rects lives in its own method that
 only mode and tool changes call.
 
 **And then the whole thing was reversed, because of the one case this app exists for.** The
 note that used to sit here said it was *unverified* whether a presenting app that hides the
 pointer hides ours too. It does. Reported from a real presentation: the wheel opened, no
-pointer was visible anywhere, and of all the tools only the laser could be seen — which is
+pointer was visible anywhere, and of all the tools only the laser could be seen - which is
 exactly the shape of the answer, because the laser's glow was always a layer on the overlay
 and every other tool was a cursor.
 
@@ -217,20 +217,20 @@ Two things were measured before changing anything, with a stand-in for a slidesh
 frontmost app that hides the pointer, and a background app that tries to see and undo it):
 
 - **We cannot tell.** `NSCursor.currentSystem` reports a perfectly visible cursor while the
-  pointer is hidden — in the hiding process as well as in the watching one. There is no public
+  pointer is hidden - in the hiding process as well as in the watching one. There is no public
   way to detect it, so there is no way to fall back only when it happens.
 - **We cannot undo it.** `CGDisplayShowCursor` and `NSCursor.unhide()` from another process
   change nothing. Hiding is per application, and so is unhiding.
 
 So the pointer is a **picture on a layer** now, like the laser's glow, and the window server is
-handed `PointerCursor.invisible` — a cursor that exists so nothing else claims the pointer and
+handed `PointerCursor.invisible` - a cursor that exists so nothing else claims the pointer and
 draws an arrow beside ours, and that shows nothing. What is drawn is unchanged: the same nib,
 chisel, crosshair and ring, from the same code, at the display's own scale.
 
 **What it costs is latency, and that is the honest part.** A cursor is composited by the
 window server the instant the mouse moves; a layer waits for a commit and the next frame. The
 pointer's position is therefore set inside its own `CATransaction` and committed at once
-rather than left to the end of the run loop's turn — which is standard practice for a layer
+rather than left to the end of the run loop's turn - which is standard practice for a layer
 that follows a hand, and whose effect **could not be measured here**: back to back on a busy
 machine, with and without, the difference in every row of `probes/onscreen.swift` was smaller
 than the run-to-run noise (±1 point). It is kept because it cannot hurt and the reasoning is
@@ -241,8 +241,8 @@ is drawn by us now, so it cannot appear more often than the screen refreshes, an
 is exactly what keeps the event rate at the refresh rate. More events would be more work per
 frame for a pointer that can only move once per frame.
 
-The failure this design had the first time — lose the cursor once and there are two pointers
-with no way back — is what the cursor hold above is for: the invisible cursor is re-set sixty
+The failure this design had the first time - lose the cursor once and there are two pointers
+with no way back - is what the cursor hold above is for: the invisible cursor is re-set sixty
 times a second, so the worst case is about a frame of a second pointer, against a pointer that
 was missing for an entire presentation. The wheel wears the same nothing and draws its own dot at
 the pointer, because it sits above the overlay and, with no overlay open at all, there is
@@ -255,16 +255,16 @@ somebody with no pointer at all. The behaviour suite checks that last one by nam
 A drag invalidates only the rectangle the new segment covers, and `draw(_:)` skips strokes
 whose bounds do not meet `dirtyRect`. Repainting the whole view per mouse move made the cost
 of a drag grow with everything already drawn: the same 960-event session took **0.325s that
-way against 0.012s this way — 26x**.
+way against 0.012s this way - 26x**.
 
 **On the differences the rendering suite used to report:** a handful of pixels differed by
-1–15/255, and the explanation on file was antialiasing where a clip boundary crosses a
+1-15/255, and the explanation on file was antialiasing where a clip boundary crosses a
 stroke. That was wrong. It was the **crosshair**, composited over the ink against different
 clip rectangles in the incremental pass than in the single pass. With the pointer on a layer
 of its own (entry 20) the suite reports **0 differing bytes at 1x, 2x and 3x**.
 
 The related measurement still stands on its own: **expanding every dirty rect makes seams
-worse, not better** — 275 bytes at 2x became 733 at +20pt and 4,482 at +60pt, with the
+worse, not better** - 275 bytes at 2x became 733 at +20pt and 4,482 at +60pt, with the
 per-pixel error unchanged. More repainting means more seams.
 
 ## 8. Temporary ink fades itself, on a layer
@@ -273,14 +273,14 @@ Temporary ink (`T`) holds full strength for the first 55% of three seconds, then
 
 **How it used to work:** a timer at 15 Hz walked the strokes, worked out each one's opacity,
 and asked for a repaint of the region covering all of them. Two costs were found and fixed
-along the way — invalidating each stroke separately made the cost grow with the square of
+along the way - invalidating each stroke separately made the cost grow with the square of
 what was on screen (12.5% CPU with fifty of them, 5.0% invalidating the union once), and the
 tick rate was settled at 15 because 20/s cost 5.1%, 15/s 4.4% and 12/s 4.3%. End to end that
 came to 2.8% of a core with three strokes fading and 3.8% with fifty.
 
 **Then the ink moved to a `CALayer` (entry 21) and that arithmetic inverted.** A layer repaint
 is four times cheaper than a view repaint for a small dirty rect and about four times dearer
-for a whole-screen one — and the union of every fading stroke *is* most of the screen once
+for a whole-screen one - and the union of every fading stroke *is* most of the screen once
 there are a few. Measured after the move: **29.8% of a core** with fifty strokes fading,
 against 3.8% for the same thing before it. A regression, straight out of an optimisation.
 
@@ -300,7 +300,7 @@ growing with the number of strokes because their union grows with it. The last c
 not grow, because there is nothing there to grow.
 
 The timer survives, at 2 Hz, doing something else entirely: dropping strokes that have run
-out of life so the model agrees with the screen — the eraser, undo and "is anything still
+out of life so the model agrees with the screen - the eraser, undo and "is anything still
 fading" all read the canvas, not the layers. Nothing waits on it, so it can be slow. It still
 starts with the first temporary stroke and stops with the last, so idle is still 0.0%.
 
@@ -321,7 +321,7 @@ place a mark stops being drawn and starts being kept.
 ## 9. The menu bar icon is never tinted
 
 **Measured:** rendering the status button with `contentTintColor` set gives mean luminance
-**0.000** — black, on a dark menu bar, which is invisible. Untinted it renders at 0.791.
+**0.000** - black, on a dark menu bar, which is invisible. Untinted it renders at 0.791.
 The cause is visible in the same measurement: the button's effective appearance resolves to
 `VibrantDark` independently of the app's own appearance, so a colour resolved in the app's
 context lands on a bar that is not in that context.
@@ -348,14 +348,14 @@ that never produces an error, and the app can only report the case macOS refuses
 ## 11. Failures are said in the menu, never in a dialog
 
 `NSAlert.runModal` blocks the main thread, and an accessory app's dialog can sit behind every
-other window — a failure at login would look exactly like a hang, menu bar icon present and
+other window - a failure at login would look exactly like a hang, menu bar icon present and
 nothing responding. Unregistered shortcuts show as a disabled line at the top of the menu
 instead. `NSAlert` does not appear in the app at all.
 
 ## 12. Leaving drawing mode on a display change, but only a real one
 
 `didChangeScreenParametersNotification` fires for more than displays coming and going. It
-fires when the Dock or the menu bar hides — which is what happens when a presentation
+fires when the Dock or the menu bar hides - which is what happens when a presentation
 starts. Measured during a Keynote slideshow: it fired at 2.4s (Keynote coming forward) and
 again at 14.0s (slideshow ending), both times with the screen frame unchanged at 1512x982
 and only `visibleFrame` moving a few points. Reacting to it tore the overlay down at the
@@ -368,7 +368,7 @@ and compared on each notification. Same layout, nothing happens.
 
 `overlayWindowSnapshot()` re-scans `NSApp.windows` as insurance against a panel that is on
 screen but has fallen out of our arrays. It filters on `isVisible`, because closed panels
-linger in `NSApp.windows` until they are deallocated — and counting those meant that right
+linger in `NSApp.windows` until they are deallocated - and counting those meant that right
 after hiding, the app still believed an overlay was open. The next `⌃⌥⌘D` took the hide
 branch again, captured strokes from an emptied panel, and the drawing was gone.
 
@@ -386,14 +386,14 @@ middle of a stroke. `performKeyEquivalent` now returns true for everything and f
 A bug worth remembering: the first version compared the modifier flags to `.command` by
 equality, which silently dropped `⇧⌘Z`. Redo looked implemented and did nothing.
 
-## 15. The tools are keyboard-only *(reversed — see 30)*
+## 15. The tools are keyboard-only *(reversed - see 30)*
 
 **Rejected:** an on-screen palette or toolbar. A tool that occupies screen space is not one
 people leave running in the background, and drawing mode is supposed to interact with
-nothing — a clickable palette would need an exception to that.
+nothing - a clickable palette would need an exception to that.
 
 So: bare letters and digits, no modifiers to hold while the other hand draws. `P H L A R O E`
-for tools, `1`–`6` colours, `[` `]` width, `Space` laser, `T` temporary ink. The corner badge
+for tools, `1`-`6` colours, `[` `]` width, `Space` laser, `T` temporary ink. The corner badge
 is the only readout, showing the tool, its width and a dot in the current colour.
 
 ## 16. A stroke carries its own attributes, and its points
@@ -447,12 +447,12 @@ The drag records what it took away and what it left, once, on release.
 Undo records edits (a stroke added, or strokes removed with the indices they came from)
 rather than inferring them from the stroke list, which is what lets it put back what the
 eraser and Clear took away, at the right depth. Each stroke carries a `UUID`, so an edit
-names a stroke rather than pointing at a position — see entry 23 for what that fixed.
+names a stroke rather than pointing at a position - see entry 23 for what that fixed.
 
 ## 17. Temporary ink is not kept across a hide
 
 It was drawn to vanish. Bringing it back mid-fade on the next show would be a surprise, and
-its disappearance is not an edit, so undo has nothing to say about it either — which means
+its disappearance is not an edit, so undo has nothing to say about it either - which means
 the entry that put it there goes when it does (entry 23).
 
 ## 18. macOS 11 is the floor
@@ -470,16 +470,16 @@ Performance work here started from the wrong end twice, so this entry is the map
 **Measured** (2026-08-30, `Testing/experiments/repaint_paths.swift`, and
 `./Testing/run.sh cost`). Asking a full screen transparent overlay to repaint 60 times a
 second costs **15.7% of a core** through `NSView`, whatever the dirty rect's size. Actually
-painting what a drag puts on screen costs **0.3–0.5%**. The ratio is about thirty to one, and
+painting what a drag puts on screen costs **0.3-0.5%**. The ratio is about thirty to one, and
 every idea that makes painting cheaper is bidding for that half point.
 
-The same repaint asked for through a `CALayer` delegate costs **3.8%** — 4x less for
-identical output — and moving a sublayer, which is not a repaint, costs **1.6%**. WindowServer
+The same repaint asked for through a `CALayer` delegate costs **3.8%** - 4x less for
+identical output - and moving a sublayer, which is not a repaint, costs **1.6%**. WindowServer
 does not move in any of these runs, so this is our own process and not the compositor.
 
 **The one caveat, and it has already bitten once:** the layer path is only cheaper for small
 dirty rects. Its fixed cost is a quarter of the view path's but its cost grows with area,
-where the view path's does not — 3.8% at 40x40, 21.0% at 400x400, 50.7% for the whole screen,
+where the view path's does not - 3.8% at 40x40, 21.0% at 400x400, 50.7% for the whole screen,
 against a flat ~15% for the view path. Everything a drag repaints is small. The fade was not,
 and moving it to a layer made it four times *worse* before it was taken off the repaint path
 altogether (entry 8).
@@ -501,7 +501,7 @@ cheaper.
   only with a number behind it.
 
 **Confirmed on the measurement, and worth fixing in its own right:** the stroke under the
-mouse is re-stroked in full on every mouse move, so a single unbroken line is quadratic —
+mouse is re-stroked in full on every mouse move, so a single unbroken line is quadratic -
 the last tenth of a 5000-point line costs **5.5x** what its first tenth did. It is small in
 absolute terms until a line gets very long, which is exactly when someone notices.
 
@@ -511,16 +511,16 @@ The crosshair used to be painted in `draw(_:)`, and following the mouse meant in
 where it had been and where it had arrived. Both rectangles are about 26pt square, which
 sounded free and was not: a repaint of a full screen transparent overlay costs the same
 whatever its dirty rect, so **painting the crosshair cost as much as painting everything**.
-On a canvas with ink on it, more — the two rectangles union into one region and every stroke
+On a canvas with ink on it, more - the two rectangles union into one region and every stroke
 that region touches is re-stroked, while the user is drawing nothing at all. Measured at 60
 moves a second: **22.5% of a core**.
 
-Moving it to a layer took that to 1.6%. It has since gone further and left the app entirely —
+Moving it to a layer took that to 1.6%. It has since gone further and left the app entirely -
 the pointer is a real cursor now (entry 6), which costs 0.5%, which is nothing. The layer
 version is worth recording anyway, because the reasoning is what carried over to the badge.
 
 **The badge went the same way, and for a sharper reason.** It changes when the tool, the
-colour or the mode changes — a few times a session — but it was painted inside `draw(_:)`,
+colour or the mode changes - a few times a session - but it was painted inside `draw(_:)`,
 and the first thing it did there was measure itself, which meant building two
 `NSAttributedString`s and laying both out **before** the check that would have skipped it.
 So every repaint, for any reason anywhere on screen, laid out the badge's text.
@@ -529,7 +529,7 @@ With the pointer already off the repaint path, that layout was all that a mouse 
 **0.059 ms an event, painting nothing**. As a picture on a layer it is **0.029 ms**, and a
 60-point drag over a canvas of 200 strokes went from 0.065 ms an event to **0.033 ms**.
 
-Its old repaint machinery went with it — `repaintRegionAfterToolChange`, the repaint margin,
+Its old repaint machinery went with it - `repaintRegionAfterToolChange`, the repaint margin,
 and the "old rect union new rect" rule that existed because a badge growing leftwards out of
 the corner would otherwise be left half drawn. A layer that is given a new picture and a new
 frame has no such problem. The whole-view repaint on a mode switch went too.
@@ -538,12 +538,12 @@ frame has no such problem. The whole-view repaint on a mode switch went too.
 
 The measurement in entry 19 said the same repaint of the same full screen transparent layer
 costs **15.7% of a core through AppKit's view display machinery and 3.8% through a
-`CALayer`** — 4x, for identical output. Nothing about what is painted changes; the difference
+`CALayer`** - 4x, for identical output. Nothing about what is painted changes; the difference
 is the path the repaint is asked through. The catch, which entry 8 paid for, is that this
 holds for small dirty rects: a layer repaint costs more as its rect grows, and a view repaint
 does not.
 
-So `DrawingView` now owns three layers, bottom to top — ink, badge, pointer — and paints
+So `DrawingView` now owns three layers, bottom to top - ink, badge, pointer - and paints
 nothing through `draw(_:)` at all. The `draw(_:)` override is gone. The painting code did not
 change: the ink layer's delegate makes an unflipped `NSGraphicsContext` current and calls the
 same body, so `NSBezierPath` and `NSColor` work exactly as before.
@@ -565,9 +565,9 @@ second), with the pointer and badge layers of entry 20:
 The old shape of the thing is in that table: **moving the mouse cost as much as drawing**,
 because the crosshair was paint and paint meant repainting the whole overlay.
 
-**What is left.** Painting a drag is now about 0.2% of a core, so the remaining 4–5% is the
+**What is left.** Painting a drag is now about 0.2% of a core, so the remaining 4-5% is the
 repaints themselves, one per mouse event. Two directions, in order: coalesce the repaints to
-the display's refresh rate (worth only what the event rate exceeds it — unmeasured), and the
+the display's refresh rate (worth only what the event rate exceeds it - unmeasured), and the
 quadratic in-progress stroke, which is now the largest thing in the painting half.
 
 ## 22. The badge is snapped to whole pixels, and the plate is dark
@@ -584,7 +584,7 @@ snapped out to whole device pixels and its origin snapped down to one.
 **Cramped.** 11pt over 9pt with 8x5 padding, unchanged since the first version. It is the
 app's entire on-screen interface and it looked like a debug overlay. Now 13pt semibold over
 10pt medium, 11x8 padding, an 8pt corner, and the colour swatch is a drawn circle in its own
-column rather than a "●" typed into the string and recoloured — the glyph was at the mercy
+column rather than a "●" typed into the string and recoloured - the glyph was at the mercy
 of the font and looked like a typo at that size.
 
 **The plate is dark, and the mode is a red stripe down its left edge.** A red plate was
@@ -594,14 +594,14 @@ vanished into the plate. Dark plate, red stripe: every colour reads, and the str
 says clicks are being captured. Click-through drops the stripe, because nothing is.
 
 Both were found by rendering the badge offscreen to a PNG and looking at it, which is worth
-doing again before changing it — the suites will not catch blurry.
+doing again before changing it - the suites will not catch blurry.
 
 **And then it was set the wrong size for two months.** Everything above was decided while the
 badge was being painted at half scale by the bug in entry 28, including the type: 11 over 9 was
 raised to 13 over 10 because it "looked like a debug overlay" in a picture where it was being
 shown at half the size it is on screen. Once the scale was fixed, the placard that came back
 was the compensation, not the design. It is 12 over 10 with 12x7 padding and a 10pt corner
-now — 46pt tall down to 40 — and it is the picture in `probes/badge.swift` that says whether
+now - 46pt tall down to 40 - and it is the picture in `probes/badge.swift` that says whether
 that is right, at the scale it is actually shown at.
 
 **The swatch became the tool.** A coloured disc said which colour and left the tool to the
@@ -610,8 +610,8 @@ it draws with: one mark, both facts, and it matches the wheel sector the tool wa
 because both take the symbol from `DrawingTool` rather than keeping a list of their own.
 
 **And it stopped shouting.** `PEN 4` became `Pen 4`, `CLICK-THROUGH` became `Click-through`,
-and the notice is a sentence. The wheel still shouts, deliberately — eight labels read at a
-glance across a room, in the second a wheel is up — but a sign that sits in the corner of
+and the notice is a sentence. The wheel still shouts, deliberately - eight labels read at a
+glance across a room, in the second a wheel is up - but a sign that sits in the corner of
 somebody's screen all day in capitals is one of the things that makes an app look like it
 came from somewhere else.
 
@@ -621,13 +621,13 @@ Three faults, reported as one. All of them made undo do nothing, or the wrong th
 state nothing on screen distinguishes from the working one.
 
 **`⌘Z` only worked while the panel had the keyboard.** The panels are `.nonactivatingPanel`
-on purpose — drawing over a presentation must not pull focus out from under the presenter —
+on purpose - drawing over a presentation must not pull focus out from under the presenter -
 and the price is that they only get key events while this app is the active one. Click
 anything at all in another app and `⌘Z` inside the overlay is a silent no-op.
 
 **Chosen:** a fourth global shortcut, `⌃⌥⌘Z`, on Carbon like the other three, so it works
 whatever has focus. (Both of these keys are gone: undo is now the hub of `⌥V` and redo one of
-its sectors — entry 30. What follows is why undo had to leave the keyboard's focus behind at
+its sectors - entry 30. What follows is why undo had to leave the keyboard's focus behind at
 all, which is still the reason it sits on a global hot key.) `⇧⌃⌥⌘Z` redoes, and comes with
 it rather than after it: an undo that
 always works next to a redo that only sometimes does is a trap, because one press too many
@@ -638,7 +638,7 @@ and break the reason the panels are non-activating.
 With one canvas per display, the shortcut applies to the screen the pointer is on, falling
 back to the screen carrying the badge.
 
-**Undo took back the wrong stroke.** `Edit.added` was applied with `strokes.removeLast()` —
+**Undo took back the wrong stroke.** `Edit.added` was applied with `strokes.removeLast()` -
 the same thing as the stroke that was added, right up until it is not. Temporary ink is
 recorded like anything else but removed when it fades, without an edit, so a faded stroke
 could leave its entry behind; the next undo then took back somebody else's line and offered
@@ -660,19 +660,19 @@ the old code first to confirm they fail: 2 where 1 is wanted, and 1 where 2 is w
 
 The tool keys work and are not going anywhere, but they ask the user to remember seven
 letters. A radial menu asks them to remember one key and a direction, and the direction is a
-forty-five degree wedge of the whole screen rather than a target to hit — so it can be driven
+forty-five degree wedge of the whole screen rather than a target to hit - so it can be driven
 at speed, without looking, in the middle of talking to a room. That is the difference between
 a tool you use while presenting and a tool you stop presenting to use.
 
 **Hold, push, let go.** `⌥Z` opens the tools, `⌥X` the colours, `⌥C` the widths. The wheel
 appears where the pointer already is. Letting go picks whatever the pointer is pushing
 towards. Sector zero is due right and they run clockwise, which puts the two that need no
-thought — the pen and the eraser — a flick right and a flick left.
+thought - the pen and the eraser - a flick right and a flick left.
 
 **The hub of the tools wheel is the mode.** Letting go in the middle hands the screen back to
 whatever is underneath; pushing at a tool takes it again and puts that tool in your hand. So
 one gesture carries both, and there is no separate mode shortcut to remember alongside a tool
-picker — which is the whole point, and why the hub says `CLICK-THROUGH` rather than `CANCEL`.
+picker - which is the whole point, and why the hub says `CLICK-THROUGH` rather than `CANCEL`.
 `⌃⌥⌘E` still does the same thing and is left registered as a way back that does not depend on
 the wheel; it is one line to remove when the wheel has been lived with for a while.
 
@@ -691,7 +691,7 @@ without looking.
   is registered on entering drawing mode and unregistered on leaving.
 - **The pointer is polled, not received.** `NSEvent.mouseLocation` on a timer, rather than
   taking mouse events. That is what lets a wheel work in drawing mode, in click-through and
-  over any app, without the panel having to take the mouse away from what is underneath —
+  over any app, without the panel having to take the mouse away from what is underneath -
   and it needs no permission. The poll runs only while a wheel is open. It also made the
   gesture testable: the tracking takes the pointer as an argument, so the behaviour suite
   drives the whole thing without a hand on the mouse.
@@ -701,13 +701,13 @@ without looking.
 
 **Measured** (`Testing/probes/onscreen.swift`, warping the pointer in a circle once a second,
 against a control that warps with nothing open): open with the pointer still, **1.0%** of a
-core — that is the poll and nothing else. Open and being swept, **3.8%**, which is eight full
+core - that is the poll and nothing else. Open and being swept, **3.8%**, which is eight full
 repaints a second while the highlight moves. A wheel is up for about a second at a time, so
 this is small in the only sense that matters; it is recorded because the claim was that it
 would be free and it is not quite.
 
-Most of it was worse. Building the tinted glyphs on every repaint — eight `NSImage`s a frame,
-because a template image does not take the current fill colour — cost **6.6%**. They are
+Most of it was worse. Building the tinted glyphs on every repaint - eight `NSImage`s a frame,
+because a template image does not take the current fill colour - cost **6.6%**. They are
 cached now; there are only ever sixteen.
 
 **The eighth tool is the laser and will be the text tool.** Nine tools do not fit in eight
@@ -719,13 +719,13 @@ someone who has learned it, so it is one slot, once, and written down here first
 
 It was drawn as part of the pointer: a glowing dot composited into the cursor image. Reported
 as not working, and it is easy to see why. A cursor is only ours while we own the window under
-the pointer, and being there is the one thing a laser has to do — in the middle of a
+the pointer, and being there is the one thing a laser has to do - in the middle of a
 presentation, over anything, on whatever the audience is looking at.
 
 **Now:** a layer on the overlay that follows the pointer, with a halo that falls off to
 nothing and a hot core inside it, so it reads as light rather than as a drawn circle. It costs
-a layer move and no repaint — 1.5% of a core at sixty moves a second, against 15.2% for
-asking the overlay to repaint instead — and it does not care who owns the cursor.
+a layer move and no repaint - 1.5% of a core at sixty moves a second, against 15.2% for
+asking the overlay to repaint instead - and it does not care who owns the cursor.
 
 The cursor's laser accessory went with it. Two spots of light an inch apart, one of which the
 audience may not be able to see, is worse than one.
@@ -759,7 +759,7 @@ both the beam and the glow.
 
 **The trail is a run of short pieces, not one stroke.** One stroke has one age and one layer,
 so a beam drawn over two seconds held at full strength for all of it and then went out in one
-go when the button came up — which is the opposite of what a laser trail does, and it is what
+go when the button came up - which is the opposite of what a laser trail does, and it is what
 was reported as the fade not working. The beam is cut every tenth of a second now
 (`Stroke.beamPiece`): each piece is finished, handed its own fading layer, and continued from
 the point the last one ended, so the light thins out behind the hand while the hand is still
@@ -787,9 +787,9 @@ third by not inventing a mechanism where one already existed.
 `⌃⌥⌘D` and `⌃⌥⌘E` are gone. One key opens a wheel, and the wheel does everything the two of
 them did:
 
-- push at a tool — the overlay opens if it was not open, takes the screen, and hands you that
+- push at a tool - the overlay opens if it was not open, takes the screen, and hands you that
   tool;
-- let go in the middle — you leave, one step at a time. From drawing, the screen goes back to
+- let go in the middle - you leave, one step at a time. From drawing, the screen goes back to
   the app underneath (what `⌃⌥⌘E` did). From there, again, and the overlay goes away with the
   drawing kept (what `⌃⌥⌘D` did).
 
@@ -835,21 +835,21 @@ six colours to a tool that has no colour.
 - **Colour, with the eraser in hand,** does not open a wheel. Handing the pen back instead was
   tried for a day and was worse: it answered a question nobody had asked and changed the tool
   in your hand while you were still using the one you had. The badge says `THE ERASER HAS NO
-  COLOUR` for a second and a half instead — which is what the badge is for, being the only
+  COLOUR` for a second and a half instead - which is what the badge is for, being the only
   place on screen this app can say anything at all.
 - **The eraser's size actually varies, and it is not a thumb.** It was `max(12, width)`,
   which gave the same eraser for five of the six widths: the size control did nothing for four
   steps out of five, the same fault the eraser itself had before it started cutting. Then it
-  was `6 + width * 2` — 20 to 68 points across — which overshot the other way: an eraser that
+  was `6 + width * 2` - 20 to 68 points across - which overshot the other way: an eraser that
   big is answering the question the wheel's `CLEAR` already answers in one gesture. What is
   left for an eraser is the small correction, so it is `4 + width * 1.25` now, **13 to 43
   points across**, and its pointer is drawn true size as it always was.
 - **The laser's sizes are beams.** The wheel paints each one the way the laser will paint it,
-  in the colour in hand, because a flat bar is not what it will put on the screen — and
+  in the colour in hand, because a flat bar is not what it will put on the screen - and
   because the laser's width was a setting that did nothing until entry 25 gave it one.
 - **A fat marker does not get a fat pen for a pointer.** The drawing grew one for one with
   the width, and the marker is four times the width in hand, so at the widest setting the
-  pointer was a 148pt pen following the mouse — clumsy however well it is drawn. Past a dozen
+  pointer was a 148pt pen following the mouse - clumsy however well it is drawn. Past a dozen
   points the barrel grows at a fifth of the rate (about 90pt at the widest) and the reach is
   capped; the six settings still read in order, which is all the pointer has to say. The
   eraser is the exception and stays true size, because its size *is* what it does.
@@ -866,7 +866,7 @@ is visible from a passing test.
 own red, which is a choice a Mac app does not get to make: every other selection on the screen
 is the colour the user chose in System Settings, and one thing that quietly says "this was
 built somewhere else" is an interface that picks its own. Sectors that *are* a colour still
-light in their own — choosing blue must not light up the accent — and the lit wedge keeps a
+light in their own - choosing blue must not light up the accent - and the lit wedge keeps a
 white edge whatever the accent is, so a graphite or a yellow one still reads as selected.
 
 **It fades in and out, over a tenth of a second and a twelfth.** A HUD that snaps on is the
@@ -893,7 +893,7 @@ frame. Measured: a 20x20pt fill covered 400 of 1600 pixels at 2x and 400 of 3600
 
 What that was on screen, and it is the whole of two of the three faults that were reported:
 
-- **The badge at half size**, sitting inside a hover rectangle four times its area — so it
+- **The badge at half size**, sitting inside a hover rectangle four times its area - so it
   also stopped drawing where the pointer was nowhere near it.
 - **The laser's glow thirteen points down and to the left of the pointer**, at half its
   intended width. "It does not point at what I am pointing at."
@@ -916,41 +916,41 @@ Reported as "the marker cannot keep up with the mouse, it moves coarsely, especi
 gets thick". It was not the tracking. It was the cap.
 
 Every `NSBezierPath` cap style except `.butt` extends the line *past* its last point by half
-the line width. The marker is four times the width in hand — 56pt at the widest — so its ink
+the line width. The marker is four times the width in hand - 56pt at the widest - so its ink
 ran up to **28 points ahead of the pointer**, and because the overshoot points along the last
 segment, it swung around every time the hand changed direction. At 2pt the same fault is a
 one-point overhang nobody can see; at 56 it is a slab.
 
 The marker's cap is `.butt` now, which is also what a real chisel tip does. What it costs is
 the one case a butt cap cannot draw: a tap has no length, and a line of no length with butt
-caps paints nothing at all. `Stroke.paint()` draws that dab explicitly — the square a chisel
-would leave — and the behaviour suite checks both halves: that there is no ink past the end of
+caps paints nothing at all. `Stroke.paint()` draws that dab explicitly - the square a chisel
+would leave - and the behaviour suite checks both halves: that there is no ink past the end of
 a line, and that a tap still leaves a mark. Swap the cap back and the first one fails.
 
 **Smoothing was considered and not done.** The obvious next thought is that the chords between
 mouse samples are what looks coarse, so the polyline should become a curve. Rendered side by
 side at fifteen samples and at sixty (`Testing/probes/ink.swift`), the difference is small at
-2pt and invisible at 56pt — a wide line hides its own chords. It would also cost the thing the
+2pt and invisible at 56pt - a wide line hides its own chords. It would also cost the thing the
 report was about: a midpoint curve ends half a segment behind the hand, so the ink would lag
 the pointer unless a separate tail were drawn every frame. Not worth it for what it buys.
 
 ## 30. Everything is on the Option row, and none of it depends on focus
 
-`⌥Z` tools, `⌥X` colour, `⌥C` size — and now `⌥V`, the things you do *to* a drawing rather
+`⌥Z` tools, `⌥X` colour, `⌥C` size - and now `⌥V`, the things you do *to* a drawing rather
 than with it: undo, redo, clear, temporary ink, hide. Four keys in a row under the left hand,
 one family, and every one of them a global hot key, which is the part that matters.
 
 **The hub of this one does something.** Every other wheel's middle is a cancel; this one's is
 `UNDO`, so a tap of `⌥V` takes one thing back and a run of taps takes back a run of them.
 Taking things back is the only job here that is done over and over, and a push-and-release
-gesture for each would be the wrong shape for it — while `REDO`, `CLEAR`, `TEMP INK` and
+gesture for each would be the wrong shape for it - while `REDO`, `CLEAR`, `TEMP INK` and
 `HIDE` are all things you do once and are worth a deliberate push.
 
 **Temporary ink says so three times.** Ink that fades on its own is alarming if you did not
-mean to switch it on — "why is my drawing disappearing?" is not a quiet question, and the
+mean to switch it on - "why is my drawing disappearing?" is not a quiet question, and the
 answer used to be a quiet word: the badge read `Temp Pen 4` and that was all. Now the badge
 carries an orange `TEMP` mark beside the tool, the wheel's own sector reads `TEMP INK ✓` while
-it is on, and switching it says out loud what it did — "strokes fade after 3 seconds" — for a
+it is on, and switching it says out loud what it did - "strokes fade after 3 seconds" - for a
 second and a half. The badge's second line, which is the only thing on screen telling somebody
 whose clicks have stopped working what to press, is untouched: the mark fits in the width the
 hint line already needed.
@@ -972,7 +972,7 @@ the ring exactly as the hand pushes. Pushing towards an edge is still limited by
 pointer can travel, which no choice of origin can help with. This is what made the behaviour
 suite's two tap checks depend on where the mouse happened to be resting when it ran.
 
-**And a tap only does anything on `⌥V`.** That is the wheel you use over and over — undo — so
+**And a tap only does anything on `⌥V`.** That is the wheel you use over and over - undo - so
 letting go without pushing undoes, and a run of taps takes back a run of things. The other
 three do nothing at all on a tap. Their hubs mean "leave" and "cancel", these are keys the
 whole system now gives up to this app, and a key hit by accident must not move somebody's mode
@@ -981,10 +981,10 @@ at its middle.
 
 **Why `CLEAR` moved onto a wheel.** It was the bare letter `C`, and that was wrong twice over:
 it is easy to hit by accident for something that erases a whole drawing, and it only worked
-while this app happened to have the keyboard — which is a state the user cannot see. A push on
+while this app happened to have the keyboard - which is a state the user cannot see. A push on
 a wheel is deliberate, and it works from anywhere.
 
-**And the rest of the bare keys went with it** — `P` `H` `L` `A` `R` `O` `E`, `1`–`6`, `[` `]`,
+**And the rest of the bare keys went with it** - `P` `H` `L` `A` `R` `O` `E`, `1`-`6`, `[` `]`,
 `Space`, `T`, `⌘Z`, `⇧⌘Z`, `Delete`. Every one of them had the same fault: they were dispatched
 to a non-activating panel, so they worked while this app was the one being typed at and
 silently did nothing the moment the user clicked anything else. That is worse than not

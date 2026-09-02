@@ -1,7 +1,7 @@
 # ScreenDrawOverlay
 
 A macOS menu bar app that puts a transparent layer over every screen so you can draw on top of
-whatever is running — a slide, a document, a video call — and then get out of the way again.
+whatever is running (a slide, a document, a video call) and then get out of the way again.
 It has no window of its own, no Dock icon, and it asks for **no system permissions**.
 
 macOS 11 or later · Apple Silicon and Intel · MIT licence · no permissions asked, no network
@@ -24,8 +24,8 @@ access, no account.
 **From a release.** Download `ScreenDrawOverlay.zip` from the
 [Releases](../../releases) page, unzip it, and move the app to `/Applications`.
 
-The first time you open it, macOS will refuse. The app is signed, but only ad-hoc signed — a
-local signature rather than a paid Developer ID — so you get "cannot be opened because Apple
+The first time you open it, macOS will refuse. The app is signed, but only ad-hoc signed (a
+local signature rather than a paid Developer ID), so you get "cannot be opened because Apple
 cannot check it for malicious software". You clear that once and never again:
 
 - Right-click the app and choose **Open**, then **Open** again in the dialog. On macOS 15
@@ -48,8 +48,8 @@ and 12, add it under System Settings → General → Login Items.
 ## The first sixty seconds
 
 Four keys sit next to each other on the Option row. **Hold one, push the mouse, let go.** The
-wheel opens right where the pointer is, and each slice covers 45° — you push in a direction
-rather than hitting a target. They work whatever app is in front, because they are registered
+wheel opens right where the pointer is, and each slice covers 45°, so you push in a
+direction rather than hitting a target. They work whatever app is in front, because they are registered
 with the system rather than with a window.
 
 `⌥Z` works from the moment the app starts. The other three come and go with the overlay:
@@ -57,15 +57,15 @@ while it is closed they are ordinary keys, and belong to whatever app you are us
 
 | Hold | What opens |
 | --- | --- |
-| `⌥Z` | Tools: pen, marker, line, arrow, eraser, rectangle, oval, laser — in that order round the wheel, starting on the right |
+| `⌥Z` | Tools: pen, marker, line, arrow, eraser, rectangle, oval, laser, in that order round the wheel, starting on the right |
 | `⌥X` | Colours |
-| `⌥C` | Size — of the pen, the marker, the hole the eraser takes out, or the laser's beam |
+| `⌥C` | Size of the pen, the marker, the hole the eraser takes out, or the laser's beam |
 | `⌥V` | What to do to a drawing: undo, redo, clear, temporary ink, hide |
 
 Two rules and that is the interface:
 
 - **The middle of a wheel is its default**, and letting go there chooses it. On `⌥Z` the middle
-  is the way out. On `⌥V` the middle is undo — so a *tap* of `⌥V` takes one thing back, and
+  is the way out. On `⌥V` the middle is undo, so a *tap* of `⌥V` takes one thing back, and
   three taps take back three.
 - **Tapping the other three does nothing**, on purpose, so a key pressed by accident never
   changes the tool or the colour.
@@ -81,7 +81,7 @@ Two rules and that is the interface:
 | Pen | A plain line. Six colours, six widths. |
 | Marker | Four times wider and see-through, like a highlighter over text. |
 | Line, arrow, rectangle, oval | Two-point shapes. Holding `Shift` while dragging snaps to 45°, or makes a square or a circle. |
-| Eraser | Rubs out the part of a stroke it passes over — it cuts strokes rather than deleting them. Its size is the hole it leaves. |
+| Eraser | Rubs out the part of a stroke it passes over: it cuts strokes rather than deleting them. Its size is the hole it leaves. |
 | Laser | A glow that follows the pointer. Hold the button down and it leaves a beam of light that thins out behind your hand and is gone in about half a second. Nothing is left on the drawing. |
 
 **Temporary ink**, on the `⌥V` wheel, makes every mark fade out three seconds after it is
@@ -93,13 +93,13 @@ comes back is the last tool that actually drew.
 
 ## Three states, one gesture
 
-- **Drawing** — the overlay takes the mouse and the keyboard. Nothing reaches the app
+- **Drawing.** The overlay takes the mouse and the keyboard. Nothing reaches the app
   underneath, and every key is swallowed, including `Escape`. The corner badge has a red
   stripe.
-- **Click-through** — the drawing stays on screen, but clicks, scrolls and keystrokes go
+- **Click-through.** The drawing stays on screen, but clicks, scrolls and keystrokes go
   straight to the app below, so a slide can be advanced or a page scrolled without losing it.
   Letting go of the `⌥Z` wheel in the middle gets here; picking any tool takes the screen back.
-- **Away** — letting go in the middle once more. The overlay closes and the drawing is kept:
+- **Away.** Letting go in the middle once more. The overlay closes and the drawing is kept:
   picking any tool brings it back where it was, undo history and all.
 
 `CLEAR` on the `⌥V` wheel is the only thing that erases a drawing, and even that can be undone.
@@ -110,7 +110,7 @@ comes back is the last tool that actually drew.
 middle; that hands the screen back. If nothing responds at all, `⌃⌥⌘Esc` quits the app.
 
 **The menu bar icon is not there.** The app has no Dock icon and no window. When the menu bar
-is full macOS hides what does not fit — holding `Command` and dragging the icons makes room.
+is full macOS hides what does not fit; holding `Command` and dragging the icons makes room.
 
 **`⌥Z` does nothing.** Another app may have registered the same shortcut; macOS allows that
 without reporting a conflict. The menu bar item does the same job, and the shortcuts are
@@ -140,7 +140,7 @@ full-screen apps and on every Space. Ink is drawn into a `CALayer` and only the 
 changed is repainted. The global shortcuts use Carbon's `RegisterEventHotKey`, which needs no
 Accessibility permission. Open at Login uses `SMAppService`.
 
-The frameworks are AppKit, Carbon, QuartzCore and ServiceManagement — no third-party
+The frameworks are AppKit, Carbon, QuartzCore and ServiceManagement, with no third-party
 dependencies. The only thing written to disk is the small settings record (tool, colour,
 width) in the app's own preferences.
 
@@ -189,20 +189,20 @@ swift build -c release      # the binary; must be warning-free
 
 There is no XCTest target. Tests are built by compiling the app's own sources into a probe that
 drives the real code and prints what happened; `Testing/README.md` explains how, and how to add
-one. Several probes render PNGs — the wheels, the badge, the cursors, the laser, the ink —
+one. Several probes render PNGs (the wheels, the badge, the cursors, the laser, the ink)
 because some things can only be checked by looking at them.
 
 The documentation is short and worth reading before changing anything:
 
-- `docs/ARCHITECTURE.md` — what each file owns, the invariants, and every measurement.
-- `docs/DECISIONS.md` — why things are as they are, including what was tried and dropped.
-- `docs/RELEASE.md` — how a release is cut.
-- `CLAUDE.md` — the operational summary: commands, conventions, and the list of things never
-  to do.
+- `docs/ARCHITECTURE.md`: what each file owns, the invariants, and every measurement.
+- `docs/DECISIONS.md`: why things are as they are, including what was tried and dropped.
+- `docs/RELEASE.md`: how a release is cut.
+- `CLAUDE.md`: the operational summary, meaning commands, conventions, and the list of things
+  never to do.
 
 Issues and pull requests are welcome. Anything that touches drawing should come with
 `./Testing/run.sh` output and a note on what moved.
 
 ## Licence
 
-MIT — see [`LICENSE`](LICENSE). Use it, change it, ship it.
+MIT. See [`LICENSE`](LICENSE). Use it, change it, ship it.
