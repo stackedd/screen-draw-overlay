@@ -950,6 +950,17 @@ because at that point the user is plainly aiming at something. The threshold was
 and that was reported as slow; 110ms is long enough that a tap does not flash a wheel and short
 enough that holding one feels like it opened rather than thought about it.
 
+**The gesture is measured from the pointer, not from the wheel.** A wheel opens centred on the
+pointer, except near a screen edge, where the panel is pushed back on screen so that no sector
+is drawn off it. The offset the selection is read from used to be taken from that panel's
+centre - so with the pointer resting near an edge it was already outside the dead zone before
+the hand moved: the wheel came up on its own with a sector lit, and letting go chose it. A tap
+of `⌥X` in the corner of a screen changed the colour. The origin is now the pointer's own
+position when the key went down, and the panel is only *drawn* where it fits; the dot moves in
+the ring exactly as the hand pushes. Pushing towards an edge is still limited by how far the
+pointer can travel, which no choice of origin can help with. This is what made the behaviour
+suite's two tap checks depend on where the mouse happened to be resting when it ran.
+
 **And a tap only does anything on `⌥V`.** That is the wheel you use over and over — undo — so
 letting go without pushing undoes, and a run of taps takes back a run of things. The other
 three do nothing at all on a tap. Their hubs mean "leave" and "cancel", these are keys the

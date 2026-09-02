@@ -798,6 +798,14 @@
         controller.openActionWheel()
         check("a tap puts nothing on screen",
               controller.wheels.isShowing ? "a wheel" : "nothing", "nothing")
+        // And that has to hold wherever the pointer is resting. A wheel opened near a screen
+        // edge is pushed back on screen to fit, and while the gesture was measured from the
+        // panel's own centre the pointer was outside the dead zone before the hand moved: the
+        // wheel came up on its own with a sector lit, and the tap chose it.
+        check("the gesture is measured from the pointer, not from where the wheel fits",
+              "\(controller.wheels.centre)", "\(NSEvent.mouseLocation)")
+        check("so a tap has aimed at nothing",
+              controller.wheels.selection == nil ? "nothing" : "a sector", "nothing")
         controller.wheels.release()
 
         // And a tap only *does* anything on the wheel you tap on purpose. ⌥V undoes, because

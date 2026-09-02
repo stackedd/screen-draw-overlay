@@ -155,7 +155,13 @@ final class WheelPanel {
         view.dotLayer.isHidden = true
         view.needsDisplay = true
         self.pick = pick
-        centre = NSPoint(x: origin.x + extent / 2, y: origin.y + extent / 2)
+        // The gesture is measured from where the hand is, not from where the wheel had to be
+        // drawn. Near a screen edge the panel is pushed back on screen by the clamp above, and
+        // taking its centre as the origin left the pointer outside the dead zone the moment the
+        // wheel opened: it came up on its own with a sector lit, and letting go chose it - so a
+        // tap near an edge changed the tool or the colour. Pushing towards the edge is still
+        // limited by the pointer's own travel, which no origin can help with.
+        centre = pointer
 
         panel.setFrameOrigin(origin)
         showing += 1
