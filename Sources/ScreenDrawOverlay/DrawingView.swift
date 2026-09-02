@@ -298,11 +298,20 @@ final class DrawingView: NSView {
         // mouse would otherwise light it wherever it was last left.
         let moved = here != lastPointerPoint
         lastPointerPoint = here
-        if laserWanted, moved || laserLayer.isHidden {
-            laserLayer.position = here
-        }
-        if pointerWanted, moved || pointerLayer.isHidden {
-            pointerLayer.position = here
+
+        // Committed here rather than left to the end of the run loop's turn. The pointer is a
+        // layer now, so every frame it waits is a frame it is behind the hand - and a hand
+        // notices that in a way it does not notice anything else in this app.
+        if moved || laserLayer.isHidden || pointerLayer.isHidden {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            if laserWanted {
+                laserLayer.position = here
+            }
+            if pointerWanted {
+                pointerLayer.position = here
+            }
+            CATransaction.commit()
         }
 
         if laserLayer.isHidden == laserWanted {

@@ -219,6 +219,20 @@ handed `PointerCursor.invisible` — a cursor that exists so nothing else claims
 draws an arrow beside ours, and that shows nothing. What is drawn is unchanged: the same nib,
 chisel, crosshair and ring, from the same code, at the display's own scale.
 
+**What it costs is latency, and that is the honest part.** A cursor is composited by the
+window server the instant the mouse moves; a layer waits for a commit and the next frame. The
+pointer's position is therefore set inside its own `CATransaction` and committed at once
+rather than left to the end of the run loop's turn — which is standard practice for a layer
+that follows a hand, and whose effect **could not be measured here**: back to back on a busy
+machine, with and without, the difference in every row of `probes/onscreen.swift` was smaller
+than the run-to-run noise (±1 point). It is kept because it cannot hurt and the reasoning is
+sound; it is written down as reasoning rather than as a number, which is the rule in this repo.
+
+Turning **mouse coalescing off** was considered for the same reason and rejected: the pointer
+is drawn by us now, so it cannot appear more often than the screen refreshes, and coalescing
+is exactly what keeps the event rate at the refresh rate. More events would be more work per
+frame for a pointer that can only move once per frame.
+
 The failure this design had the first time — lose the cursor once and there are two pointers
 with no way back — is what the cursor hold above is for: the invisible cursor is re-set twenty
 times a second, so the worst case is about 50ms of a second pointer, against a pointer that was
