@@ -88,24 +88,11 @@ final class OverlayPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 
     // Key equivalents are dispatched before keyDown, so without this a Command shortcut
-    // pressed while drawing would still reach this app's menu - Command+Q would quit the
-    // app in the middle of a stroke - or be handed to the app underneath. Drawing mode
-    // interacts with nothing, so they stop here. Command+Z is the one exception, since
-    // undo is part of the tool; the global hot keys are unaffected because Carbon
-    // delivers those outside this path.
+    // pressed while drawing would still reach this app's menu - Command+Q would quit the app
+    // in the middle of a stroke - or be handed to the app underneath. Drawing mode interacts
+    // with nothing, so they stop here, all of them: the things this app does are on global
+    // hot keys, which Carbon delivers outside this path entirely.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        let shortcutFlags = event.modifierFlags.intersection([.command, .shift, .option, .control])
-
-        // Undo and redo are the tool's own, so they are handed to the view rather than
-        // swallowed. Redo carries Shift as well as Command, which an equality check on
-        // Command alone silently dropped - the shortcut looked implemented and did
-        // nothing.
-        let isUndoOrRedo = event.charactersIgnoringModifiers?.lowercased() == "z"
-            && (shortcutFlags == .command || shortcutFlags == [.command, .shift])
-        if isUndoOrRedo {
-            drawingView.keyDown(with: event)
-        }
-
-        return true
+        true
     }
 }

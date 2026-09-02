@@ -2,8 +2,10 @@
 //
 // Global rather than local because a non-activating panel only receives ordinary keystrokes
 // while this app is the active one, and after the user has clicked anything in another app it
-// is not. Every shortcut that has to work whatever has focus is here; the tool keys, which
-// only mean anything while the overlay already has the keyboard, are in DrawingView.
+// is not. **Everything this app can be told to do is here**: four wheels on the Option row and
+// the panic key. There is no second, quieter set of keys that works only while this app
+// happens to have the keyboard - there was, and a shortcut that sometimes works is worse than
+// no shortcut (docs/DECISIONS.md 30).
 //
 // Carbon rather than an event monitor because Carbon needs no Accessibility permission, which
 // is the decision the whole app hangs off (docs/DECISIONS.md 1).
@@ -18,8 +20,6 @@ final class Shortcuts {
         let toolWheel: () -> Void
         let wheelReleased: () -> Void
         let quit: () -> Void
-        let undo: () -> Void
-        let redo: () -> Void
     }
 
     // The other three wheels only mean something once there is a canvas, so they come and go
@@ -37,8 +37,6 @@ final class Shortcuts {
     // quit key by id, so its number is part of the contract.
     private enum ID: UInt32 {
         case quit = 2
-        case undo = 4
-        case redo = 5
         case toolWheel = 6
         case colourWheel = 7
         case widthWheel = 8
@@ -71,24 +69,7 @@ final class Shortcuts {
                           keyCode: UInt32(kVK_Escape),
                           modifiers: UInt32(cmdKey | optionKey | controlKey),
                           handler: actions.quit),
-             "Control + Option + Command + Escape", "\u{2303}\u{2325}\u{2318}\u{238B}"),
-
-            // Undo is global because Command+Z is not: the panels are non-activating, so
-            // they only get the keyboard while this app is active, and after the user has
-            // clicked anything at all in another app they are not. Redo comes with it rather
-            // than after it - an undo that always works beside a redo that only sometimes
-            // does is a trap.
-            (GlobalHotKey(id: ID.undo.rawValue,
-                          keyCode: UInt32(kVK_ANSI_Z),
-                          modifiers: UInt32(cmdKey | optionKey | controlKey),
-                          handler: actions.undo),
-             "Control + Option + Command + Z", "\u{2303}\u{2325}\u{2318}Z"),
-
-            (GlobalHotKey(id: ID.redo.rawValue,
-                          keyCode: UInt32(kVK_ANSI_Z),
-                          modifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey),
-                          handler: actions.redo),
-             "Shift + Control + Option + Command + Z", "\u{21E7}\u{2303}\u{2325}\u{2318}Z")
+             "Control + Option + Command + Escape", "\u{2303}\u{2325}\u{2318}\u{238B}")
         ]
 
         // A modal alert is the wrong tool for a background app: runModal blocks the main

@@ -11,9 +11,9 @@ checked at all.
     ./Testing/run.sh cost         what a repaint costs to paint
 
 **behaviour** (`probes/behaviour.swift`) drives a real AppDelegate: the mode matrix, hiding
-and showing keeping strokes with their tool attributes, the unfinished-stroke commit, tool
-keys through NSApplication's real key dispatch, Command+Q being swallowed,
-clear/undo/redo, and tap versus hold on the drawing shortcut. Any refactor is judged by
+and showing keeping strokes with their tool attributes, the unfinished-stroke commit, every
+wheel and what its sectors and hub do, that the bare keys the app used to have now do nothing,
+Command+Q being swallowed, clear/undo/redo, and tap versus hold. Any refactor is judged by
 whether its output is unchanged line for line.
 
 **rendering** (`probes/rendering.swift`) paints the same session twice - once incrementally,

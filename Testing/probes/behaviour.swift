@@ -20,6 +20,28 @@
                                          charactersIgnoringModifiers: chars, isARepeat: false, keyCode: UInt16(code))!)
     }
 
+    // Everything a user can ask for is on a wheel now, so the checks ask for it the same way.
+    // Sector 0 is due right and the order runs clockwise: redo, clear, temp ink, hide.
+    func pushAction(_ index: Int?) {
+        controller.openActionWheel()
+        guard let index else {
+            controller.wheels.track(controller.wheels.centre)
+            controller.wheels.release()
+            return
+        }
+
+        let sweep = CGFloat.pi * 2 / CGFloat(OverlayController.actionOrder.count)
+        let angle = -CGFloat(index) * sweep
+        controller.wheels.track(NSPoint(x: controller.wheels.centre.x + cos(angle) * 120,
+                                        y: controller.wheels.centre.y + sin(angle) * 120))
+        controller.wheels.release()
+    }
+
+    func undoOnce() { pushAction(nil) }
+    func redoOnce() { pushAction(0) }
+    func clearAll() { pushAction(1) }
+    func toggleTemporaryInk() { pushAction(2) }
+
     func stroke(finish: Bool = true, y: CGFloat = 300) {
         guard let panel = controller.overlayWindowSnapshot().first else { return }
         let v = panel.drawingView
@@ -59,8 +81,8 @@
         v.mouseUp(with: ev(.leftMouseUp, to))
     }
 
-    func drag(_ tool: Int, _ chars: String, from: NSPoint, to: NSPoint) {
-        press(tool, chars)
+    func drag(_ tool: DrawingTool, from: NSPoint, to: NSPoint) {
+        controller.tools.select(tool: tool)
         guard let panel = controller.overlayWindowSnapshot().first else { return }
         let v = panel.drawingView
         func ev(_ t: NSEvent.EventType, _ p: NSPoint) -> NSEvent {
@@ -92,7 +114,7 @@
         check("click-through + D", { controller.toggleDrawingMode(); return self.state }(), "DRAWING")
         check("strokes survive D from click-through", "\(live)", "2")
 
-        press(kVK_ANSI_3, "3"); press(kVK_ANSI_A, "a")
+        controller.tools.selectColor(2); controller.tools.select(tool: .arrow)
         stroke(y: 400)
         let signature = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot()).first!.capturedStrokes()
             .map { "\($0.style.label)/\(Int($0.width))/\($0.points.count)" }.joined(separator: ",")
@@ -109,20 +131,31 @@
         check("unfinished stroke committed on mode switch", "\(live)", "4")
         controller.toggleInteractionMode()
 
-        press(kVK_ANSI_E, "e")
-        check("bare E selects eraser", controller.tools.tool.label + "/" + state, "ERASER/DRAWING")
-        press(kVK_Space, " ")
-        check("space selects laser", controller.tools.tool.label, "LASER")
-        press(kVK_Space, " ")
-        press(kVK_ANSI_P, "p")
+        // The keyboard belongs to nobody now. There used to be a layer of bare keys - E for
+        // the eraser, Space for the laser, C to clear, Command+Z to undo - and they worked
+        // only while this panel happened to be the key window, which is a state the user
+        // cannot see. Everything moved to the Option row, where it works whatever has focus,
+        // and what is left here is a check that the old keys do nothing at all.
+        controller.tools.select(tool: .pen)
+        let beforeKeys = live
+        let beforeColour = controller.tools.colorIndex
+        for (code, characters) in [(kVK_ANSI_E, "e"), (kVK_Space, " "), (kVK_ANSI_T, "t"),
+                                   (kVK_ANSI_C, "c"), (kVK_ANSI_3, "3")] {
+            press(code, characters)
+        }
+        press(kVK_ANSI_Z, "z", .command)
+        check("the bare keys are gone: nothing moved",
+              controller.tools.tool.label + "/\(controller.tools.colorIndex)/\(live)",
+              "PEN/\(beforeColour)/\(beforeKeys)")
         press(kVK_ANSI_Q, "q", .command)
         check("Cmd+Q swallowed", "\(NSApp.isRunning)", "true")
+
         let beforeClear = live
-        press(kVK_ANSI_C, "c")
-        check("C clears", "\(live)", "0")
-        press(kVK_ANSI_Z, "z", .command)
+        clearAll()
+        check("the wheel's CLEAR clears", "\(live)", "0")
+        undoOnce()
         check("undo restores the clear", "\(live)", "\(beforeClear)")
-        press(kVK_ANSI_Z, "z", [.command, .shift])
+        redoOnce()
         check("redo clears again", "\(live)", "0")
 
         // Hiding the overlay used to throw the history away with the panels, so the drawing
@@ -131,19 +164,19 @@
         stroke(y: 560)
         controller.toggleDrawingMode()
         controller.toggleDrawingMode()
-        press(kVK_ANSI_Z, "z", .command)
+        undoOnce()
         check("undo still works after hide and show", "\(live)", "1")
 
         // A temporary stroke that fades leaves nothing behind - including its entry in the
         // history. It used to stay, and the next undo applied it to whatever happened to be
         // last, which took back a line the user had just drawn and offered a faded one back
         // in its place.
-        press(kVK_ANSI_C, "c")
+        clearAll()
         stroke(y: 560)
         stroke(y: 580)
-        press(kVK_ANSI_T, "t")
+        controller.tools.toggleTemporaryInk()
         stroke(y: 600)
-        press(kVK_ANSI_T, "t")
+        controller.tools.toggleTemporaryInk()
         if let view = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot()).first {
             let expired = Date().addingTimeInterval(-Stroke.fadeDuration - 1)
             view.canvas.strokes = view.canvas.strokes.map { stroke in
@@ -154,8 +187,8 @@
             }
             view.advanceFade()
         }
-        press(kVK_ANSI_Z, "z", .command)
-        press(kVK_ANSI_Z, "z", [.command, .shift])
+        undoOnce()
+        redoOnce()
         check("undo steps over temporary ink that has faded", "\(live)", "2")
 
         // The wheel's whole promise is that a direction picks a tool without aiming, so the
@@ -175,8 +208,8 @@
         // a dense canvas about a bit, take every drag back, and exactly as much ink has to
         // come back as went away. It catches bookkeeping the counts cannot - a piece
         // recorded twice, an original not recorded, a tail quietly dropped.
-        press(kVK_ANSI_C, "c")
-        press(kVK_ANSI_P, "p")
+        clearAll()
+        controller.tools.select(tool: .pen)
         for row in 0..<6 {
             stroke(y: 300 + CGFloat(row) * 24)
         }
@@ -186,7 +219,7 @@
             return canvas.strokes.reduce(0) { $0 + Stroke.totalLength(of: $1.outline()) }
         }
         let inkBefore = inkOnScreen()
-        press(kVK_ANSI_E, "e")
+        controller.tools.select(tool: .eraser)
         let rubs = [(NSPoint(x: 240, y: 260), NSPoint(x: 300, y: 460)),
                     (NSPoint(x: 360, y: 460), NSPoint(x: 300, y: 260)),
                     (NSPoint(x: 200, y: 380), NSPoint(x: 400, y: 372))]
@@ -195,33 +228,33 @@
         }
         check("rubbing a full canvas takes ink away", inkOnScreen() < inkBefore ? "yes" : "no", "yes")
         for _ in rubs {
-            press(kVK_ANSI_Z, "z", .command)
+            undoOnce()
         }
         let back = inkOnScreen()
         check("and taking every drag back puts all of it back",
               abs(back - inkBefore) < 0.5 ? "yes" : "no: \(Int(back)) of \(Int(inkBefore))", "yes")
-        press(kVK_ANSI_C, "c")
-        press(kVK_ANSI_P, "p")
+        clearAll()
+        controller.tools.select(tool: .pen)
 
         // Shapes are erased like everything else. Their `points` are only the two corners
         // the drag was defined by, so measuring to those measured to a rectangle's diagonal
         // rather than its outline: the eraser did nothing over most of a shape and took the
         // whole thing where it did reach. Flattened, a shape cuts like a line, and what is
         // left is no longer a shape - which is right, a piece was rubbed out of it.
-        press(kVK_ANSI_C, "c")
-        drag(kVK_ANSI_R, "r", from: NSPoint(x: 240, y: 620), to: NSPoint(x: 460, y: 760))
+        clearAll()
+        drag(.rectangle, from: NSPoint(x: 240, y: 620), to: NSPoint(x: 460, y: 760))
         check("a rectangle is one stroke", "\(live)", "1")
-        press(kVK_ANSI_E, "e")
+        controller.tools.select(tool: .eraser)
         rubAcross(from: NSPoint(x: 200, y: 690), to: NSPoint(x: 280, y: 690))
         check("erasing a rectangle's edge leaves the rest of it", live > 0 ? "yes" : "gone", "yes")
-        press(kVK_ANSI_C, "c")
-        press(kVK_ANSI_P, "p")
+        clearAll()
+        controller.tools.select(tool: .pen)
 
         // The laser is a light on the overlay, not a decoration on the cursor - a cursor is
         // only ours while we own the window under the pointer, and being there is the one
         // thing a laser has to do. It also has no business sitting on top of an app the
         // user has just been handed back.
-        press(kVK_Space, " ")
+        controller.tools.toggleLaser()
         let laserLit = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot())
             .first.map { !$0.laserLayer.isHidden } ?? false
         check("space lights the laser on the overlay", laserLit ? "yes" : "no", "yes")
@@ -365,7 +398,7 @@
         }
 
         check("and it leaves no permanent ink", "\(live)", "\(permanentBefore)")
-        press(kVK_Space, " ")
+        controller.tools.toggleLaser()
 
         // The laser draws light, not a pen line that happens to disappear - which is what
         // "it has no design of its own" meant. A beam is three passes: a halo that reaches
@@ -434,27 +467,27 @@
         // The eraser cuts, it does not delete. Rubbing out whole strokes made its size
         // meaningless: one touch anywhere on a line took the entire line, so a wide eraser
         // and a narrow one did exactly the same thing.
-        press(kVK_ANSI_C, "c")
-        press(kVK_ANSI_P, "p")
+        clearAll()
+        controller.tools.select(tool: .pen)
         stroke(y: 700)
-        press(kVK_ANSI_E, "e")
+        controller.tools.select(tool: .eraser)
         rub(x: 290, y: 700)
         check("eraser cuts a line in two", "\(live)", "2")
 
         // A quick hand produces one event that jumps a long way. The eraser used to cut a
         // circle only where each event landed, so a fast stroke across a line passed either
         // side of it and did nothing - which is the "sometimes it doesn't erase" reported.
-        press(kVK_ANSI_C, "c")
-        press(kVK_ANSI_P, "p")
+        clearAll()
+        controller.tools.select(tool: .pen)
         stroke(y: 700)
-        press(kVK_ANSI_E, "e")
+        controller.tools.select(tool: .eraser)
         rubAcross(from: NSPoint(x: 290, y: 760), to: NSPoint(x: 290, y: 640))
         check("a fast eraser stroke still cuts what it crossed", "\(live)", "2")
 
         // And a drag is one thing to take back, not one per mouse move.
-        press(kVK_ANSI_Z, "z", .command)
+        undoOnce()
         check("one eraser drag is one undo", "\(live)", "1")
-        press(kVK_ANSI_P, "p")
+        controller.tools.select(tool: .pen)
 
         // And the whole gesture, end to end, through the same code the shortcut runs: open
         // the wheel where the pointer is, push, let go.
@@ -616,7 +649,7 @@
         // over and a gesture for each would be the wrong shape. Everything on it works
         // whatever has the keyboard, which is why the bare letters it replaces are gone.
         controller.tools.select(tool: .pen)
-        press(kVK_ANSI_C, "c")
+        clearAll()
         stroke(y: 300); stroke(y: 340)
         let beforeUndo = live
         controller.openActionWheel()
@@ -655,7 +688,7 @@
         check("and pushing up puts the overlay away, keeping the drawing", state, "OFF")
         controller.toggleDrawingMode()
         check("which came back", "\(live)", "\(beforeUndo)")
-        press(kVK_ANSI_C, "c")
+        clearAll()
 
         // The wheel is the only way in now, so it has to be able to open an overlay that
         // is not there - and the eighth sector has to be able to put it away again, keeping

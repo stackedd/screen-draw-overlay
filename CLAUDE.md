@@ -4,14 +4,17 @@ A macOS menu bar app that puts a transparent overlay over every screen and lets 
 it — over a presentation, a document, anything. No window of its own, no Dock icon, and
 **no system permissions of any kind**.
 
-**`⌥Z` is the whole interface.** Hold it, push the mouse at what you want, let go. A tool
-opens the overlay and hands it to you; the middle is the way out, one step at a time — first
-the screen goes back to the app underneath, then the overlay goes away with the drawing kept.
-The hub says which step it is about to take. While the overlay is up, `⌥X` and `⌥C` do
-the same for colour and width. `⌃⌥⌘Z` / `⇧⌃⌥⌘Z` take a mistake back and `⌃⌥⌘Esc` quits — those
-are global for the same reason the wheel is: a non-activating panel only gets the keyboard
-while this app is the active one, so plain `⌘Z` was a no-op whenever the user had clicked
-anything else. The menu bar item is the way in if `⌥Z` is ever taken by another app.
+**The Option row is the whole interface.** Hold one of four keys, push the mouse at what you
+want, let go. `⌥Z` is the tools — a tool opens the overlay and hands it to you, and the middle
+is the way out, one step at a time. `⌥X` is colour, `⌥C` is size, and `⌥V` is what you do *to*
+a drawing: its middle undoes, so a tap of it takes one thing back, and its sectors are redo,
+clear, temporary ink and hide. `⌃⌥⌘Esc` quits.
+
+Every one of them is a global hot key, and that is the point: a non-activating panel only gets
+the keyboard while this app is the active one, so the bare keys this app used to have (`P` for
+pen, `C` to clear, `⌘Z` to undo) worked only sometimes — which is worse than not existing
+(`docs/DECISIONS.md` 30). There are none left. The menu bar item is the way in if `⌥Z` is ever
+taken by another app.
 
 ## Stack
 

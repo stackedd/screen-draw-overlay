@@ -26,8 +26,8 @@ import AppKit
 
 final class ModeBadge {
     // What the second line says. Escape is not on it: it no longer leaves drawing mode.
-    private static let drawingHint = "⌥Z wheel · middle hands it back · ⌃⌥⌘Z undo"
-    private static let interactionHint = "⌥Z wheel · pick a tool to draw · ⌃⌥⌘Esc quit"
+    private static let drawingHint = "⌥Z tools · ⌥V undo · middle of a wheel hands it back"
+    private static let interactionHint = "⌥Z tools · ⌥V undo · ⌃⌥⌘Esc quits"
 
 
     // Sized for a screen rather than for a screenshot. These were set while the badge was

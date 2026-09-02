@@ -154,9 +154,7 @@ final class OverlayController {
             quit: {
                 print("ScreenDrawOverlay: emergency quit")
                 NSApp.terminate(nil)
-            },
-            undo: { [weak self] in self?.undoOnScreenUnderPointer(redo: false) },
-            redo: { [weak self] in self?.undoOnScreenUnderPointer(redo: true) }
+            }
         ))
     }
 

@@ -50,12 +50,17 @@ Three states, and every transition is deliberate:
 - **Click-through** — panels stay visible but ignore the mouse; the app underneath gets
   everything, including the keyboard.
 
-One key moves between all three. `⌥Z` holds open a wheel of tools: push at one and the
-overlay opens, takes the screen and hands you that tool; let go in the middle to leave, one
-step at a time — the screen back to the app underneath, then the overlay away with the drawing
-kept. `⌥X` and `⌥C` do the same for colour and width while the overlay is up. `⌃⌥⌘Esc` quits
-the process outright, and `⌃⌥⌘Z` / `⇧⌃⌥⌘Z` undo and redo — global because the panels are
-non-activating, so `⌘Z` only reaches them while this app is the active one.
+Four keys move between all three, and they are next to each other on the keyboard. `⌥Z` holds
+open a wheel of tools: push at one and the overlay opens, takes the screen and hands you that
+tool; let go in the middle to leave, one step at a time — the screen back to the app
+underneath, then the overlay away with the drawing kept. `⌥X` and `⌥C` do the same for colour
+and size while the overlay is up, and `⌥V` is the wheel of things you do *to* a drawing: its
+hub undoes, so a tap of it takes one back, and its sectors are redo, clear, temporary ink and
+hide. `⌃⌥⌘Esc` quits the process outright.
+
+All of them are Carbon global hot keys, which is what makes them work whatever has the
+keyboard. The app has no other keys: the bare letters it used to have only worked while these
+non-activating panels happened to be key, which is a state the user cannot see.
 
 `⌥Z` is registered for the life of the app rather than with the overlay, because it is the
 only thing that opens one. The menu bar item is the way in if it is ever taken.
@@ -88,8 +93,9 @@ These exist because something went wrong once. Do not remove them without readin
    the mouse — it is what carries the pointer and the laser's glow), and the cursor hold at
    20Hz, 0.1% of a core (the same condition). All three stop with the thing that started
    them.
-7. **Drawing mode interacts with nothing.** Keys are swallowed (no beeps, no `⌘Q`), clicks
-   never reach what is underneath. Interaction is what click-through is for.
+7. **Drawing mode interacts with nothing.** Every key is swallowed (no beeps, no `⌘Q`, and
+   nothing of its own either — the app's own commands are global hot keys), and clicks never
+   reach what is underneath. Interaction is what click-through is for.
 
 ## What has been measured
 

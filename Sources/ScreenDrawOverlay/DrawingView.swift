@@ -508,59 +508,19 @@ final class DrawingView: NSView {
         badgeLayer.isHidden = badge.isHovered
     }
 
+    // Drawing mode owns the keyboard and does nothing with it.
+    //
+    // There used to be a layer of bare keys here - P for pen, 1 to 6 for colours, C to clear,
+    // Command+Z to undo - and they were quick, and they were a trap: they only worked while
+    // this panel happened to be the key window, which is a state the user cannot see. Anything
+    // this app can be told to do is on the Option row now, registered globally, so it works
+    // whatever has the keyboard (docs/DECISIONS.md 30).
+    //
+    // Keys are still swallowed rather than passed on: an unhandled key travels up the
+    // responder chain and ends in a system beep, so typing while drawing made the machine beep
+    // on every letter. Escape included - it used to leave drawing mode, and it threw the
+    // drawing away just as somebody pressed Escape to get out of a presentation.
     override func keyDown(with event: NSEvent) {
-        let shortcutFlags = event.modifierFlags.intersection([.command, .shift, .option, .control])
-
-        if event.keyCode == UInt16(kVK_Escape) {
-            // Swallowed on purpose. Escape used to leave drawing mode, but that only
-            // worked while the panel happened to be key - a state the user cannot see -
-            // and it threw the drawing away just as someone pressed Escape to get out of
-            // a presentation. Not calling super also keeps AppKit from beeping.
-            return
-        } else if event.keyCode == UInt16(kVK_ANSI_C), shortcutFlags == [] || shortcutFlags == .shift {
-            clear()
-        } else if event.keyCode == UInt16(kVK_ANSI_Z), shortcutFlags == .command {
-            undo()
-        } else if event.keyCode == UInt16(kVK_ANSI_Z), shortcutFlags == [.command, .shift] {
-            redo()
-        } else if event.keyCode == UInt16(kVK_Delete) || event.keyCode == UInt16(kVK_ForwardDelete),
-                  shortcutFlags == [] {
-            clear()
-        } else if shortcutFlags == [] {
-            handleToolKey(event.keyCode)
-        }
-
-        // Everything else is swallowed rather than passed on. Drawing mode owns the
-        // keyboard the same way it owns the mouse: an unhandled key would travel up the
-        // responder chain and end in a system beep, so typing while drawing made the
-        // machine beep on every letter. Click-through is where the keyboard belongs to
-        // someone else.
-    }
-
-    // Drawing mode owns the keyboard, so the tool keys are plain letters and digits - no
-    // modifiers to hold while the other hand is drawing. Mnemonic throughout: P pen,
-    // H highlighter, L line, A arrow, R rectangle, O oval, E eraser.
-    private func handleToolKey(_ keyCode: UInt16) {
-        switch Int(keyCode) {
-        case kVK_ANSI_1: tools.selectColor(0)
-        case kVK_ANSI_2: tools.selectColor(1)
-        case kVK_ANSI_3: tools.selectColor(2)
-        case kVK_ANSI_4: tools.selectColor(3)
-        case kVK_ANSI_5: tools.selectColor(4)
-        case kVK_ANSI_6: tools.selectColor(5)
-        case kVK_ANSI_LeftBracket: tools.stepWidth(by: -1)
-        case kVK_ANSI_RightBracket: tools.stepWidth(by: 1)
-        case kVK_ANSI_P: tools.select(tool: .pen)
-        case kVK_ANSI_H: tools.select(tool: .highlighter)
-        case kVK_ANSI_L: tools.select(tool: .line)
-        case kVK_ANSI_A: tools.select(tool: .arrow)
-        case kVK_ANSI_R: tools.select(tool: .rectangle)
-        case kVK_ANSI_O: tools.select(tool: .ellipse)
-        case kVK_ANSI_E: tools.select(tool: .eraser)
-        case kVK_Space: tools.toggleLaser()
-        case kVK_ANSI_T: tools.toggleTemporaryInk()
-        default: break
-        }
     }
 
     // Escape can also arrive as a cancel action rather than a plain keyDown; swallow it

@@ -46,10 +46,10 @@ func mouse(_ t: NSEvent.EventType, _ p: NSPoint, shift: Bool = false) -> NSEvent
     NSEvent.mouseEvent(with: t, location: p, modifierFlags: shift ? .shift : [], timestamp: 0,
                        windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
 }
-func tap(_ code: Int, _ chars: String, _ flags: NSEvent.ModifierFlags = []) {
-    view.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
-                                        windowNumber: window.windowNumber, context: nil, characters: chars,
-                                        charactersIgnoringModifiers: chars, isARepeat: false, keyCode: UInt16(code))!)
+// The tools used to be changed with bare keys; they are wheels now (docs/DECISIONS.md 30), so
+// this session asks the same things of the same objects and paints what comes back.
+func set(_ change: () -> Void) {
+    change()
     flush()
 }
 func drag(from a: NSPoint, to b: NSPoint, steps: Int = 24, shift: Bool = false) {
@@ -61,21 +61,21 @@ func drag(from a: NSPoint, to b: NSPoint, steps: Int = 24, shift: Bool = false) 
     view.mouseUp(with: mouse(.leftMouseUp, b, shift: shift)); flush()
 }
 
-tap(kVK_ANSI_P, "p"); drag(from: NSPoint(x: 60, y: 80), to: NSPoint(x: 800, y: 140))
-tap(kVK_ANSI_3, "3"); tap(kVK_ANSI_L, "l"); drag(from: NSPoint(x: 60, y: 200), to: NSPoint(x: 800, y: 260))
-tap(kVK_ANSI_5, "5"); tap(kVK_ANSI_A, "a"); drag(from: NSPoint(x: 60, y: 320), to: NSPoint(x: 800, y: 380))
-tap(kVK_ANSI_4, "4"); tap(kVK_ANSI_R, "r"); drag(from: NSPoint(x: 120, y: 420), to: NSPoint(x: 700, y: 560))
-tap(kVK_ANSI_2, "2"); tap(kVK_ANSI_O, "o"); drag(from: NSPoint(x: 200, y: 430), to: NSPoint(x: 620, y: 550))
-tap(kVK_ANSI_H, "h"); drag(from: NSPoint(x: 60, y: 620), to: NSPoint(x: 800, y: 620))
+set { tools.select(tool: .pen) }; drag(from: NSPoint(x: 60, y: 80), to: NSPoint(x: 800, y: 140))
+set { tools.selectColor(2) }; set { tools.select(tool: .line) }; drag(from: NSPoint(x: 60, y: 200), to: NSPoint(x: 800, y: 260))
+set { tools.selectColor(4) }; set { tools.select(tool: .arrow) }; drag(from: NSPoint(x: 60, y: 320), to: NSPoint(x: 800, y: 380))
+set { tools.selectColor(3) }; set { tools.select(tool: .rectangle) }; drag(from: NSPoint(x: 120, y: 420), to: NSPoint(x: 700, y: 560))
+set { tools.selectColor(1) }; set { tools.select(tool: .ellipse) }; drag(from: NSPoint(x: 200, y: 430), to: NSPoint(x: 620, y: 550))
+set { tools.select(tool: .highlighter) }; drag(from: NSPoint(x: 60, y: 620), to: NSPoint(x: 800, y: 620))
 // The marker at its widest, because the rectangle a stroke asks to have repainted is now its
 // own reach rather than a whole width either side - and a 56pt line is where being one point
 // too mean would show.
-tap(kVK_ANSI_RightBracket, "]"); tap(kVK_ANSI_RightBracket, "]"); tap(kVK_ANSI_RightBracket, "]")
+set { tools.stepWidth(by: 1) }; set { tools.stepWidth(by: 1) }; set { tools.stepWidth(by: 1) }
 drag(from: NSPoint(x: 80, y: 680), to: NSPoint(x: 780, y: 660), steps: 30)
-tap(kVK_ANSI_LeftBracket, "["); tap(kVK_ANSI_LeftBracket, "["); tap(kVK_ANSI_LeftBracket, "[")
-tap(kVK_ANSI_E, "e"); drag(from: NSPoint(x: 400, y: 230), to: NSPoint(x: 405, y: 230), steps: 4)
-tap(kVK_ANSI_Z, "z", .command)
-tap(kVK_ANSI_Z, "z", [.command, .shift])
+set { tools.stepWidth(by: -1) }; set { tools.stepWidth(by: -1) }; set { tools.stepWidth(by: -1) }
+set { tools.select(tool: .eraser) }; drag(from: NSPoint(x: 400, y: 230), to: NSPoint(x: 405, y: 230), steps: 4)
+set { view.undo() }
+set { view.redo() }
 
 let full = bitmap()
 render(full, frame)

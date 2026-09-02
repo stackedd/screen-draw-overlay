@@ -378,7 +378,7 @@ middle of a stroke. `performKeyEquivalent` now returns true for everything and f
 A bug worth remembering: the first version compared the modifier flags to `.command` by
 equality, which silently dropped `⇧⌘Z`. Redo looked implemented and did nothing.
 
-## 15. The tools are keyboard-only
+## 15. The tools are keyboard-only *(reversed — see 30)*
 
 **Rejected:** an on-screen palette or toolbar. A tool that occupies screen space is not one
 people leave running in the background, and drawing mode is supposed to interact with
@@ -939,3 +939,16 @@ gesture for each would be the wrong shape for it — while `REDO`, `CLEAR`, `TEM
 it is easy to hit by accident for something that erases a whole drawing, and it only worked
 while this app happened to have the keyboard — which is a state the user cannot see. A push on
 a wheel is deliberate, and it works from anywhere.
+
+**And the rest of the bare keys went with it** — `P` `H` `L` `A` `R` `O` `E`, `1`–`6`, `[` `]`,
+`Space`, `T`, `⌘Z`, `⇧⌘Z`, `Delete`. Every one of them had the same fault: they were dispatched
+to a non-activating panel, so they worked while this app was the one being typed at and
+silently did nothing the moment the user clicked anything else. That is worse than not
+existing, because the user cannot see which of the two states they are in. Entry 15 said the
+tools were keyboard-only; that is now reversed, and what replaced it is one mechanic with
+nothing underneath it. `⌃⌥⌘Z` and `⇧⌃⌥⌘Z` went too: undo is the hub of `⌥V`, which is one hand
+and one key.
+
+The keyboard is still *swallowed* in drawing mode, for the reason it always was: an unhandled
+key travels up the responder chain and ends in a system beep, and `⌘Q` in the middle of a
+stroke is not what anybody meant.
