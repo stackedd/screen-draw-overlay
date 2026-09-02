@@ -557,6 +557,43 @@
         check("the pointer carries the colour", red == blue ? "same" : "different", "different")
         controller.tools.selectColor(0)
 
+        // A marker's line stops where the hand did. Every cap style except butt extends past
+        // the end of the line by half its width, so a 56pt marker ran 28pt ahead of the
+        // pointer and that overshoot swung round as the hand turned - which is what "the
+        // marker moves coarsely" was. Painted here rather than described: ink to the right of
+        // where the line ends is the fault.
+        let straight = NSBezierPath()
+        straight.lineWidth = 56
+        straight.lineCapStyle = StrokeStyle.highlighter.lineCapStyle
+        straight.move(to: NSPoint(x: 40, y: 100))
+        straight.line(to: NSPoint(x: 160, y: 100))
+        let laid = Stroke(points: [NSPoint(x: 40, y: 100), NSPoint(x: 160, y: 100)],
+                          path: straight, color: .systemYellow, width: 56,
+                          style: .highlighter, createdAt: nil)
+        if let picture = Picture.drawn(size: NSSize(width: 220, height: 200), scale: 1, {
+            laid.paint()
+        }) {
+            let values = alpha(picture)
+            let side = picture.width
+            // The image counts rows from the top; the line is at y = 100 of 200.
+            func at(_ x: Int) -> Double { values[(200 - 1 - 100) * side + x] }
+            check("the marker's line stops where the hand stopped",
+                  at(150) > 0.1 && at(175) < 0.02 ? "yes" : "no: \(at(150)) \(at(175))", "yes")
+        }
+
+        // The cost of a butt cap: a tap has no length, and a line of no length paints nothing
+        // at all. The dab is drawn on purpose instead of left to the cap.
+        let dabPath = NSBezierPath()
+        dabPath.move(to: NSPoint(x: 100, y: 100))
+        let dab = Stroke(points: [NSPoint(x: 100, y: 100)], path: dabPath, color: .systemYellow,
+                         width: 56, style: .highlighter, createdAt: nil)
+        if let picture = Picture.drawn(size: NSSize(width: 200, height: 200), scale: 1, {
+            dab.paint()
+        }) {
+            let inked = alpha(picture).filter { $0 > 0.1 }.count
+            check("and a tap with it still leaves a mark", inked > 100 ? "yes" : "no: \(inked)", "yes")
+        }
+
         // What the window server is handed is a cursor that shows nothing - so that nothing
         // else claims the pointer and draws an arrow beside ours - and the pointer itself is
         // a layer on the overlay, which is what a presenting app cannot hide.

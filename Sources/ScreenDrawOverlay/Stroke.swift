@@ -200,8 +200,16 @@ enum StrokeStyle {
         self == .highlighter ? 0.35 : 1
     }
 
+    // Butt for the marker, and this is not a detail at 56 points wide: every other cap style
+    // extends *past* the end of the line by half its width, so a wide marker's ink ran up to
+    // 28pt ahead of the pointer and that overshoot swung around as the hand changed direction.
+    // It is what "the marker does not keep up, it moves coarsely" was. A butt cap stops where
+    // the hand is - which is also what a real chisel tip does.
+    //
+    // What it costs: a tap has no length, and a line of no length with butt caps paints
+    // nothing. `Stroke.paint()` draws the dab for that case instead.
     var lineCapStyle: NSBezierPath.LineCapStyle {
-        self == .highlighter ? .square : .round
+        self == .highlighter ? .butt : .round
     }
 
     // How far the paint reaches past the path, as a multiple of the width. A beam's halo is
@@ -310,6 +318,16 @@ struct Stroke {
     // how a beam could be given its own look in one of them and not the other.
     func paint() {
         guard style == .beam else {
+            // A tap: one point, no length. With a round cap that paints a dot, and with the
+            // marker's butt cap it paints nothing at all, so the mark a chisel would leave is
+            // drawn here rather than left to the cap.
+            if points.count == 1, style == .highlighter, let dab = points.first {
+                renderColor.setFill()
+                NSBezierPath(rect: NSRect(x: dab.x - width / 2, y: dab.y - width / 2,
+                                          width: width, height: width)).fill()
+                return
+            }
+
             renderColor.setStroke()
             path.stroke()
             return

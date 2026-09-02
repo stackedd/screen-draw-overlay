@@ -875,3 +875,27 @@ hot spot; all four checks fail if the two lines are swapped back.
 Fading ink also snaps its frame out to whole device pixels now, for the reason the badge
 already did (entry 22): the stroke changes layers at the moment the mouse comes up, and a
 picture resampled by a fraction of a pixel reads as the ink shifting under the hand.
+
+## 29. The marker's line stops where the hand does
+
+Reported as "the marker cannot keep up with the mouse, it moves coarsely, especially when it
+gets thick". It was not the tracking. It was the cap.
+
+Every `NSBezierPath` cap style except `.butt` extends the line *past* its last point by half
+the line width. The marker is four times the width in hand — 56pt at the widest — so its ink
+ran up to **28 points ahead of the pointer**, and because the overshoot points along the last
+segment, it swung around every time the hand changed direction. At 2pt the same fault is a
+one-point overhang nobody can see; at 56 it is a slab.
+
+The marker's cap is `.butt` now, which is also what a real chisel tip does. What it costs is
+the one case a butt cap cannot draw: a tap has no length, and a line of no length with butt
+caps paints nothing at all. `Stroke.paint()` draws that dab explicitly — the square a chisel
+would leave — and the behaviour suite checks both halves: that there is no ink past the end of
+a line, and that a tap still leaves a mark. Swap the cap back and the first one fails.
+
+**Smoothing was considered and not done.** The obvious next thought is that the chords between
+mouse samples are what looks coarse, so the polyline should become a curve. Rendered side by
+side at fifteen samples and at sixty (`Testing/probes/ink.swift`), the difference is small at
+2pt and invisible at 56pt — a wide line hides its own chords. It would also cost the thing the
+report was about: a midpoint curve ends half a segment behind the hand, so the ink would lag
+the pointer unless a separate tail were drawn every frame. Not worth it for what it buys.
