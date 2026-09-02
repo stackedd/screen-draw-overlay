@@ -49,6 +49,12 @@ final class ModeBadge {
     // The mode stripe down the left edge.
     private static let stripeWidth: CGFloat = 3
 
+    // The mark that says strokes are going to disappear on their own. It is a pill rather than
+    // a word in the sentence, because "Temp Pen 4" is quiet enough to miss and the question it
+    // answers - why did my drawing vanish? - is not a quiet one.
+    private static let pillGap: CGFloat = 6
+    private static let pillPadding: CGFloat = 5
+
     private let tools: ToolSettings
 
     // Where the badge is allowed to sit, in the view's coordinates: the screen's visible
@@ -101,7 +107,9 @@ final class ModeBadge {
     // third of a pixel is exactly as blurry as it sounds.
     func render(scale: CGFloat) -> (image: CGImage?, frame: NSRect) {
         let (mode, hint) = lines()
-        let textWidth = max(mode.size().width, hint.size().width)
+        let pill = temporaryPill
+        let pillWidth = pill.map { $0.size().width + ModeBadge.pillPadding * 2 + ModeBadge.pillGap } ?? 0
+        let textWidth = max(mode.size().width + pillWidth, hint.size().width)
         let column = ModeBadge.glyphColumn + ModeBadge.glyphGap
         let width = ModeBadge.snappedUp(ModeBadge.paddingX * 2 + column + textWidth, scale: scale)
         let height = ModeBadge.snappedUp(mode.size().height + hint.size().height
@@ -142,6 +150,17 @@ final class ModeBadge {
             hint.draw(at: NSPoint(x: textX, y: ModeBadge.paddingY))
             let modeY = ModeBadge.paddingY + hint.size().height + ModeBadge.lineGap
             mode.draw(at: NSPoint(x: textX, y: modeY))
+
+            if let pill {
+                let size = pill.size()
+                let box = NSRect(x: textX + mode.size().width + ModeBadge.pillGap,
+                                 y: modeY + (mode.size().height - size.height) / 2 - 1,
+                                 width: size.width + ModeBadge.pillPadding * 2,
+                                 height: size.height + 2)
+                NSColor.systemOrange.setFill()
+                NSBezierPath(roundedRect: box, xRadius: 4, yRadius: 4).fill()
+                pill.draw(at: NSPoint(x: box.minX + ModeBadge.pillPadding, y: box.minY + 1))
+            }
 
             drawTool(centredOn: (height - ModeBadge.glyphColumn) / 2)
         }
@@ -196,14 +215,28 @@ final class ModeBadge {
             return tools.tool.name
         }
 
-        let temporary = tools.drawsTemporaryInk ? "Temp " : ""
-        return "\(temporary)\(tools.tool.name) \(Int(tools.renderWidth))"
+        return "\(tools.tool.name) \(Int(tools.renderWidth))"
     }
 
     private var backgroundColor: NSColor {
         isInteractionMode
             ? NSColor.black.withAlphaComponent(0.62)
             : NSColor.black.withAlphaComponent(0.72)
+    }
+
+    // Nil unless strokes are going to fade. Drawn dark on orange, which is the one warm thing
+    // on the badge and reads at a glance without being red - red is the stripe, and the stripe
+    // means something else.
+    private var temporaryPill: NSAttributedString? {
+        guard !isInteractionMode, tools.drawsTemporaryInk else {
+            return nil
+        }
+
+        return NSAttributedString(string: "TEMP", attributes: [
+            .font: NSFont.systemFont(ofSize: 9, weight: .bold),
+            .foregroundColor: NSColor.black.withAlphaComponent(0.85),
+            .kern: 0.4
+        ])
     }
 
     private func lines() -> (mode: NSAttributedString, hint: NSAttributedString) {

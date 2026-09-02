@@ -39,6 +39,8 @@ one = made { tools, badge in
     badge.notice = "The eraser has no colour"
 }
 samples.append(("saying something", one.0, one.1))
+one = made { tools, _ in tools.toggleTemporaryInk() }
+samples.append(("temporary ink", one.0, one.1))
 
 let width = 620.0, rowHeight = 62.0
 let sheet = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(width * scale),

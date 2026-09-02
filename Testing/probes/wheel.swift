@@ -19,7 +19,7 @@ let scale: CGFloat = 2
 let panels: [(String, Wheel, Int?)] = [
     ("tools, nothing picked", OverlayController.toolWheel, nil),
     // The one whose hub does something: a tap of ⌥V undoes.
-    ("actions, nothing picked", OverlayController.actionWheel, nil),
+    ("actions, temp ink on", OverlayController.actionWheel(temporaryInk: true), nil),
     ("colours, blue", OverlayController.colourWheel, 4),
     ("widths, pen", OverlayController.widthWheel(for: .pen, in: .systemRed), 3),
     ("widths, eraser", OverlayController.widthWheel(for: .eraser, in: .systemRed), 3),

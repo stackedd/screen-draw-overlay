@@ -67,9 +67,15 @@ final class OverlayController {
         }
     }
 
-    private static let actionWheel = Wheel(
-        items: actionOrder.map { Wheel.Item(label: $0.label, symbol: $0.symbolName) },
-        centreLabel: "UNDO")
+    // Built as it opens rather than once, so the temporary ink sector can say whether it is
+    // on. A toggle that does not show its state is a coin flip.
+    private static func actionWheel(temporaryInk: Bool) -> Wheel {
+        Wheel(items: actionOrder.map { action in
+            let ticked = action == .temporaryInk && temporaryInk
+            return Wheel.Item(label: ticked ? action.label + " ✓" : action.label,
+                              symbol: action.symbolName)
+        }, centreLabel: "UNDO")
+    }
 
     private static let colourWheel = Wheel(items: zip(
         ["RED", "ORANGE", "YELLOW", "GREEN", "BLUE", "WHITE"], ToolSettings.colors
@@ -246,7 +252,7 @@ final class OverlayController {
     // works whatever has the keyboard, which is the whole reason it exists: the keys it
     // replaces only worked while this app happened to be the one being typed at.
     private func openActionWheel() {
-        wheels.open(OverlayController.actionWheel) { [weak self] index in
+        wheels.open(OverlayController.actionWheel(temporaryInk: tools.drawsTemporaryInk)) { [weak self] index in
             guard let self else {
                 return
             }
@@ -264,7 +270,16 @@ final class OverlayController {
                 // puts back what was actually cleared.
                 self.onTheScreenUnderThePointer { $0.clear() }
             case .temporaryInk:
+                // Said out loud, because ink that disappears by itself is alarming if you did
+                // not mean to switch it on - and the badge, which says so permanently, is a
+                // small thing in a corner somebody may not be looking at.
                 self.tools.toggleTemporaryInk()
+                let seconds = Int(Stroke.fadeDuration)
+                let on = self.tools.drawsTemporaryInk
+                self.drawingViews.forEach {
+                    $0.flash(on ? "Temporary ink on — strokes fade after \(seconds) seconds"
+                               : "Temporary ink off — strokes stay")
+                }
             case .hide:
                 self.hideOverlay(reason: "hidden from the actions wheel")
             }

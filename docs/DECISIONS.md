@@ -935,6 +935,15 @@ Taking things back is the only job here that is done over and over, and a push-a
 gesture for each would be the wrong shape for it — while `REDO`, `CLEAR`, `TEMP INK` and
 `HIDE` are all things you do once and are worth a deliberate push.
 
+**Temporary ink says so three times.** Ink that fades on its own is alarming if you did not
+mean to switch it on — "why is my drawing disappearing?" is not a quiet question, and the
+answer used to be a quiet word: the badge read `Temp Pen 4` and that was all. Now the badge
+carries an orange `TEMP` mark beside the tool, the wheel's own sector reads `TEMP INK ✓` while
+it is on, and switching it says out loud what it did — "strokes fade after 3 seconds" — for a
+second and a half. The badge's second line, which is the only thing on screen telling somebody
+whose clicks have stopped working what to press, is untouched: the mark fits in the width the
+hint line already needed.
+
 **A wheel only appears if you hold the key.** Under 180ms it is a tap: the hub's job is done
 and nothing goes on the screen at all. That falls out of making undo the hub of `⌥V` — a wheel
 flashing up on every undo would be the wrong thing for the one action people repeat — and it

@@ -674,6 +674,52 @@
             clearAll()
         }
 
+        // Ink that disappears by itself is alarming if you did not mean to switch it on, so the
+        // badge wears a mark rather than a quiet word: "Pen 4" with an orange TEMP beside it.
+        // Checked by painting the badge and looking for the orange, because a label nobody can
+        // find is the fault being fixed.
+        func orangePixels(_ image: CGImage) -> Int {
+            let (w, h) = (image.width, image.height)
+            var pixels = [UInt8](repeating: 0, count: w * h * 4)
+            guard let ctx = CGContext(data: &pixels, width: w, height: h, bitsPerComponent: 8,
+                                      bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+                return 0
+            }
+
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+            var found = 0
+            for index in stride(from: 0, to: pixels.count, by: 4) {
+                let (red, green, blue) = (pixels[index], pixels[index + 1], pixels[index + 2])
+                if red > 200, green > 100, green < 190, blue < 80 {
+                    found += 1
+                }
+            }
+
+            return found
+        }
+
+        let badgeBounds = NSRect(x: 0, y: 0, width: 900, height: 600)
+        let plainBadge = ModeBadge(bounds: badgeBounds, tools: controller.tools)
+        let plainMark = plainBadge.render(scale: 2).image.map(orangePixels) ?? -1
+        controller.tools.toggleTemporaryInk()
+        let temporaryBadge = ModeBadge(bounds: badgeBounds, tools: controller.tools)
+        let temporaryMark = temporaryBadge.render(scale: 2).image.map(orangePixels) ?? -1
+        check("the badge wears a mark while ink is temporary",
+              temporaryMark > 200 && plainMark == 0 ? "yes" : "no: \(temporaryMark)/\(plainMark)",
+              "yes")
+        // The badge does not have to grow for it: the hint line underneath is the wider of the
+        // two, so the mark fits in the space that was already there.
+        check("without making the badge any wider",
+              temporaryBadge.frame.width == plainBadge.frame.width ? "yes" : "no", "yes")
+        controller.tools.toggleTemporaryInk()
+
+        // And the wheel that switches it says which way it is now.
+        check("the wheel says temporary ink is off",
+              OverlayController.actionWheel(temporaryInk: false).items[2].label, "TEMP INK")
+        check("and says so when it is on",
+              OverlayController.actionWheel(temporaryInk: true).items[2].label, "TEMP INK ✓")
+
         // What the window server is handed is a cursor that shows nothing - so that nothing
         // else claims the pointer and draws an arrow beside ours - and the pointer itself is
         // a layer on the overlay, which is what a presenting app cannot hide.
