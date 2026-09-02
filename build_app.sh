@@ -1,7 +1,18 @@
 #!/bin/bash
 #
-# Builds dist/ScreenDrawOverlay.app (universal, ad-hoc signed) and a zip next to it.
-# Requires the Xcode command line tools. No Xcode project needed.
+# Builds dist/ScreenDrawOverlay.app (universal) and a zip next to it. Requires the Xcode
+# command line tools; no Xcode project needed.
+#
+# Ad-hoc signed by default, which is what a machine without a Developer ID can do - macOS then
+# warns on first launch and the user has to right-click > Open (see README).
+#
+# With a Developer ID it signs and notarises properly instead:
+#
+#     DEVELOPER_ID="Developer ID Application: Your Name (TEAMID)" ./build_app.sh
+#     DEVELOPER_ID="..." NOTARY_PROFILE=my-profile ./build_app.sh    # also notarise + staple
+#
+# NOTARY_PROFILE is a keychain profile made once with:
+#     xcrun notarytool store-credentials my-profile --apple-id ... --team-id ... --password ...
 #
 set -euo pipefail
 
@@ -23,24 +34,48 @@ if [ ! -f "$BINARY" ]; then
     exit 1
 fi
 
+echo "==> Drawing the icon"
+ICON="$ROOT_DIR/Packaging/AppIcon.icns"
+if [ ! -f "$ICON" ] || [ "$ROOT_DIR/Tools/makeicon.swift" -nt "$ICON" ]; then
+    swiftc -O "$ROOT_DIR/Tools/makeicon.swift" -o "$ROOT_DIR/.build/makeicon"
+    "$ROOT_DIR/.build/makeicon" "$ROOT_DIR/Packaging"
+fi
+
 echo "==> Assembling $APP_DIR"
 rm -rf "$APP_DIR" "$ZIP_PATH"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp "$INFO_PLIST" "$APP_DIR/Contents/Info.plist"
 cp "$BINARY" "$APP_DIR/Contents/MacOS/$APP_NAME"
+cp "$ICON" "$APP_DIR/Contents/Resources/AppIcon.icns"
 chmod +x "$APP_DIR/Contents/MacOS/$APP_NAME"
 printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 
 echo "==> Architectures: $(lipo -archs "$APP_DIR/Contents/MacOS/$APP_NAME")"
 
-echo "==> Signing (ad-hoc)"
-# Ad-hoc: no Developer ID, no notarization. macOS will warn on first launch;
-# see the install section of README.md.
-codesign --force --deep --sign - "$APP_DIR"
+if [ -n "${DEVELOPER_ID:-}" ]; then
+    echo "==> Signing with $DEVELOPER_ID"
+    # Hardened runtime is what notarisation requires; the timestamp is what keeps the
+    # signature valid after the certificate expires.
+    codesign --force --options runtime --timestamp --sign "$DEVELOPER_ID" "$APP_DIR"
+else
+    echo "==> Signing (ad-hoc: no Developer ID, so macOS will warn on first launch)"
+    codesign --force --deep --sign - "$APP_DIR"
+fi
 codesign --verify --strict --verbose=2 "$APP_DIR"
 
 echo "==> Zipping"
 ditto -c -k --keepParent "$APP_DIR" "$ZIP_PATH"
+
+if [ -n "${DEVELOPER_ID:-}" ] && [ -n "${NOTARY_PROFILE:-}" ]; then
+    echo "==> Notarising (this waits on Apple, usually a minute or two)"
+    xcrun notarytool submit "$ZIP_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
+    # The ticket is stapled to the app, then the zip is made again so the copy people
+    # download carries it and opens without a network round trip.
+    xcrun stapler staple "$APP_DIR"
+    rm -f "$ZIP_PATH"
+    ditto -c -k --keepParent "$APP_DIR" "$ZIP_PATH"
+    echo "==> Notarised and stapled"
+fi
 
 echo
 echo "Built: $APP_DIR"
