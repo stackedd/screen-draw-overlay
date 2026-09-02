@@ -155,18 +155,15 @@ final class WheelPanel {
         // Read where the pointer already is, rather than waiting a frame to find out.
         track(NSEvent.mouseLocation)
 
-        // The cursor is re-set a few times a second while the wheel is up, for the same reason
-        // the overlay holds it: a window that appears under a stationary pointer is handed the
+        // The cursor is re-set on every tick while the wheel is up, for the same reason the
+        // overlay holds it: a window that appears under a stationary pointer is handed the
         // plain arrow by the window server about 25ms later, and the wheel is a window that
         // just appeared. The overlay's own hold does not cover the case where there is no
-        // overlay yet, which is exactly the first ⌥Z of a session.
-        var tick = 0
+        // overlay yet, which is exactly the first ⌥Z of a session. Every tick rather than
+        // every fourth, because a quarter of sixty is a 66ms gap and that is what a flicker
+        // is; a wheel is up for about a second, so the whole of it costs 0.05ms x 60.
         let timer = Timer(timeInterval: WheelPanel.pollInterval, repeats: true) { [weak self] _ in
-            tick += 1
-            if tick % 4 == 0 {
-                PointerCursor.invisible.set()
-            }
-
+            PointerCursor.invisible.set()
             self?.track(NSEvent.mouseLocation)
         }
         RunLoop.main.add(timer, forMode: .common)

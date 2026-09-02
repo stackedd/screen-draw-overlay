@@ -446,11 +446,15 @@ final class OverlayController {
     // first half measured clean on every path this repo can drive, and a symptom that survives
     // a fix nobody can reproduce is worth answering at the symptom.
     //
-    // Both are cheap, and measured rather than assumed: `NSCursor.set()` is 0.049ms, so twenty
-    // a second is 0.1% of a core - and setting it blind is three times cheaper than asking
+    // Both are cheap, and measured rather than assumed: `NSCursor.set()` is 0.049ms, so sixty
+    // a second is 0.3% of a core - and setting it blind is three times cheaper than asking
     // `NSCursor.currentSystem` what is on screen first (0.157ms). Neither timer exists while
     // the overlay is closed, which is where the "idle costs nothing" promise lives.
-    private static let cursorHoldInterval: TimeInterval = 1.0 / 20
+    //
+    // Sixty rather than twenty because twenty was still visible: the gap between the window
+    // server handing out an arrow and us taking it back was up to 50ms, which is three frames,
+    // and it was reported as a flicker. At the display's own rate the worst case is one frame.
+    private static let cursorHoldInterval: TimeInterval = 1.0 / 60
     private static let cursorSettleInterval: TimeInterval = 1.0 / 120
     private static let cursorSettleTicks = 42
 
