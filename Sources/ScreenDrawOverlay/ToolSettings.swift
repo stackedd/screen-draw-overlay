@@ -159,11 +159,16 @@ final class ToolSettings {
         onChange?()
     }
 
-    // How much the eraser takes out. It used to be max(12, width), which meant five of the
-    // six widths gave the same eraser - the size control did nothing for four steps out of
-    // five, which is its own version of the fault the eraser itself had.
+    // How much the eraser takes out: 13 to 43 points across.
+    //
+    // Two versions ago it was max(12, width), which gave five of the six settings the same
+    // eraser. The version after that, 6 + width * 2, went the other way - 20 to 68 points, a
+    // rubber the size of a thumb at the top end. An eraser that big is answering a question
+    // the wheel's own CLEAR already answers in one gesture; what is left for it is the small
+    // correction, the word that came out wrong, the arrow pointing at the wrong box. So the
+    // range starts finer and grows more slowly.
     static func eraserRadius(at index: Int) -> CGFloat {
-        6 + widths[min(max(index, 0), widths.count - 1)] * 2
+        4 + widths[min(max(index, 0), widths.count - 1)] * 1.25
     }
 
     var eraserRadius: CGFloat {

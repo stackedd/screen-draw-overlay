@@ -826,10 +826,13 @@ six colours to a tool that has no colour.
   in your hand while you were still using the one you had. The badge says `THE ERASER HAS NO
   COLOUR` for a second and a half instead — which is what the badge is for, being the only
   place on screen this app can say anything at all.
-- **The eraser's size actually varies.** It was `max(12, width)`, which gave the same eraser
-  for five of the six widths: the size control did nothing for four steps out of five, which
-  is the same fault the eraser itself had before it started cutting. It is `6 + width * 2`
-  now — 20 to 68 points across.
+- **The eraser's size actually varies, and it is not a thumb.** It was `max(12, width)`,
+  which gave the same eraser for five of the six widths: the size control did nothing for four
+  steps out of five, the same fault the eraser itself had before it started cutting. Then it
+  was `6 + width * 2` — 20 to 68 points across — which overshot the other way: an eraser that
+  big is answering the question the wheel's `CLEAR` already answers in one gesture. What is
+  left for an eraser is the small correction, so it is `4 + width * 1.25` now, **13 to 43
+  points across**, and its pointer is drawn true size as it always was.
 - **The laser's sizes are beams.** The wheel paints each one the way the laser will paint it,
   in the colour in hand, because a flat bar is not what it will put on the screen — and
   because the laser's width was a setting that did nothing until entry 25 gave it one.
