@@ -268,6 +268,19 @@
         // only ours while we own the window under the pointer, and being there is the one
         // thing a laser has to do. It also has no business sitting on top of an app the
         // user has just been handed back.
+        //
+        // The pointer is put in the middle of the screen first, and this is not a nicety:
+        // whether the laser lights depends on the pointer being over the panel, so with the
+        // mouse left in a corner - or over another display - these two checks failed for a
+        // reason that had nothing to do with the code. Warping needs no permission, and where
+        // the mouse was is put back before the summary.
+        let mouseWasAt = NSEvent.mouseLocation
+        if let screen = NSScreen.main {
+            CGWarpMouseCursorPosition(CGPoint(x: screen.frame.midX,
+                                              y: screen.frame.maxY - screen.frame.midY))
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+
         controller.tools.select(tool: .laser)
         let laserLit = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot())
             .first.map { !$0.laserLayer.isHidden } ?? false
@@ -997,6 +1010,11 @@
         controller.toggleInteractionMode()
         controller.toggleDrawingMode()
         check("and when the overlay goes away", controller.cursorHold == nil ? "yes" : "no", "yes")
+
+        // Somebody is sitting in front of this machine, and their pointer should be where
+        // they left it.
+        CGWarpMouseCursorPosition(CGPoint(x: mouseWasAt.x,
+                                          y: (NSScreen.main?.frame.maxY ?? 0) - mouseWasAt.y))
 
         print("REG summary: \(pass) passed, \(fail) failed")
         // Quits through the panic key rather than NSApp.terminate, so the shortcut that has
