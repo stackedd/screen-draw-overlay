@@ -1092,6 +1092,14 @@
         // is not moving, and it is a timer, so where it stops matters as much as where it
         // runs: click-through hands the pointer to the app underneath, and a closed overlay
         // has to cost nothing at all.
+        // The rate is not a detail: it is the length of the flash somebody sees when the
+        // window server puts the arrow up for a moment after a pick. Sixty a second measured
+        // 3-7ms and was visible; a hundred and twenty measures 2-4ms and is not
+        // (docs/DECISIONS.md 38). A future edit that slows this down fails here.
+        check("the hold is fast enough that a lost frame is not a visible one",
+              OverlayController.cursorHoldInterval <= 1.0 / 120 ? "fast enough" : "too slow",
+              "fast enough")
+
         check("the cursor hold runs while drawing mode has the mouse",
               controller.cursorHold != nil ? "yes" : "no", "yes")
         controller.toggleInteractionMode()

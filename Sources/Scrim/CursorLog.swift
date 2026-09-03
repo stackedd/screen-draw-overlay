@@ -82,6 +82,22 @@ enum CursorLog {
                      shown as NSString, state as NSString))
     }
 
+    // What the app was doing at that moment, printed into the same stream.
+    //
+    // The log said the arrow appears at a pick and lasts about twelve milliseconds, which is
+    // where the reading stopped being useful: a pick is four things in eighty milliseconds -
+    // the wheel handing the mouse back, the tool changing, the wheel's window going away, and
+    // the cursor being taken back - and "one of those four" is not an answer. These lines put
+    // the four in the stream with the cursor changes, so the flash sits between two of them.
+    static func note(_ what: String) {
+        guard isOn else {
+            return
+        }
+
+        print(String(format: "CURSOR %8.3fs         ---- %@",
+                     Date().timeIntervalSince(started), what as NSString))
+    }
+
     // Printed on the way out, because the thing being hunted is two lines in a hundred.
     static func summarise() {
         guard isOn else {

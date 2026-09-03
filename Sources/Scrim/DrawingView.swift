@@ -198,8 +198,8 @@ final class DrawingView: NSView {
     // So the window server gets a cursor that shows nothing, and the pointer is a layer. The
     // failure this used to have - lose the cursor once and there are two pointers with no way
     // back - is answered by the cursor hold in OverlayController, which re-sets the invisible
-    // cursor sixty times a second: worst case is about a frame of a second pointer, against a
-    // pointer that was missing for the whole presentation.
+    // cursor a hundred and twenty times a second: worst case is under a frame of a second
+    // pointer, against a pointer that was missing for the whole presentation.
     private func refreshPointer() {
         let extent = LaserDot.extent(for: tools.renderWidth)
         laserLayer.bounds = NSRect(x: 0, y: 0, width: extent, height: extent)
@@ -728,6 +728,7 @@ final class DrawingView: NSView {
         //
         // What is still needed: the cursor set now rather than at the next move, the pointer's
         // own picture rebuilt in the new colour and size, and the badge redrawn.
+        CursorLog.note("tool settings changed")
         applyDrawingCursor()
         refreshPointer()
         refreshBadge()

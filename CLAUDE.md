@@ -123,8 +123,8 @@ easy to repeat.
    can sit behind every window; failures are said in the menu.
 8. **Never leave a timer running when the overlay is closed.** Closed is 0.0% CPU and that
    is a tested property. Each timer that runs while it is open is tied to something being
-   true and stops with it: the pointer poll at 60Hz and the cursor hold at 60Hz (both only
-   while drawing mode has the mouse, the hold costing 0.3% of a core), the fade tick (only while
+   true and stops with it: the pointer poll at 60Hz and the cursor hold at 120Hz (both only
+   while drawing mode has the mouse, the hold costing 0.6% of a core), the fade tick (only while
    temporary ink is on screen), and two short-lived ones: the burst that takes the cursor
    back for a third of a second after a panel appears, the badge's notice, the card under
    the menu bar, and the one-shot launch check two seconds in. A wheel's own poll lives and
@@ -157,7 +157,8 @@ away, so there is nothing in the code that checks, counts, phones home or asks f
 - **The pointer is drawn, not handed over.** An app that is presenting hides the system
   cursor, and nothing this app may do can detect or undo that, so the pointer is a layer and
   the window server gets a cursor that shows nothing (`docs/DECISIONS.md` 6). The cursor hold
-  runs at 60Hz while drawing mode has the mouse, which is what stops the arrow coming back.
+  runs at 120Hz while drawing mode has the mouse, which is what stops the arrow coming back -
+  the rate is the length of the flash, and 120 puts it under a frame (`docs/DECISIONS.md` 38).
 - **Painting asks for what it needs.** A stroke paints only the segments whose ink could land
   in the rectangle being repainted, which took a 5000-point line's last tenth from 0.309 ms an
   event to 0.025 and the whole session from 833 ms to 83. The two other items that were on

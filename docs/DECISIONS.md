@@ -190,11 +190,12 @@ of CPU, once; the bound is what keeps an idle overlay at nothing.
 probe fires the real hot keys through the real handlers and walks all seven ways in and out,
 and none of them leaves an arrow. A symptom that survives a fix nobody can reproduce is worth
 answering at the symptom, so there is a second, slower half: `holdCursor()` re-sets the tool's
-cursor **sixty times a second for as long as drawing mode is on**, and stops on click-through
-and when the overlay goes away. Whatever hands the arrow out, it holds for about a frame.
+cursor **a hundred and twenty times a second for as long as drawing mode is on**, and stops on
+click-through and when the overlay goes away. Whatever hands the arrow out, it holds for less
+than a frame - the rate got there in three steps, and entry 38 has the measurements.
 
 That is a poll, and this app does not like polls, so it was measured before it was written:
-`NSCursor.set()` costs **0.049ms**, which is 0.3% of a core at 60Hz - and setting it blind is
+`NSCursor.set()` costs **0.049ms**, which is 0.6% of a core at 120Hz - and setting it blind is
 three times cheaper than asking `NSCursor.currentSystem` what is on screen first (0.157ms) and
 only setting it when it differs. The per-move version this replaces did the same work eight
 times a second but *only while the mouse was moving*, which is exactly the case that was not
@@ -1306,3 +1307,52 @@ same doubt as the first three:
 Every change of what the screen is showing, with how long the last one lasted and what the app
 thought it was doing, and a summary on the way out of every moment the screen showed something
 that was not ours while the overlay had the mouse.
+
+
+## 38. The rate of the cursor hold is the length of the flash
+
+**The fourth round of the same report**, and the one that ended it. Entry 35 stopped the arrow
+appearing while a wheel is up; entry 37 stopped a cursor rect being thrown away on every pick.
+Both were real, both were measured, and afterwards there was still a blink the instant after
+picking something.
+
+**What the app's own log said** (`SCRIM_CURSOR_LOG=1`, which prints every change of what the
+screen is showing next to what the app was doing, 2026-09-04, 0.9, Mac15,6, macOS 26.6.2).
+Seven picks, and every flash landed in the same place:
+
+| from | to the flash |
+| --- | --- |
+| the wheel's window being ordered out | 273-276 ms |
+| `takeCursorBack()` starting its burst | 357-365 ms |
+
+The burst is 42 ticks at 1/120 of a second: **350ms**. So the arrow arrived within about ten
+milliseconds of the burst's last tick, seven times out of seven. While the cursor was being
+re-set 120 times a second nothing got through; the moment that dropped to the 60Hz hold, one
+flash of 3-11ms appeared and was taken back.
+
+**So it is a race, not an event.** Something outside this app puts the arrow up once after each
+pick - and it is not this app, because nothing here sets `NSCursor.arrow` on that path. Our
+timer takes it back on its next tick, which makes **the rate of the hold the length of the
+flash**. Two runs, same build, one variable:
+
+| hold | flashes per run | longest | seen by eye |
+| --- | --- | --- | --- |
+| 60 a second | 5 | **7 ms** | "very clear" |
+| 120 a second | 6 | **4 ms** | not seen at all |
+
+The count did not change, which is the point: the same number of lost races, each one half as
+long. A 120Hz display draws a frame every 8.3ms, so at 60 the arrow could span two frames and
+at 120 it usually spans none.
+
+**Now:** the hold runs at 120Hz while the overlay has the mouse. It costs 120 x 0.049ms =
+**0.6% of a core**, against 0.3% before, and only while drawing mode is on - a closed overlay
+still costs nothing. `SCRIM_CURSOR_HOLD` takes a rate rather than only 0 or 1, so the next
+person to ask "is this fast enough?" can answer it in twenty seconds instead of reasoning about
+it, and the behaviour suite fails if anybody slows it back down.
+
+**What this cost to find**, worth writing down because the same shape will come again: three
+rounds were spent making the app set the cursor more often on the strength of reasoning, and
+each one helped without finishing the job. The fourth found it by making the app say what the
+screen was showing next to what it was doing, at 4ms, on the machine where it happened - and
+then by changing one variable between two runs. The probes could not have found it: they warp
+the pointer, and the window server does not answer a warp the way it answers a hand.

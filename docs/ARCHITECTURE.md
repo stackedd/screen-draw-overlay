@@ -97,7 +97,7 @@ These exist because something went wrong once. Do not remove them without readin
    that exists while it is open is tied to something being true: the fade tick (only while
    temporary ink is on screen), the pointer poll at 60Hz (only while drawing mode is taking
    the mouse - it is what carries the pointer and the laser's glow), and the cursor hold at
-   60Hz, 0.3% of a core (the same condition). Two more are short-lived: the burst that takes
+   120Hz, 0.6% of a core (the same condition). Two more are short-lived: the burst that takes
    the cursor back for a third of a second after a panel appears, and the badge's notice.
    Each stops with the thing that started it.
 7. **Drawing mode interacts with nothing.** Every key is swallowed (no beeps, no `⌘Q`, and
@@ -282,9 +282,10 @@ had nothing of this app under the pointer, so the hold below was setting a curso
 reached the screen. The wheel takes the mouse and becomes key in exactly those cases now.
 
 So the pointer is a picture on a layer, the window server is handed a cursor that shows
-nothing, and the cursor hold re-sets that sixty times a second so a lost cursor cannot leave
-an arrow standing next to ours for more than about a frame. It was twenty a second first, and
-a gap of up to 50ms - three frames - was still being reported as a flicker.
+nothing, and the cursor hold re-sets that a hundred and twenty times a second so a lost cursor
+cannot leave an arrow standing next to ours for longer than a frame. It was twenty a second
+first, then sixty, and each was still visible: the rate is the length of the flash, and the eye
+stopped seeing it at 120 (entry 38).
 
 Setting it is not the same as keeping it. A panel that appears under a stationary pointer is
 handed the plain arrow by the window server about 25ms later, whatever the app set before

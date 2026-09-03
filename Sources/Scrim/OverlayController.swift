@@ -719,18 +719,35 @@ final class OverlayController {
     // a fix nobody can reproduce is worth answering at the symptom.
     //
     // Both are cheap, and measured rather than assumed: `NSCursor.set()` is 0.049ms, so sixty
-    // a second is 0.3% of a core - and setting it blind is three times cheaper than asking
+    // a second is 0.6% of a core - and setting it blind is three times cheaper than asking
     // `NSCursor.currentSystem` what is on screen first (0.157ms). Neither timer exists while
     // the overlay is closed, which is where the "idle costs nothing" promise lives.
     //
     // Sixty rather than twenty because twenty was still visible: the gap between the window
     // server handing out an arrow and us taking it back was up to 50ms, which is three frames,
     // and it was reported as a flicker. At the display's own rate the worst case is one frame.
-    private static let cursorHoldInterval: TimeInterval = 1.0 / 60
+    // How often the tool's cursor is re-set while drawing mode has the mouse.
+    //
+    // A hundred and twenty a second, and that number was arrived at by watching the screen
+    // rather than by reasoning (docs/DECISIONS.md 38). Something outside this app puts the
+    // arrow up once after every pick; the hold takes it back on its next tick, so the rate is
+    // the length of the flash. At sixty it was up to 7ms and plainly visible; at a hundred and
+    // twenty it is 2-4ms, under one frame of a 120Hz display, and it stopped being visible at
+    // all. It costs 120 x 0.049ms = 0.6% of a core, only while the overlay has the mouse.
+    //
+    // SCRIM_CURSOR_HOLD takes a rate, so "is this fast enough?" stays a question a run can
+    // answer; 0 turns the hold off altogether.
+    private static let cursorHoldInterval: TimeInterval = {
+        let asked = ProcessInfo.processInfo.environment["SCRIM_CURSOR_HOLD"]
+        let rate = asked.flatMap(Double.init) ?? 120
+        return 1.0 / max(1, min(rate, 480))
+    }()
     private static let cursorSettleInterval: TimeInterval = 1.0 / 120
     private static let cursorSettleTicks = 42
 
     private func takeCursorBack() {
+        CursorLog.note("taking the cursor back")
+
         // No overlay, or the screen handed back: the pointer belongs to whatever is
         // underneath, and it has to be a pointer somebody can see. This is load-bearing now
         // that the wheel wears a cursor that shows nothing - without it, closing a wheel with
@@ -759,6 +776,7 @@ final class OverlayController {
 
             timer.invalidate()
             self?.cursorSettling = nil
+            CursorLog.note("cursor burst finished, the hold has it from here")
         }
         RunLoop.main.add(timer, forMode: .common)
         cursorSettling = timer

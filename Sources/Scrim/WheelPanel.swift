@@ -232,6 +232,7 @@ final class WheelPanel {
             return
         }
 
+        CursorLog.note("wheel on screen")
         isShowing = true
         panel.alphaValue = 0
 
@@ -286,6 +287,7 @@ final class WheelPanel {
     func release() {
         // Released before the wheel ever appeared: a tap, and a tap chooses nothing. The hub
         // is only ever reached by letting go in the middle of a wheel that is on screen.
+        CursorLog.note("wheel released")
         // Hands the mouse back before anything else, the way forceCloseOverlay does: a panel
         // that is fading out and still taking clicks is the one thing this app must not be.
         panel.ignoresMouseEvents = true
@@ -329,7 +331,9 @@ final class WheelPanel {
                 return
             }
 
+            CursorLog.note("wheel's window ordered out")
             self.panel.orderOut(nil)
+            CursorLog.note("wheel's window gone")
         })
     }
 
