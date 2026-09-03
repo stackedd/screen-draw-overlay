@@ -16,7 +16,8 @@ the commit that changed it; this is the last check that nothing moved since.
 
 Manual, because nothing in this repo can inject a real mouse or a real presentation:
 
-- The whole `⌥Z` gesture with a real hand: open, pick, draw, undo with `⌥V`, leave by the hub.
+- The whole `⌥X` gesture with a real hand: open, pick, draw, undo with `⌥Z` (tapped and held),
+  leave by the hub.
 - A real slideshow (Keynote or PowerPoint, full screen): the pointer is visible, the laser
   reads, the overlay is above the slides.
 - A second display, if there is one: the badge on one screen, drawing on both.
@@ -75,12 +76,12 @@ command.
 The README has room for one short clip, and it is the single most convincing thing on the page.
 Twenty seconds, one take, no narration:
 
-1. A slide or a document on screen. Hold `⌥Z`, the wheel opens, push right, let go - the pen.
+1. A slide or a document on screen. Hold `⌥X`, the wheel opens, push right, let go - the pen.
 2. Underline a word. Circle something.
-3. Hold `⌥X`, push at another colour, draw one more mark.
-4. Tap `⌥V` twice: the last two marks go.
-5. Hold `⌥Z`, push at `LASER`, let go, and sweep the beam across a diagram.
-6. Hold `⌥Z`, let go in the middle: the screen goes back to the app underneath, drawing still
+3. Hold `⌥C`, push at another colour, draw one more mark.
+4. Press `⌥Z` twice: the last two marks go.
+5. Hold `⌥X`, push at `LASER`, let go, and sweep the beam across a diagram.
+6. Hold `⌥X`, let go in the middle: the screen goes back to the app underneath, drawing still
    on it. Once more: it is gone.
 
 Record with QuickTime (File → New Screen Recording), then:

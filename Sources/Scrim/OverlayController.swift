@@ -4,12 +4,12 @@
 // Three things worth knowing before changing anything here:
 //
 //   1. The mode model. Off, drawing, click-through, and one gesture moves between all three:
-//      ⌥Z holds a wheel open, pushing at a tool opens the overlay and hands you that tool,
+//      ⌥X holds a wheel open, pushing at a tool opens the overlay and hands you that tool,
 //      and letting go in the middle leaves - the screen back to the app underneath first,
 //      then the overlay away with the drawing kept.
 //   2. Overlay lifetime. Panels are created per screen on entry and destroyed on exit, so
 //      the drawing is lifted out and filed by display beforehand - hiding is not erasing,
-//      only C erases - along with the undo history that goes with it.
+//      only CLEAR on the ⌥B wheel erases - along with the undo history that goes with it.
 //   3. Recovery. forceCloseOverlay releases the mouse before it closes anything, and
 //      overlayWindowSnapshot deliberately re-scans NSApp.windows for panels that fell out
 //      of our own records. Both exist because a stuck overlay traps the user's clicks.
@@ -34,12 +34,11 @@ final class OverlayController {
         items: toolOrder.map { Wheel.Item(label: $0.label, symbol: $0.symbolName) },
         centreLabel: "CLICK-THROUGH")
 
-    // What you do *to* a drawing rather than with it. The hub is UNDO rather than a cancel,
-    // which is what makes a tap of ⌥V undo: taking something back is the one thing here that
-    // is done over and over, and a gesture per undo would be the wrong shape for it. The four
-    // sectors are the rest, and CLEAR being one of them is the point - it used to be the bare
-    // letter C, which is both easy to hit by accident and only worked when this app happened
-    // to have the keyboard.
+    // What you do *to* a drawing rather than with it, on ⌥B. Undo is not here: it is a key
+    // of its own now (⌥Z, where every other application on this machine keeps it), and one
+    // thing in two places is one place too many. CLEAR being here is the point - it used to be
+    // the bare letter C, which is both easy to hit by accident and only worked when this app
+    // happened to have the keyboard.
     private static let actionOrder: [Action] = [.redo, .clear, .temporaryInk, .hide]
 
     enum Action {
@@ -74,7 +73,7 @@ final class OverlayController {
             let ticked = action == .temporaryInk && temporaryInk
             return Wheel.Item(label: ticked ? action.label + " ✓" : action.label,
                               symbol: action.symbolName)
-        }, centreLabel: "UNDO")
+        })
     }
 
     private static let colourWheel = Wheel(items: zip(
@@ -124,6 +123,9 @@ final class OverlayController {
     // for as long as the overlay is taking the mouse. See takeCursorBack().
     private var cursorSettling: Timer?
     private var cursorHold: Timer?
+    // Lives only while ⌥Z is held down: the wait before a held undo starts repeating, and
+    // then the repeat itself. See undoPressed().
+    private var undoRepeat: Timer?
 
     private var keptDrawings: [String: Canvas.Kept] = [:]
     private let tools = ToolSettings()
@@ -164,15 +166,53 @@ final class OverlayController {
         ))
     }
 
-    // The wheels only exist while there is a canvas to change, which is also what keeps ⌥Z
-    // out of the way the rest of the time.
+    // These only exist while there is a canvas to change, which is also what keeps ⌥Z ⌥C ⌥V
+    // ⌥B out of the way the rest of the time. Undo is here rather than in the always-live set
+    // for the same reason: with no overlay open there is nothing to take back.
     private func startWheels() {
         shortcuts.registerWheels(Shortcuts.WheelActions(
             colours: { [weak self] in self?.openColourWheel() },
             widths: { [weak self] in self?.openWidthWheel() },
             actions: { [weak self] in self?.openActionWheel() },
-            released: { [weak self] in self?.wheels.release() }
+            released: { [weak self] in self?.wheels.release() },
+            undo: { [weak self] in self?.undoPressed() },
+            undoReleased: { [weak self] in self?.undoReleased() }
         ))
+    }
+
+    // ⌥Z, and nothing else: one press takes one thing back. Holding it repeats, because that
+    // is what ⌘Z does in every other application and taking back five things should not be
+    // five deliberate presses (docs/DECISIONS.md 31).
+    //
+    // The repeat is a timer, so it obeys the rule every timer here obeys: it exists only while
+    // the key is down, and stopWheels() ends it if the overlay goes away mid-press.
+    private static let undoRepeatDelay: TimeInterval = 0.4
+    private static let undoRepeatInterval: TimeInterval = 0.1
+
+    private func undoPressed() {
+        undoOnScreenUnderPointer(redo: false)
+        undoRepeat?.invalidate()
+
+        let start = Timer(timeInterval: OverlayController.undoRepeatDelay, repeats: false) {
+            [weak self] _ in
+            self?.startUndoRepeat()
+        }
+        RunLoop.main.add(start, forMode: .common)
+        undoRepeat = start
+    }
+
+    private func startUndoRepeat() {
+        let timer = Timer(timeInterval: OverlayController.undoRepeatInterval, repeats: true) {
+            [weak self] _ in
+            self?.undoOnScreenUnderPointer(redo: false)
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        undoRepeat = timer
+    }
+
+    private func undoReleased() {
+        undoRepeat?.invalidate()
+        undoRepeat = nil
     }
 
     // The tools wheel carries the mode as well as the tool, which is the whole shape of the
@@ -248,18 +288,14 @@ final class OverlayController {
         }
     }
 
-    // The hub undoes, so a tap of ⌥V is an undo and nothing else. Everything on this wheel
-    // works whatever has the keyboard, which is the whole reason it exists: the keys it
-    // replaces only worked while this app happened to be the one being typed at.
+    // Everything on this wheel works whatever has the keyboard, which is the whole reason it
+    // exists: the keys it replaces only worked while this app happened to be the one being
+    // typed at. Its hub is a plain cancel like the colour and size wheels - undo used to live
+    // there and now has a key of its own, and one thing in two places is one place too many.
     private func openActionWheel() {
-        wheels.open(OverlayController.actionWheel(temporaryInk: tools.drawsTemporaryInk),
-                    actsOnTap: true) { [weak self] index in
-            guard let self else {
-                return
-            }
-
-            guard let index else {
-                self.undoOnScreenUnderPointer(redo: false)
+        wheels.open(OverlayController.actionWheel(temporaryInk: tools.drawsTemporaryInk)) {
+            [weak self] index in
+            guard let self, let index else {
                 return
             }
 
@@ -289,6 +325,7 @@ final class OverlayController {
 
     private func stopWheels() {
         shortcuts.unregisterWheels()
+        undoReleased()
         wheels.close()
     }
 

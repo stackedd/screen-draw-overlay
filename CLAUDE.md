@@ -4,16 +4,17 @@ A macOS menu bar app that puts a transparent overlay over every screen and lets 
 it: over a presentation, a document, anything. No window of its own, no Dock icon, and
 **no system permissions of any kind**.
 
-**The Option row is the whole interface.** Hold one of four keys, push the mouse at what you
-want, let go. `⌥Z` is the tools; a tool opens the overlay and hands it to you, and the middle
-is the way out, one step at a time. `⌥X` is colour, `⌥C` is size, and `⌥V` is what you do *to*
-a drawing: its middle undoes, so a tap of it takes one thing back, and its sectors are redo,
-clear, temporary ink and hide. `⌃⌥⌘Esc` quits.
+**The Option row is the whole interface**, five keys in a row. `⌥Z` undoes: one press takes
+one thing back and holding it repeats, where every other application on this machine keeps it.
+The other four open a wheel - hold, push the mouse at what you want, let go. `⌥X` is the tools;
+a tool opens the overlay and hands it to you, and the middle is the way out, one step at a
+time. `⌥C` is colour, `⌥V` is size, and `⌥B` is what else you do *to* a drawing: redo, clear,
+temporary ink and hide. `⌃⌥⌘Esc` quits.
 
 Every one of them is a global hot key, and that is the point: a non-activating panel only gets
 the keyboard while this app is the active one, so the bare keys this app used to have (`P` for
 pen, `C` to clear, `⌘Z` to undo) worked only sometimes, which is worse than not existing
-(`docs/DECISIONS.md` 30). There are none left. The menu bar item is the way in if `⌥Z` is ever
+(`docs/DECISIONS.md` 30). There are none left. The menu bar item is the way in if `⌥X` is ever
 taken by another app.
 
 ## Stack
@@ -128,7 +129,7 @@ easy to repeat.
 9. **Never make drawing mode interact with anything.** No key should escape it, no click
    should reach what is underneath. Interaction is what click-through is for.
 10. **Never let hiding erase.** The wheel's `HIDE` keeps the strokes **and the undo
-    history**; `CLEAR` on the `⌥V` wheel is the only thing that erases, and even that is
+    history**; `CLEAR` on the `⌥B` wheel is the only thing that erases, and even that is
     undoable.
 11. **Never let an edit point at a position.** Undo names strokes by `id`. `removeLast()`
     took back the wrong line whenever temporary ink faded out from under the history.
@@ -144,11 +145,13 @@ easy to repeat.
 about making it one thing to learn and one thing to trust. It is MIT-licensed and given
 away, so there is nothing in the code that checks, counts, phones home or asks for money.
 
-- **One mechanic.** Four keys on the Option row (`⌥Z` tools, `⌥X` colour, `⌥C` size, `⌥V`
-  what you do *to* a drawing), all of them global, all of them hold-push-release, with nothing
-  underneath them. The bare keys are gone (`docs/DECISIONS.md` 30): they only worked while a
-  non-activating panel happened to be key, which is a state the user cannot see. `⌥V`'s hub is
-  undo, so a tap takes one thing back; a wheel only appears if the key is held past 110ms.
+- **One mechanic.** Five keys on the Option row (`⌥Z` undo, `⌥X` tools, `⌥C` colour, `⌥V`
+  size, `⌥B` what else you do *to* a drawing), all of them global, the four wheels all
+  hold-push-release, with nothing underneath them. The bare keys are gone
+  (`docs/DECISIONS.md` 30): they only worked while a non-activating panel happened to be key,
+  which is a state the user cannot see. Undo has a key rather than a hub
+  (`docs/DECISIONS.md` 31); a wheel only appears if the key is held past 110ms, and a tap on
+  any of the four does nothing.
 - **The pointer is drawn, not handed over.** An app that is presenting hides the system
   cursor, and nothing this app may do can detect or undo that, so the pointer is a layer and
   the window server gets a cursor that shows nothing (`docs/DECISIONS.md` 6). The cursor hold

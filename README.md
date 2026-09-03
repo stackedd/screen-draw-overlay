@@ -50,28 +50,29 @@ and 12, add it under System Settings → General → Login Items.
 
 ## The first sixty seconds
 
-Four keys sit next to each other on the Option row. **Hold one, push the mouse, let go.** The
-wheel opens right where the pointer is, and each slice covers 45°, so you push in a
-direction rather than hitting a target. They work whatever app is in front, because they are registered
-with the system rather than with a window.
+Five keys sit next to each other on the Option row: `Z X C V B`. `⌥Z` undoes; the other four
+open a wheel. **Hold one, push the mouse, let go.** The wheel opens right where the pointer is,
+and each slice covers 45°, so you push in a direction rather than hitting a target. All five
+work whatever app is in front, because they are registered with the system rather than with a
+window.
 
-`⌥Z` works from the moment the app starts. The other three come and go with the overlay:
-while it is closed they are ordinary keys, and belong to whatever app you are using.
-
-| Hold | What opens |
+| Key | What it does |
 | --- | --- |
-| `⌥Z` | Tools: pen, marker, line, arrow, eraser, rectangle, oval, laser, in that order round the wheel, starting on the right |
-| `⌥X` | Colours |
-| `⌥C` | Size of the pen, the marker, the hole the eraser takes out, or the laser's beam |
-| `⌥V` | What to do to a drawing: undo, redo, clear, temporary ink, hide |
+| `⌥Z` | **Undo.** One press takes one thing back; hold it and it keeps going, like `⌘Z` anywhere else |
+| `⌥X` | Tools: pen, marker, line, arrow, eraser, rectangle, oval, laser, in that order round the wheel, starting on the right |
+| `⌥C` | Colours |
+| `⌥V` | Size of the pen, the marker, the hole the eraser takes out, or the laser's beam |
+| `⌥B` | What else to do to a drawing: redo, clear, temporary ink, hide |
+
+`⌥X` works from the moment the app starts. The other four come and go with the overlay: while
+it is closed they are ordinary keys, and belong to whatever app you are using.
 
 Two rules and that is the interface:
 
-- **The middle of a wheel is its default**, and letting go there chooses it. On `⌥Z` the middle
-  is the way out. On `⌥V` the middle is undo, so a *tap* of `⌥V` takes one thing back, and
-  three taps take back three.
-- **Tapping the other three does nothing**, on purpose, so a key pressed by accident never
-  changes the tool or the colour.
+- **The middle of a wheel is its default**, and letting go there chooses it. On `⌥X` the middle
+  is the way out; on the other three it is a plain cancel.
+- **Tapping a wheel key does nothing**, on purpose, so a key pressed by accident never changes
+  the tool, the colour or the drawing.
 
 `⌃⌥⌘Esc` quits the app from any state. It is the only other shortcut, and it always works.
 
@@ -87,7 +88,7 @@ Two rules and that is the interface:
 | Eraser | Rubs out the part of a stroke it passes over: it cuts strokes rather than deleting them. Its size is the hole it leaves. |
 | Laser | A glow that follows the pointer. Hold the button down and it leaves a beam of light that thins out behind your hand and is gone in about half a second. Nothing is left on the drawing. |
 
-**Temporary ink**, on the `⌥V` wheel, makes every mark fade out three seconds after it is
+**Temporary ink**, on the `⌥B` wheel, makes every mark fade out three seconds after it is
 finished, the way a presenter's pen does. While it is on, the badge in the corner wears an
 orange `TEMP`, so a drawing that disappears is never a surprise.
 
@@ -101,21 +102,21 @@ comes back is the last tool that actually drew.
   stripe.
 - **Click-through.** The drawing stays on screen, but clicks, scrolls and keystrokes go
   straight to the app below, so a slide can be advanced or a page scrolled without losing it.
-  Letting go of the `⌥Z` wheel in the middle gets here; picking any tool takes the screen back.
+  Letting go of the `⌥X` wheel in the middle gets here; picking any tool takes the screen back.
 - **Away.** Letting go in the middle once more. The overlay closes and the drawing is kept:
   picking any tool brings it back where it was, undo history and all.
 
-`CLEAR` on the `⌥V` wheel is the only thing that erases a drawing, and even that can be undone.
+`CLEAR` on the `⌥B` wheel is the only thing that erases a drawing, and even that can be undone.
 
 ## If something goes wrong
 
-**The overlay is taking clicks and the menu bar is out of reach.** Hold `⌥Z` and let go in the
+**The overlay is taking clicks and the menu bar is out of reach.** Hold `⌥X` and let go in the
 middle; that hands the screen back. If nothing responds at all, `⌃⌥⌘Esc` quits the app.
 
 **The menu bar icon is not there.** The app has no Dock icon and no window. When the menu bar
 is full macOS hides what does not fit; holding `Command` and dragging the icons makes room.
 
-**`⌥Z` does nothing.** Another app may have registered the same shortcut; macOS allows that
+**`⌥X` does nothing.** Another app may have registered the same shortcut; macOS allows that
 without reporting a conflict. The menu bar item does the same job, and the shortcuts are
 defined in one file for anyone building their own copy.
 

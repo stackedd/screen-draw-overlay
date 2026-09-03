@@ -50,24 +50,25 @@ Three states, and every transition is deliberate:
 - **Click-through** - panels stay visible but ignore the mouse; the app underneath gets
   everything, including the keyboard.
 
-Four keys move between all three, and they are next to each other on the keyboard. `⌥Z` holds
+Five keys sit next to each other on the keyboard, and four of them move between all three
+states. `⌥X` holds
 open a wheel of tools: push at one and the overlay opens, takes the screen and hands you that
 tool; let go in the middle to leave, one step at a time - the screen back to the app
-underneath, then the overlay away with the drawing kept. `⌥X` and `⌥C` do the same for colour
-and size while the overlay is up, and `⌥V` is the wheel of things you do *to* a drawing: its
-hub undoes, so a tap of it takes one back, and its sectors are redo, clear, temporary ink and
-hide. `⌃⌥⌘Esc` quits the process outright.
+underneath, then the overlay away with the drawing kept. `⌥C` and `⌥V` do the same for colour
+and size while the overlay is up, and `⌥B` is the wheel of the rest of what you do *to* a
+drawing: redo, clear, temporary ink and hide. `⌥Z` is not a wheel at all - it undoes, one press
+for one thing, repeating while it is held (entry 31 in DECISIONS). `⌃⌥⌘Esc` quits the process outright.
 
 All of them are Carbon global hot keys, which is what makes them work whatever has the
 keyboard. The app has no other keys: the bare letters it used to have only worked while these
 non-activating panels happened to be key, which is a state the user cannot see.
 
-`⌥Z` is registered for the life of the app rather than with the overlay, because it is the
+`⌥X` is registered for the life of the app rather than with the overlay, because it is the
 only thing that opens one. The menu bar item is the way in if it is ever taken.
 
 **Hiding is not erasing.** Leaving drawing mode lifts the strokes out of the panels and
 files them by display, together with the undo history; the next tool picked from the wheel
-puts both back. `CLEAR` on the `⌥V` wheel is the only thing that erases, and even that is
+puts both back. `CLEAR` on the `⌥B` wheel is the only thing that erases, and even that is
 undoable.
 
 ## Invariants

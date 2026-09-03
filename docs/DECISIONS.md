@@ -972,12 +972,11 @@ the ring exactly as the hand pushes. Pushing towards an edge is still limited by
 pointer can travel, which no choice of origin can help with. This is what made the behaviour
 suite's two tap checks depend on where the mouse happened to be resting when it ran.
 
-**And a tap only does anything on `⌥V`.** That is the wheel you use over and over - undo - so
-letting go without pushing undoes, and a run of taps takes back a run of things. The other
-three do nothing at all on a tap. Their hubs mean "leave" and "cancel", these are keys the
-whole system now gives up to this app, and a key hit by accident must not move somebody's mode
-or their colour: leaving is worth the deliberate gesture of holding the wheel open and pushing
-at its middle.
+**And a tap does nothing on any of them.** Their hubs mean "leave" and "cancel", these are keys
+the whole system now gives up to this app, and a key hit by accident must not move somebody's
+mode or their colour: leaving is worth the deliberate gesture of holding the wheel open and
+pushing at its middle. Undo was the exception here for a while - a tap of `⌥V` took one thing
+back - and entry 31 says why it stopped being one.
 
 **Why `CLEAR` moved onto a wheel.** It was the bare letter `C`, and that was wrong twice over:
 it is easy to hit by accident for something that erases a whole drawing, and it only worked
@@ -990,9 +989,45 @@ to a non-activating panel, so they worked while this app was the one being typed
 silently did nothing the moment the user clicked anything else. That is worse than not
 existing, because the user cannot see which of the two states they are in. Entry 15 said the
 tools were keyboard-only; that is now reversed, and what replaced it is one mechanic with
-nothing underneath it. `⌃⌥⌘Z` and `⇧⌃⌥⌘Z` went too: undo is the hub of `⌥V`, which is one hand
-and one key.
+nothing underneath it. `⌃⌥⌘Z` and `⇧⌃⌥⌘Z` went too, first onto the hub of `⌥V` and then onto
+`⌥Z` (entry 31), which is one hand and one key either way.
 
 The keyboard is still *swallowed* in drawing mode, for the reason it always was: an unhandled
 key travels up the responder chain and ends in a system beep, and `⌘Q` in the middle of a
 stroke is not what anybody meant.
+
+
+## 31. Undo is a key of its own, on `⌥Z`, and the row moved right
+
+**Was:** undo was the hub of the `⌥V` wheel. A tap of that key took one thing back, which
+worked and was measurably fast, but it had to be learned twice over - that a tap is different
+from a hold, and that this one wheel's middle does something where the other three cancel.
+
+**Now:** `⌥Z` undoes and opens nothing. The rest of the row shifted one letter right:
+
+| Key | Was | Is |
+| --- | --- | --- |
+| `⌥Z` | tools wheel | **undo** |
+| `⌥X` | colour wheel | tools wheel |
+| `⌥C` | size wheel | colour wheel |
+| `⌥V` | actions wheel | size wheel |
+| `⌥B` | - | actions wheel: redo, clear, temporary ink, hide |
+
+**Why `Z`.** Every application on this machine puts undo on `Z`, and the finger goes there
+before the head does. A shortcut that agrees with the rest of the system is one fewer thing to
+learn, and undo is the thing a drawing tool asks for most often after the pen itself.
+
+**One thing in one place.** The actions wheel's hub is a plain cancel now, like the colour and
+size wheels. Undo living in two places meant two answers to "how do I take that back?", and
+the wheel's answer was the one that needed explaining. `WheelPanel` lost `actsOnTap` with it:
+all four wheels now do nothing at all on a tap, which is one rule instead of two.
+
+**Holding it repeats**, after 400ms and then every 100ms, because `⌘Z` repeats everywhere else
+and taking back five things should not be five deliberate presses. It is a timer, so it obeys
+the rule every timer here obeys: it exists only while the key is down, and the overlay closing
+mid-press ends it. The behaviour suite checks both ends.
+
+**What it costs.** `⌥X` is now the key registered for the life of the app - the way in - so it
+is `⌥X` rather than `⌥Z` that is taken from every other application on the machine. `⌥Z` and
+the other three come and go with the overlay, because with no overlay open there is nothing to
+undo and no wheel worth opening.

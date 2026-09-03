@@ -44,7 +44,14 @@
         RunLoop.current.run(until: Date().addingTimeInterval(WheelPanel.holdBeforeShowing + 0.05))
     }
 
-    func undoOnce() { pushAction(nil) }
+    // ⌥Z, both halves of it: the press takes one thing back and arms the repeat, the release
+    // disarms it. Driven through the controller's own handlers, which is what the hot key
+    // calls.
+    func undoOnce() {
+        controller.undoPressed()
+        controller.undoReleased()
+    }
+
     func redoOnce() { pushAction(0) }
     func clearAll() { pushAction(1) }
     func toggleTemporaryInk() { pushAction(2) }
@@ -745,18 +752,21 @@
             controller.toggleInteractionMode()
         }
 
-        // The actions wheel is the one whose hub does something rather than cancelling: a tap
-        // of ⌥V undoes, because taking things back is the one job here that is done over and
-        // over and a gesture for each would be the wrong shape. Everything on it works
-        // whatever has the keyboard, which is why the bare letters it replaces are gone.
+        // Undo is a key of its own now (⌥Z), so the actions wheel's hub is a plain cancel like
+        // the colour and size wheels. One thing in two places is one place too many.
         controller.tools.select(tool: .pen)
         clearAll()
         stroke(y: 300); stroke(y: 340)
         let beforeUndo = live
         controller.openActionWheel()
+        heldOpen()
         controller.wheels.track(controller.wheels.centre)
         controller.wheels.release()
-        check("a tap on the actions wheel takes one back", "\(live)", "\(beforeUndo - 1)")
+        check("the actions wheel's hub takes nothing back", "\(live)", "\(beforeUndo)")
+
+        undoOnce()
+        check("⌥Z does, on its own", "\(live)", "\(beforeUndo - 1)")
+        redoOnce()
 
         // Sector 0 is due right, and the order runs clockwise from there: redo, clear, temp
         // ink, hide.
@@ -774,9 +784,7 @@
 
         pushAction(1)
         check("pushing down clears the screen", "\(live)", "0")
-        controller.openActionWheel()
-        controller.wheels.track(controller.wheels.centre)
-        controller.wheels.release()
+        undoOnce()
         check("and that is one thing to take back", "\(live)", "\(beforeUndo)")
 
         let temporaryBefore = controller.tools.drawsTemporaryInk
@@ -791,10 +799,40 @@
         check("which came back", "\(live)", "\(beforeUndo)")
         clearAll()
 
-        // A wheel only appears if you hold the key. Under the threshold it is a tap and the
-        // hub's job is done with nothing on screen - which matters most for ⌥V, whose hub is
-        // undo: a wheel flashing up on every undo would be the wrong thing for the one action
-        // people repeat.
+        // Holding ⌥Z repeats, the way ⌘Z does in every other application: taking back five
+        // things is one held key rather than five deliberate presses. The repeat is a timer,
+        // so where it stops matters as much as where it runs.
+        clearAll()
+        for _ in 0..<6 {
+            stroke(y: 300)
+        }
+
+        let beforeHold = live
+        controller.undoPressed()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.75))
+        check("holding ⌥Z takes back more than one",
+              beforeHold - live > 1 ? "yes" : "no", "yes")
+        check("and the repeat is running while it is held",
+              controller.undoRepeat != nil ? "yes" : "no", "yes")
+
+        controller.undoReleased()
+        let afterRelease = live
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        check("letting go stops it", "\(live)", "\(afterRelease)")
+        check("and leaves no timer behind",
+              controller.undoRepeat == nil ? "yes" : "no", "yes")
+
+        // And the overlay going away mid-press takes it with it, which is where the "closed
+        // costs nothing" promise lives.
+        controller.undoPressed()
+        controller.toggleDrawingMode()
+        check("an overlay that closes mid-press stops it too",
+              controller.undoRepeat == nil ? "yes" : "no", "yes")
+        controller.toggleDrawingMode()
+        clearAll()
+
+        // A wheel only appears if you hold the key. Under the threshold it is a tap, and a tap
+        // leaves nothing on screen and chooses nothing.
         controller.openActionWheel()
         check("a tap puts nothing on screen",
               controller.wheels.isShowing ? "a wheel" : "nothing", "nothing")
@@ -808,9 +846,9 @@
               controller.wheels.selection == nil ? "nothing" : "a sector", "nothing")
         controller.wheels.release()
 
-        // And a tap only *does* anything on the wheel you tap on purpose. ⌥V undoes, because
-        // that is the job people repeat; the other three mean "leave" and "cancel", and a key
-        // pressed by accident must not move somebody's mode or their colour.
+        // And a tap does nothing on any of the four. Their hubs mean "leave" and "cancel",
+        // these are keys the whole system gives up to this app, and a key pressed by accident
+        // must not move somebody's mode, their colour or their drawing.
         let stateBeforeTap = state
         controller.openToolWheel()
         controller.wheels.release()
@@ -821,6 +859,20 @@
         controller.wheels.release()
         check("and a tap on the colour wheel leaves the colour alone",
               "\(controller.tools.colorIndex)", "\(colourBeforeTap)")
+
+        let widthBeforeTap = controller.tools.widthIndex
+        controller.openWidthWheel()
+        controller.wheels.release()
+        check("and a tap on the size wheel leaves the width alone",
+              "\(controller.tools.widthIndex)", "\(widthBeforeTap)")
+
+        stroke(y: 380)
+        let inkBeforeTap = live
+        controller.openActionWheel()
+        controller.wheels.release()
+        check("and a tap on the actions wheel takes nothing back",
+              "\(live)", "\(inkBeforeTap)")
+        clearAll()
 
         controller.openActionWheel()
         controller.wheels.track(NSPoint(x: controller.wheels.centre.x + 120,

@@ -92,9 +92,6 @@ final class WheelPanel {
     private var poll: Timer?
     private var showTimer: Timer?
     private var isShowing = false
-    // Whether letting go before the wheel appeared does the hub's job. True only for the
-    // actions wheel, whose hub is undo - see open(_:centreLabel:actsOnTap:pick:).
-    private var actsOnTap = false
     private var centre: NSPoint = .zero
     private var pick: ((Int?) -> Void)?
     // Which showing of the wheel is the current one, so a fade that is still running cannot
@@ -130,11 +127,11 @@ final class WheelPanel {
     // would put half its sectors somewhere the pointer cannot reach.
     // The pick is handed nil for the hub rather than nothing at all, because the hub is not
     // always a cancel: on the tools wheel it is the way out to driving the system.
-    // `actsOnTap` is what separates the wheel you use over and over from the three you use
-    // deliberately. Undo is a tap on ⌥V, because a gesture for each undo is the wrong shape.
-    // The other three do nothing at all on a tap: their hubs mean "leave" and "cancel", and a
-    // key pressed by accident should not move anybody's mode.
-    func open(_ wheel: Wheel, centreLabel: String? = nil, actsOnTap: Bool = false,
+    // A tap - letting go before the wheel ever appeared - does nothing on any of them. Their
+    // hubs mean "leave" and "cancel", these are keys the whole system gives up to this app,
+    // and a key hit by accident must not move somebody's mode or their colour. Undo used to be
+    // the exception, on ⌥V; it has a key of its own now (docs/DECISIONS.md 31).
+    func open(_ wheel: Wheel, centreLabel: String? = nil,
               pick: @escaping (Int?) -> Void) {
         close()
 
@@ -150,7 +147,6 @@ final class WheelPanel {
 
         view.wheel = wheel
         view.centreLabel = centreLabel
-        self.actsOnTap = actsOnTap
         view.highlighted = nil
         view.dotLayer.isHidden = true
         view.needsDisplay = true
@@ -182,7 +178,7 @@ final class WheelPanel {
         // overlay holds it: a window that appears under a stationary pointer is handed the
         // plain arrow by the window server about 25ms later, and the wheel is a window that
         // just appeared. The overlay's own hold does not cover the case where there is no
-        // overlay yet, which is exactly the first ⌥Z of a session. Every tick rather than
+        // overlay yet, which is exactly the first ⌥X of a session. Every tick rather than
         // every fourth, because a quarter of sixty is a 66ms gap and that is what a flicker
         // is; a wheel is up for about a second, so the whole of it costs 0.05ms x 60.
         let timer = Timer(timeInterval: WheelPanel.pollInterval, repeats: true) { [weak self] _ in
@@ -219,11 +215,11 @@ final class WheelPanel {
     // The held key came up. Whatever the pointer is pushing towards is the answer; the dead
     // zone in the middle is how the user says never mind.
     func release() {
-        // Released before the wheel ever appeared: a tap. Only the wheel that asked for it
-        // does anything with that.
+        // Released before the wheel ever appeared: a tap, and a tap chooses nothing. The hub
+        // is only ever reached by letting go in the middle of a wheel that is on screen.
         let tapped = !isShowing
         let chosen = view.highlighted
-        let answer = tapped && !actsOnTap ? nil : pick
+        let answer = tapped ? nil : pick
         pick = nil
         poll?.invalidate()
         poll = nil

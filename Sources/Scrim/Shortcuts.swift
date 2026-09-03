@@ -2,8 +2,8 @@
 //
 // Global rather than local because a non-activating panel only receives ordinary keystrokes
 // while this app is the active one, and after the user has clicked anything in another app it
-// is not. **Everything this app can be told to do is here**: four wheels on the Option row and
-// the panic key. There is no second, quieter set of keys that works only while this app
+// is not. **Everything this app can be told to do is here**: undo, four wheels on the Option
+// row, and the panic key. There is no second, quieter set of keys that works only while this app
 // happens to have the keyboard - there was, and a shortcut that sometimes works is worse than
 // no shortcut (docs/DECISIONS.md 30).
 //
@@ -15,21 +15,23 @@ import Carbon
 
 final class Shortcuts {
     // The ones that are always live. Opening the overlay is among them, because the tools
-    // wheel is now the only thing that opens one.
+    // wheel is the only thing that opens one.
     struct Actions {
         let toolWheel: () -> Void
         let wheelReleased: () -> Void
         let quit: () -> Void
     }
 
-    // The other three wheels only mean something once there is a canvas, so they come and go
-    // with the overlay. Each is held rather than tapped, so each needs both halves of the
-    // keypress.
+    // The rest only mean something once there is a canvas, so they come and go with the
+    // overlay: three more wheels, and undo. Every one of them needs both halves of the
+    // keypress - the wheels because they are held, and undo because holding it repeats.
     struct WheelActions {
         let colours: () -> Void
         let widths: () -> Void
         let actions: () -> Void
         let released: () -> Void
+        let undo: () -> Void
+        let undoReleased: () -> Void
     }
 
     // Carbon identifies a hot key by a number. Named rather than written out at the call
@@ -41,6 +43,7 @@ final class Shortcuts {
         case colourWheel = 7
         case widthWheel = 8
         case actionWheel = 9
+        case undo = 10
     }
 
     // Held only to keep them registered; nothing here needs to reach one by name.
@@ -55,15 +58,15 @@ final class Shortcuts {
     func register(_ actions: Actions) -> [String] {
         let shortcuts: [(key: GlobalHotKey, spoken: String, symbols: String)] = [
             // The way in and the way around. Registered for the life of the app rather than
-            // with the overlay, because it is now the only thing that opens one - which
-            // costs ⌥Z system-wide, and is the strongest argument there is for eventually
-            // letting people change these.
+            // with the overlay, because it is the only thing that opens one - which costs
+            // ⌥X system-wide, and is the strongest argument there is for eventually letting
+            // people change these.
             (GlobalHotKey(id: ID.toolWheel.rawValue,
-                          keyCode: UInt32(kVK_ANSI_Z),
+                          keyCode: UInt32(kVK_ANSI_X),
                           modifiers: UInt32(optionKey),
                           handler: actions.toolWheel,
                           releaseHandler: actions.wheelReleased),
-             "Option + Z", "\u{2325}Z"),
+             "Option + X", "\u{2325}X"),
 
             (GlobalHotKey(id: ID.quit.rawValue,
                           keyCode: UInt32(kVK_Escape),
@@ -102,12 +105,13 @@ final class Shortcuts {
             return
         }
 
-        // Z X C V, four keys in a row under the left hand: tools, colour, size, and the
-        // things you do to a drawing rather than with it.
+        // Z X C V B, five keys in a row under the left hand: undo, tools, colour, size, and
+        // the things you do to a drawing rather than with it. Undo sits on Z because that is
+        // where every other application on this machine puts it (docs/DECISIONS.md 31).
         let wheels: [(ID, UInt32, () -> Void)] = [
-            (.colourWheel, UInt32(kVK_ANSI_X), actions.colours),
-            (.widthWheel, UInt32(kVK_ANSI_C), actions.widths),
-            (.actionWheel, UInt32(kVK_ANSI_V), actions.actions)
+            (.colourWheel, UInt32(kVK_ANSI_C), actions.colours),
+            (.widthWheel, UInt32(kVK_ANSI_V), actions.widths),
+            (.actionWheel, UInt32(kVK_ANSI_B), actions.actions)
         ]
 
         for (id, keyCode, opened) in wheels {
@@ -120,6 +124,18 @@ final class Shortcuts {
             if !key.register() {
                 print("Scrim: wheel shortcut unavailable")
             }
+        }
+
+        // Undo is not a wheel and has a release half of its own: letting go stops the repeat
+        // that holding it starts.
+        let undo = GlobalHotKey(id: ID.undo.rawValue,
+                                keyCode: UInt32(kVK_ANSI_Z),
+                                modifiers: UInt32(optionKey),
+                                handler: actions.undo,
+                                releaseHandler: actions.undoReleased)
+        wheelKeys.append(undo)
+        if !undo.register() {
+            print("Scrim: undo shortcut unavailable")
         }
     }
 
