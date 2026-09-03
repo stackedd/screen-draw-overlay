@@ -166,9 +166,10 @@ Everything below runs from a clone, on any Mac:
 ./Testing/run.sh
 ```
 
-- **91 behaviour checks** drive the real app: every wheel and what its slices do, hiding and
-  showing keeping the strokes *and* the undo history, the eraser cutting rather than deleting,
-  the laser, temporary ink, and the pointer the overlay hands to the window server.
+- **123 behaviour checks** drive the real app: every wheel and what its slices do, hiding and
+  showing keeping the strokes *and* the undo history, the eraser cutting rather than deleting
+  (and taking text away whole), the laser, temporary ink, typing, the rules that keep a
+  changed shortcut usable, and the pointer the overlay hands to the window server.
 - **A pixel comparison** of one drawing painted incrementally and painted in a single pass, at
   1x, 2x and 3x backing scale: **0 differing bytes**. That is how "the optimisation did not
   change what is on screen" is proved rather than asserted.
