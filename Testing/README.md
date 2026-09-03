@@ -93,6 +93,17 @@ screen was showing an arrow.
 
 It warps the pointer around the middle of the main screen and puts it back.
 
+`probes/settings.swift` is the odd one out: it prints the settings window's layout rather than
+rendering it. The controls in that window are hosted views, and `cacheDisplay(in:to:)` draws
+nothing for them - the first version of it produced a picture of four text fields floating in
+an empty rectangle. Capturing the real screen would need Screen Recording, which this app does
+not ask for, so what it checks is geometry: nothing without a size, nothing outside the window,
+nothing on top of anything else. `SETTINGS_HOLD=1` leaves the window up to be clicked at.
+
+    python3 Testing/make_probe.py settings SETTINGS \
+      && swift build --package-path .build/testing/settings -c release \
+      && SETTINGS_HOLD=1 .build/testing/settings/.build/release/SETTINGS
+
 `probes/diagnose.swift` is the other kind of by-hand tool: it puts a real overlay up and asks
 it what state it is actually in - is the laser layer attached, does it have a picture in it,
 does the app's own cursor match the tool's, does the wheel hand the cursor back. It was

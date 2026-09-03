@@ -81,7 +81,12 @@ final class WheelPanel {
     // A tenth of a second: long enough that a tap does not flash a wheel, short enough that
     // holding one feels like it opened rather than like it thought about it. It was 0.18 and
     // that was reported as slow.
-    private static let holdBeforeShowing: TimeInterval = 0.11
+    static let holdBeforeShowing: TimeInterval = ShortcutSettings.defaultDelay
+
+    // How long this wheel waits, which is a setting: the default suits most hands and some
+    // people want it gone (docs/DECISIONS.md 32). Set by open(); zero means the wheel is on
+    // screen before the key has finished travelling.
+    private var holdForThisOne: TimeInterval = ShortcutSettings.defaultDelay
 
     private let view: WheelView = {
         let view = WheelView(frame: NSRect(x: 0, y: 0, width: Wheel.extent, height: Wheel.extent))
@@ -132,6 +137,7 @@ final class WheelPanel {
     // and a key hit by accident must not move somebody's mode or their colour. Undo used to be
     // the exception, on ⌥V; it has a key of its own now (docs/DECISIONS.md 31).
     func open(_ wheel: Wheel, centreLabel: String? = nil,
+              delay: TimeInterval = WheelPanel.holdBeforeShowing,
               pick: @escaping (Int?) -> Void) {
         close()
 
@@ -163,13 +169,19 @@ final class WheelPanel {
         showing += 1
         PointerCursor.invisible.set()
 
-        // Not shown yet: a short press is a tap, and a tap is the hub's job with nothing on
-        // screen. The timer, or the first push out of the dead zone, brings it up.
-        let hold = Timer(timeInterval: WheelPanel.holdBeforeShowing, repeats: false) { [weak self] _ in
-            self?.show()
+        // Not shown yet: a short press is a tap, and a tap chooses nothing. The timer, or the
+        // first push out of the dead zone, brings it up. A delay of zero means there is no tap
+        // to speak of - the wheel is up before the key comes back.
+        holdForThisOne = max(0, delay)
+        if holdForThisOne == 0 {
+            show()
+        } else {
+            let hold = Timer(timeInterval: holdForThisOne, repeats: false) { [weak self] _ in
+                self?.show()
+            }
+            RunLoop.main.add(hold, forMode: .common)
+            showTimer = hold
         }
-        RunLoop.main.add(hold, forMode: .common)
-        showTimer = hold
 
         // Read where the pointer already is, rather than waiting a frame to find out.
         track(NSEvent.mouseLocation)

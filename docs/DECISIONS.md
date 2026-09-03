@@ -1031,3 +1031,52 @@ mid-press ends it. The behaviour suite checks both ends.
 is `⌥X` rather than `⌥Z` that is taken from every other application on the machine. `⌥Z` and
 the other three come and go with the overlay, because with no overlay open there is nothing to
 undo and no wheel worth opening.
+
+
+## 32. The shortcuts are settings, and each wheel's delay with them
+
+**The problem is one macOS will not solve.** Two applications can register the same global
+shortcut and both succeed; neither is told, and the one that registered first wins (entry 1).
+So a user whose `⌥X` already belongs to something else has a key that does nothing, no way to
+find out why, and - until now - nothing to do about it. The menu bar item was the whole
+answer, and it is a poor one: it is a way to work *without* the shortcut, not a way to have it.
+
+**Chosen:** five bindings in `UserDefaults`, read on launch and re-registered when they change,
+and one window to change them in. The window is built in code, is not modal, and is only on
+screen when somebody has opened it from the menu.
+
+**Three rules the settings enforce**, because a setting that can be wrong is worse than no
+setting:
+
+- **Every binding needs `⌘`, `⌥` or `⌃`.** A global hot key with no modifier takes that letter
+  from every application on the machine - typing `z` in a text field would undo instead. The
+  check is on the way in as well as on the way out, because a defaults file can be edited by
+  hand.
+- **No two of ours on one combination.** macOS would accept it and leave one of them dead.
+- **The panic key is not in the list.** `⌃⌥⌘Esc` has to be true whatever else has been
+  changed, including by somebody who has changed everything else (CLAUDE.md, never number 4).
+  It is shown in the window, greyed, so that it is knowable.
+
+**Recording needs the hot keys down.** They are global: pressing `⌥X` to record it would open
+the tools wheel over the settings window. So arming a recorder unregisters everything and
+disarming puts it back - which is also what happens when the window is closed with a recorder
+still armed, because an app with no shortcuts at all is the worst state this window could
+produce. Keys are read with `keyDown` on the recorder itself rather than a global monitor: a
+global monitor needs Accessibility, and this app does not ask for it. `performKeyEquivalent`
+is overridden too, or nothing with `⌘` in it could ever be recorded - AppKit offers those to
+the window before they are ever a `keyDown`.
+
+**The delay is per wheel.** 110ms is where the threshold has been since it was measured (entry
+30), and it is a compromise: long enough that a tap does not flash a wheel, short enough that a
+hold does not feel like a wait. Which side of that people fall on differs, so it is a number in
+the window, 0 to 500ms. **Zero has a meaning**: the wheel is on screen the moment the key goes
+down, and there is no tap to speak of.
+
+**What is deliberately not in this window:** colour, width, the tool, temporary ink. Every one
+of those is a wheel already, in the hand, where the drawing is - moving them into a window
+would be moving them away from the work (entry 24). The window holds the things you set once
+and forget.
+
+**Testing it.** The rules are behaviour checks; the layout is a by-hand report rather than a
+picture, because the window's controls are hosted views and `cacheDisplay(in:to:)` draws
+nothing for them - see `Testing/README.md`.

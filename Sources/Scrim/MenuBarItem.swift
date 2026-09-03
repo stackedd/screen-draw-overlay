@@ -22,6 +22,7 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
     struct Actions {
         let toggleDrawing: () -> Void
         let toggleClickThrough: () -> Void
+        let openSettings: () -> Void
         let quit: () -> Void
     }
 
@@ -63,6 +64,10 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
 
     @objc private func quit() {
         actions.quit()
+    }
+
+    @objc private func openSettings() {
+        actions.openSettings()
     }
 
     private func build() {
@@ -111,6 +116,15 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
             loginItem = launchItem
             menu.addItem(.separator())
         }
+
+        // Where a shortcut can be moved, which matters because macOS lets another app take
+        // one of ours without telling either of us (docs/DECISIONS.md 32).
+        let settingsItem = NSMenuItem(title: "Settings…",
+                                      action: #selector(openSettings),
+                                      keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+        menu.addItem(.separator())
 
         let quitItem = NSMenuItem(title: "Quit",
                                   action: #selector(quit),

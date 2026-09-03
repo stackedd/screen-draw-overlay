@@ -1,8 +1,10 @@
 # How this app is put together
 
 Scrim puts a transparent window over every screen and lets you draw on it. It
-has no window of its own, no Dock icon, and asks for no system permissions. That last part
-is not an accident and it constrains almost every decision below.
+has no Dock icon, asks for no system permissions, and puts nothing on screen except what you
+draw - the settings window is the one window it owns, and it is only there when somebody has
+asked for it. The permissions part is not an accident and it constrains almost every decision
+below.
 
 This file is for whoever touches the code next: what each piece owns, what must not be
 broken, and what has already been measured. Its companion is
@@ -29,6 +31,8 @@ version: commands, conventions and the "never do this" list.
 | `Canvas.swift` | The drawing itself: strokes, the eraser, undo/redo, fading. Knows nothing about windows - it returns the rectangles that changed. |
 | `Stroke.swift` | What a mark is made of, what each tool does with two points, and how each style is painted - a pen line, a marker, or a beam of light. |
 | `ToolSettings.swift` | The pen in hand: colour, width, tool. Shared across screens, remembered between launches. |
+| `ShortcutSettings.swift` | Which key does what and how long each wheel waits, with the rules that keep a binding usable. Remembered between launches. |
+| `SettingsWindow.swift` | The only window this app owns: five recorders, five delays, and the panic key shown but locked. |
 | `ModeBadge.swift` | The badge in the corner - the app's entire on-screen interface. It hands over a picture, snapped to whole pixels; the view carries it on a layer. |
 | `PointerCursor.swift` | The pointer's picture, one per tool in the colour in hand - painted onto a layer, plus the cursor that shows nothing which the window server is handed instead. |
 | `GlobalHotKey.swift` | The global shortcuts, on Carbon, and the ownership rules that keep the callback safe. |

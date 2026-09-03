@@ -42,6 +42,7 @@ HEAD = """            controller.reportUnavailableShortcuts(unavailable)
 OPEN_UP = [
     ("    private func ", "    func "),
     ("    private var ", "    var "),
+    ("    private lazy var ", "    lazy var "),
     ("    private let ", "    let "),
     ("    private static func ", "    static func "),
     ("    private(set) var ", "    var "),

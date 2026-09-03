@@ -2,7 +2,8 @@
 
 A macOS menu bar app that puts a transparent layer over every screen so you can draw on top of
 whatever is running (a slide, a document, a video call) and then get out of the way again.
-It has no window of its own, no Dock icon, and it asks for **no system permissions**.
+Nothing of it is on screen while you draw, it has no Dock icon, and it asks for **no system
+permissions**.
 
 A scrim is the gauze a theatre hangs in front of a stage: paint on it and it holds the mark,
 light the stage behind it and it disappears. That is the whole idea.
@@ -74,7 +75,13 @@ Two rules and that is the interface:
 - **Tapping a wheel key does nothing**, on purpose, so a key pressed by accident never changes
   the tool, the colour or the drawing.
 
-`⌃⌥⌘Esc` quits the app from any state. It is the only other shortcut, and it always works.
+`⌃⌥⌘Esc` quits the app from any state. It is the only other shortcut, it cannot be changed,
+and it always works.
+
+**If one of those keys is already taken** by something else, open **Settings…** from the menu
+bar and press the keys you would rather use. Every shortcut needs `⌘`, `⌥` or `⌃` in it. The
+same window sets how long each wheel waits before it appears - 110ms out of the box, and `0`
+opens it the moment you press the key.
 
 (`⌥` is Option, `⌃` is Control, `⌘` is Command.)
 
@@ -113,7 +120,7 @@ comes back is the last tool that actually drew.
 **The overlay is taking clicks and the menu bar is out of reach.** Hold `⌥X` and let go in the
 middle; that hands the screen back. If nothing responds at all, `⌃⌥⌘Esc` quits the app.
 
-**The menu bar icon is not there.** The app has no Dock icon and no window. When the menu bar
+**The menu bar icon is not there.** The app has no Dock icon and nothing on screen. When the menu bar
 is full macOS hides what does not fit; holding `Command` and dragging the icons makes room.
 
 **`⌥X` does nothing.** Another app may have registered the same shortcut; macOS allows that

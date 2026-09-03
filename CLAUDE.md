@@ -1,8 +1,9 @@
 # Scrim
 
 A macOS menu bar app that puts a transparent overlay over every screen and lets you draw on
-it: over a presentation, a document, anything. No window of its own, no Dock icon, and
-**no system permissions of any kind**.
+it: over a presentation, a document, anything. Nothing on screen but the drawing, no Dock
+icon, and **no system permissions of any kind**. It owns one window - the settings sheet where
+the shortcuts are changed - and it is only there when somebody asks for it.
 
 **The Option row is the whole interface**, five keys in a row. `⌥Z` undoes: one press takes
 one thing back and holding it repeats, where every other application on this machine keeps it.
@@ -41,6 +42,8 @@ Universal binary, macOS 11+.
       Canvas.swift            the drawing: strokes, eraser, undo/redo, fading
       Stroke.swift            what a mark is made of; what each tool draws
       ToolSettings.swift      the pen in hand, shared and remembered
+      ShortcutSettings.swift  which key does what, and how long a wheel waits
+      SettingsWindow.swift    the one window: recording a shortcut, setting a delay
       ModeBadge.swift         the corner badge
       Wheel.swift             a radial menu: sectors, hit test, painting
       WheelPanel.swift        the window a wheel opens in, and hold-push-release

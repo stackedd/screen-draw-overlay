@@ -111,7 +111,11 @@ final class OverlayController {
     }
 
     private let wheels = WheelPanel()
-    private let shortcuts = Shortcuts()
+    // Which key does what, and how long each wheel waits. Owned here because this is what
+    // has to take the hot keys down and put them back when one of them changes.
+    let shortcutSettings = ShortcutSettings()
+    private lazy var shortcuts = Shortcuts(settings: shortcutSettings)
+    private var settingsWindow: SettingsWindow?
     private var menuBar: MenuBarItem?
     private var overlayWindows: [OverlayPanel] = []
     private var drawingViews: [DrawingView] = []
@@ -142,8 +146,15 @@ final class OverlayController {
         menuBar = MenuBarItem(actions: MenuBarItem.Actions(
             toggleDrawing: { [weak self] in self?.toggleDrawingMode() },
             toggleClickThrough: { [weak self] in self?.toggleInteractionMode() },
+            openSettings: { [weak self] in self?.openSettings() },
             quit: { NSApp.terminate(nil) }
         ))
+
+        // A shortcut that has moved has to be taken down and put back up, wherever it was
+        // registered: the always-live one here, the rest with the overlay if there is one.
+        shortcutSettings.onChange = { [weak self] in
+            self?.shortcutsChanged()
+        }
 
         // A tool picked on one screen applies everywhere, and the badge that shows it
         // lives on one panel only, so every panel is told to redraw it.
@@ -156,18 +167,58 @@ final class OverlayController {
                                                name: NSApplication.didChangeScreenParametersNotification,
                                                object: nil)
 
-        return shortcuts.register(Shortcuts.Actions(
+        return shortcuts.register(alwaysLiveActions())
+    }
+
+    private func alwaysLiveActions() -> Shortcuts.Actions {
+        Shortcuts.Actions(
             toolWheel: { [weak self] in self?.openToolWheel() },
             wheelReleased: { [weak self] in self?.wheels.release() },
             quit: {
                 print("Scrim: emergency quit")
                 NSApp.terminate(nil)
             }
-        ))
+        )
     }
 
-    // These only exist while there is a canvas to change, which is also what keeps ⌥Z ⌥C ⌥V
-    // ⌥B out of the way the rest of the time. Undo is here rather than in the always-live set
+    // The window where the keys can be changed, built the first time it is asked for. While a
+    // recorder in it is armed the hot keys come down, because otherwise pressing the keys you
+    // want to record fires the shortcut you already have.
+    private func openSettings() {
+        if settingsWindow == nil {
+            settingsWindow = SettingsWindow(settings: shortcutSettings) { [weak self] suspend in
+                guard let self else {
+                    return
+                }
+
+                if suspend {
+                    self.shortcuts.unregister()
+                } else {
+                    self.shortcutsChanged()
+                }
+            }
+        }
+
+        settingsWindow?.show()
+    }
+
+    // Everything comes down and goes back up, because a binding that moved has to stop firing
+    // under its old keys. The wheels only go back up if there is an overlay for them to serve.
+    private func shortcutsChanged() {
+        let wheelsWereUp = shortcuts.wheelsAreRegistered
+        shortcuts.unregister()
+
+        var unavailable = shortcuts.register(alwaysLiveActions())
+        if wheelsWereUp || isDrawingMode {
+            startWheels()
+            unavailable += shortcuts.refused
+        }
+
+        menuBar?.reportUnavailableShortcuts(unavailable)
+    }
+
+    // These only exist while there is a canvas to change, which is also what keeps the other
+    // four out of the way the rest of the time. Undo is here rather than in the always-live set
     // for the same reason: with no overlay open there is nothing to take back.
     private func startWheels() {
         shortcuts.registerWheels(Shortcuts.WheelActions(
@@ -233,7 +284,8 @@ final class OverlayController {
     }
 
     private func openToolWheel() {
-        wheels.open(OverlayController.toolWheel, centreLabel: hubLabel) { [weak self] index in
+        wheels.open(OverlayController.toolWheel, centreLabel: hubLabel,
+                    delay: shortcutSettings.delay(for: .tools)) { [weak self] index in
             guard let self else {
                 return
             }
@@ -277,13 +329,15 @@ final class OverlayController {
             return
         }
 
-        wheels.open(OverlayController.colourWheel) { [weak self] index in
+        wheels.open(OverlayController.colourWheel,
+                    delay: shortcutSettings.delay(for: .colours)) { [weak self] index in
             index.map { self?.tools.selectColor($0) }
         }
     }
 
     private func openWidthWheel() {
-        wheels.open(OverlayController.widthWheel(for: tools.tool, in: tools.color)) { [weak self] index in
+        wheels.open(OverlayController.widthWheel(for: tools.tool, in: tools.color),
+                    delay: shortcutSettings.delay(for: .widths)) { [weak self] index in
             index.map { self?.tools.selectWidth($0) }
         }
     }
@@ -293,8 +347,8 @@ final class OverlayController {
     // typed at. Its hub is a plain cancel like the colour and size wheels - undo used to live
     // there and now has a key of its own, and one thing in two places is one place too many.
     private func openActionWheel() {
-        wheels.open(OverlayController.actionWheel(temporaryInk: tools.drawsTemporaryInk)) {
-            [weak self] index in
+        wheels.open(OverlayController.actionWheel(temporaryInk: tools.drawsTemporaryInk),
+                    delay: shortcutSettings.delay(for: .actions)) { [weak self] index in
             guard let self, let index else {
                 return
             }

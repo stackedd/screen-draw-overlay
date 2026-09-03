@@ -50,24 +50,41 @@ final class Shortcuts {
     private var hotKeys: [GlobalHotKey] = []
     private var wheelKeys: [GlobalHotKey] = []
 
+    // Where the keys come from. Everything except the panic key is a setting, because a
+    // clash with another application is silent and otherwise unanswerable (DECISIONS 32).
+    private let settings: ShortcutSettings
+
+    init(settings: ShortcutSettings) {
+        self.settings = settings
+    }
+
+    // Whether the overlay's own keys are up, so whoever re-registers after a change knows
+    // whether to put them back.
+    var wheelsAreRegistered: Bool {
+        !wheelKeys.isEmpty
+    }
+
     // Registers the lot and returns the ones macOS refused, written the way a menu would
     // show them. A refusal is rare and quiet - two different processes can register the same
     // combination and both succeed - so this only ever catches the case macOS turns down
     // outright.
     @discardableResult
     func register(_ actions: Actions) -> [String] {
+        let tools = settings.binding(for: .tools)
         let shortcuts: [(key: GlobalHotKey, spoken: String, symbols: String)] = [
             // The way in and the way around. Registered for the life of the app rather than
             // with the overlay, because it is the only thing that opens one - which costs
-            // ⌥X system-wide, and is the strongest argument there is for eventually letting
-            // people change these.
+            // this combination system-wide, and is why it can be changed.
             (GlobalHotKey(id: ID.toolWheel.rawValue,
-                          keyCode: UInt32(kVK_ANSI_X),
-                          modifiers: UInt32(optionKey),
+                          keyCode: tools.keyCode,
+                          modifiers: tools.modifiers,
                           handler: actions.toolWheel,
                           releaseHandler: actions.wheelReleased),
-             "Option + X", "\u{2325}X"),
+             tools.spoken, tools.spoken),
 
+            // Not a setting, on purpose: the panic key is the one thing that has to be true
+            // whatever else has been changed, including by somebody who has changed
+            // everything else (CLAUDE.md, never number 4).
             (GlobalHotKey(id: ID.quit.rawValue,
                           keyCode: UInt32(kVK_Escape),
                           modifiers: UInt32(cmdKey | optionKey | controlKey),
@@ -98,44 +115,54 @@ final class Shortcuts {
         unregisterWheels()
     }
 
-    // Colour and width come up with the overlay and go down with it: they change what is in
-    // hand, and there is nothing in hand without a canvas.
+    // These come up with the overlay and go down with it: they change or take back what is
+    // on it, and there is nothing to change without a canvas. The ones macOS refused are
+    // collected the same way the always-live ones are.
+    private(set) var refused: [String] = []
+
     func registerWheels(_ actions: WheelActions) {
         guard wheelKeys.isEmpty else {
             return
         }
 
-        // Z X C V B, five keys in a row under the left hand: undo, tools, colour, size, and
-        // the things you do to a drawing rather than with it. Undo sits on Z because that is
-        // where every other application on this machine puts it (docs/DECISIONS.md 31).
-        let wheels: [(ID, UInt32, () -> Void)] = [
-            (.colourWheel, UInt32(kVK_ANSI_C), actions.colours),
-            (.widthWheel, UInt32(kVK_ANSI_V), actions.widths),
-            (.actionWheel, UInt32(kVK_ANSI_B), actions.actions)
+        refused = []
+
+        // Z X C V B out of the box, five keys in a row under the left hand: undo, tools,
+        // colour, size, and the things you do to a drawing rather than with it. Undo sits on
+        // Z because that is where every other application on this machine puts it
+        // (docs/DECISIONS.md 31). Any of them can be moved (32).
+        let wheels: [(ID, ShortcutSettings.Action, () -> Void)] = [
+            (.colourWheel, .colours, actions.colours),
+            (.widthWheel, .widths, actions.widths),
+            (.actionWheel, .actions, actions.actions)
         ]
 
-        for (id, keyCode, opened) in wheels {
+        for (id, setting, opened) in wheels {
+            let binding = settings.binding(for: setting)
             let key = GlobalHotKey(id: id.rawValue,
-                                   keyCode: keyCode,
-                                   modifiers: UInt32(optionKey),
+                                   keyCode: binding.keyCode,
+                                   modifiers: binding.modifiers,
                                    handler: opened,
                                    releaseHandler: actions.released)
             wheelKeys.append(key)
             if !key.register() {
-                print("Scrim: wheel shortcut unavailable")
+                print("Scrim: \(setting.label) shortcut unavailable")
+                refused.append(binding.spoken)
             }
         }
 
         // Undo is not a wheel and has a release half of its own: letting go stops the repeat
         // that holding it starts.
-        let undo = GlobalHotKey(id: ID.undo.rawValue,
-                                keyCode: UInt32(kVK_ANSI_Z),
-                                modifiers: UInt32(optionKey),
-                                handler: actions.undo,
-                                releaseHandler: actions.undoReleased)
-        wheelKeys.append(undo)
-        if !undo.register() {
+        let undo = settings.binding(for: .undo)
+        let undoKey = GlobalHotKey(id: ID.undo.rawValue,
+                                   keyCode: undo.keyCode,
+                                   modifiers: undo.modifiers,
+                                   handler: actions.undo,
+                                   releaseHandler: actions.undoReleased)
+        wheelKeys.append(undoKey)
+        if !undoKey.register() {
             print("Scrim: undo shortcut unavailable")
+            refused.append(undo.spoken)
         }
     }
 

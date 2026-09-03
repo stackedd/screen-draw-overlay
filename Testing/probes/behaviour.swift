@@ -927,6 +927,57 @@
         controller.toggleDrawingMode()
         check("and hiding kept the drawing", "\(live)", "\(beforeHiding)")
 
+        // The shortcuts are settings now, and the rules around them are what keep the app
+        // usable: a binding with no modifier would take a bare key from every application on
+        // the machine, two of ours on one combination would leave one of them dead, and the
+        // panic key has to stay where it is whatever else has been moved.
+        let settings = controller.shortcutSettings
+        check("the keys start where the row starts",
+              ShortcutSettings.Action.allCases.map { settings.binding(for: $0).spoken }.joined(separator: " "),
+              "⌥Z ⌥X ⌥C ⌥V ⌥B")
+
+        var refusal = settings.set(keyCode: UInt32(kVK_ANSI_K), modifiers: 0, key: "K", for: .undo)
+        check("a shortcut with no modifier is refused",
+              refusal == nil ? "taken" : "refused", "refused")
+
+        refusal = settings.set(keyCode: UInt32(kVK_ANSI_X), modifiers: UInt32(optionKey),
+                               key: "X", for: .undo)
+        check("and so is one another action already has",
+              refusal == nil ? "taken" : "refused", "refused")
+
+        refusal = settings.set(keyCode: UInt32(kVK_Escape),
+                               modifiers: UInt32(cmdKey | optionKey | controlKey),
+                               key: "⎋", for: .undo)
+        check("and the panic key cannot be moved",
+              refusal == nil ? "taken" : "refused", "refused")
+
+        check("none of that changed anything", settings.binding(for: .undo).spoken, "⌥Z")
+
+        refusal = settings.set(keyCode: UInt32(kVK_ANSI_U),
+                               modifiers: UInt32(cmdKey | controlKey), key: "U", for: .undo)
+        check("a shortcut that breaks no rule is taken",
+              refusal == nil ? "taken" : "refused", "taken")
+        check("and it is what the row now says", settings.binding(for: .undo).spoken, "⌃⌘U")
+        check("with the hot keys put back up",
+              controller.shortcuts.wheelsAreRegistered ? "yes" : "no", "yes")
+
+        settings.resetToDefaults()
+        check("and resetting puts the row back",
+              ShortcutSettings.Action.allCases.map { settings.binding(for: $0).spoken }.joined(separator: " "),
+              "⌥Z ⌥X ⌥C ⌥V ⌥B")
+
+        // The delay is per shortcut, and zero means the wheel is up before the key comes back.
+        settings.setDelay(0, for: .actions)
+        controller.openActionWheel()
+        check("a wheel with no delay is on screen at once",
+              controller.wheels.isShowing ? "a wheel" : "nothing", "a wheel")
+        controller.wheels.close()
+        controller.openToolWheel()
+        check("and one with a delay still waits",
+              controller.wheels.isShowing ? "a wheel" : "nothing", "nothing")
+        controller.wheels.close()
+        settings.resetToDefaults()
+
         // The cursor hold is what stops the window server leaving an arrow on a pointer that
         // is not moving, and it is a timer, so where it stops matters as much as where it
         // runs: click-through hands the pointer to the app underneath, and a closed overlay
