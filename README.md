@@ -1,8 +1,11 @@
-# ScreenDrawOverlay
+# Scrim
 
 A macOS menu bar app that puts a transparent layer over every screen so you can draw on top of
 whatever is running (a slide, a document, a video call) and then get out of the way again.
 It has no window of its own, no Dock icon, and it asks for **no system permissions**.
+
+A scrim is the gauze a theatre hangs in front of a stage: paint on it and it holds the mark,
+light the stage behind it and it disappears. That is the whole idea.
 
 macOS 11 or later · Apple Silicon and Intel · MIT licence · no permissions asked, no network
 access, no account.
@@ -21,7 +24,7 @@ access, no account.
 
 ## Installing
 
-**From a release.** Download `ScreenDrawOverlay.zip` from the
+**From a release.** Download `Scrim.zip` from the
 [Releases](../../releases) page, unzip it, and move the app to `/Applications`.
 
 The first time you open it, macOS will refuse. The app is signed, but only ad-hoc signed (a
@@ -37,8 +40,8 @@ cannot check it for malicious software". You clear that once and never again:
 need Xcode or its command line tools (`xcode-select --install`):
 
 ```bash
-git clone https://github.com/stackedd/screen-draw-overlay.git
-cd screen-draw-overlay && ./build_app.sh && open dist/ScreenDrawOverlay.app
+git clone https://github.com/stackedd/scrim.git
+cd scrim && ./build_app.sh && open dist/Scrim.app
 ```
 
 Either way, a small scribble icon appears in the menu bar. That is the whole interface. On

@@ -1,4 +1,4 @@
-# ScreenDrawOverlay
+# Scrim
 
 A macOS menu bar app that puts a transparent overlay over every screen and lets you draw on
 it: over a presentation, a document, anything. No window of its own, no Dock icon, and
@@ -24,7 +24,7 @@ Universal binary, macOS 11+.
 
 ## Layout
 
-    Sources/ScreenDrawOverlay/
+    Sources/Scrim/
       main.swift              the four lines that start the app
       AppDelegate.swift       launch, terminate, and the wiring between the next two
       OverlayController.swift modes, overlay lifetime, kept drawings, the menu bar item
@@ -46,11 +46,11 @@ Universal binary, macOS 11+.
       PointerCursor.swift     one cursor per tool, in the colour in hand
       GlobalHotKey.swift      Carbon shortcuts and their ownership rules
       NSScreen+Display.swift  identifying a display across time
-      CursorLog.swift         what the screen showed, when asked: SDO_CURSOR_LOG=1
+      CursorLog.swift         what the screen showed, when asked: SCRIM_CURSOR_LOG=1
     Testing/                  three suites and the by-hand probes (see below)
     Packaging/                Info.plist, AppIcon.icns, icon-preview.png
     Tools/makeicon.swift      draws the icon; build_app.sh runs it
-    build_app.sh              builds dist/ScreenDrawOverlay.app + zip
+    build_app.sh              builds dist/Scrim.app + zip
     docs/ARCHITECTURE.md      what each piece owns, invariants, measurements
     docs/DECISIONS.md         why things are the way they are, and what was rejected
 
@@ -64,7 +64,7 @@ pointer is a picture on a layer, because a presenting app can hide a cursor.
     swift build -c release        # must be warning-free
     ./build_app.sh                # also compiles x86_64 - it catches what the line above misses
     ./Testing/run.sh              # every suite; behaviour must report 0 failed
-    open dist/ScreenDrawOverlay.app
+    open dist/Scrim.app
 
 `./Testing/run.sh behaviour` drives the real app and checks the mode matrix, hide/show,
 every wheel and what its sectors and hub do, undo/redo and tap-versus-hold. `./Testing/run.sh rendering` paints a session

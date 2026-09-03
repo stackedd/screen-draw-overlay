@@ -37,7 +37,7 @@ func fireHotKey(id: UInt32, release: Bool = false) {
         return
     }
 
-    var hotKeyID = EventHotKeyID(signature: OSType(UInt32(ascii: "SDO1")), id: id)
+    var hotKeyID = EventHotKeyID(signature: OSType(UInt32(ascii: "SCRM")), id: id)
     SetEventParameter(event, EventParamName(kEventParamDirectObject),
                       EventParamType(typeEventHotKeyID), MemoryLayout<EventHotKeyID>.size, &hotKeyID)
     SendEventToEventTarget(event, GetApplicationEventTarget())

@@ -1,6 +1,6 @@
 # Cutting a release
 
-ScreenDrawOverlay is free software under the MIT licence. A release is a tag, a built app, and
+Scrim is free software under the MIT licence. A release is a tag, a built app, and
 a GitHub Release with the zip attached - plus, if you want, a pay-what-you-want page pointing
 at the same download. Nothing in the app knows or cares about any of that.
 
@@ -32,7 +32,7 @@ the tag matches it: `git tag -a v1.0 -m "..."` then `git push --tags`.
 
 Without an Apple Developer Program membership:
 
-    ./build_app.sh            # ad-hoc signed; dist/ScreenDrawOverlay.zip is the download
+    ./build_app.sh            # ad-hoc signed; dist/Scrim.zip is the download
 
 With one ($99/year), the same script does the whole job:
 
@@ -62,7 +62,7 @@ command.
 
 ## Publishing
 
-1. `gh release create v1.0 dist/ScreenDrawOverlay.zip --title "..." --notes "..."`, or the web
+1. `gh release create v1.0 dist/Scrim.zip --title "..." --notes "..."`, or the web
    UI. Attach the zip, not the app folder.
 2. The release notes are for users, not for git: what is new, what broke, and the Gatekeeper
    paragraph above.

@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>ScreenDrawOverlay</string>
+	<string>Scrim</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.stackedd.ScreenDrawOverlay</string>
+	<string>com.stackedd.Scrim</string>
 	<key>CFBundleExecutable</key>
-	<string>ScreenDrawOverlay</string>
+	<string>Scrim</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
 	<key>CFBundleVersion</key>

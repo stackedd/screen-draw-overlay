@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let controller = OverlayController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        print("ScreenDrawOverlay: app launched")
+        print("Scrim: app launched")
 
         // Two copies at once is a trap, not a feature: macOS lets both register the same
         // global hot keys, so one press opens two overlays stacked on each other and
@@ -20,7 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Launching again - by double clicking, or by a login item on top of a copy that
         // is already up - quietly leaves the running one alone.
         guard !AppDelegate.anotherInstanceIsRunning() else {
-            print("ScreenDrawOverlay: another copy is already running, quitting this one")
+            print("Scrim: another copy is already running, quitting this one")
             NSApp.terminate(nil)
             return
         }
@@ -28,7 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Keep the app out of the Dock. The small menu bar item is the whole presence.
         NSApp.setActivationPolicy(.accessory)
 
-        // Off unless SDO_CURSOR_LOG is set: this is the app saying what the screen shows, on
+        // Off unless SCRIM_CURSOR_LOG is set: this is the app saying what the screen shows, on
         // the machine where the pointer misbehaves, because no probe here can reproduce it.
         CursorLog.startIfAsked { [weak self] in
             self?.controller.stateDescription ?? "no controller"
@@ -36,13 +36,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let unavailable = controller.start()
         if !unavailable.isEmpty {
-            print("ScreenDrawOverlay: hotkeys unavailable: \(unavailable.joined(separator: ", "))")
+            print("Scrim: hotkeys unavailable: \(unavailable.joined(separator: ", "))")
             controller.reportUnavailableShortcuts(unavailable)
         }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        print("ScreenDrawOverlay: app terminating")
+        print("Scrim: app terminating")
         controller.shutDown()
     }
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Builds dist/ScreenDrawOverlay.app (universal) and a zip next to it. Requires the Xcode
+# Builds dist/Scrim.app (universal) and a zip next to it. Requires the Xcode
 # command line tools; no Xcode project needed.
 #
 # Ad-hoc signed by default, which is what a machine without a Developer ID can do - macOS then
@@ -16,7 +16,7 @@
 #
 set -euo pipefail
 
-APP_NAME="ScreenDrawOverlay"
+APP_NAME="Scrim"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
 APP_DIR="$DIST_DIR/$APP_NAME.app"

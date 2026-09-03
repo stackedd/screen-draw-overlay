@@ -28,7 +28,7 @@ final class GlobalHotKey {
         }
     }
 
-    private static let signature = OSType(UInt32(ascii: "SDO1"))
+    private static let signature = OSType(UInt32(ascii: "SCRM"))
 
     // One handler for every hot key instead of one per hot key. It holds no per-instance
     // state and is installed with a nil userData pointer, so there is nothing in it that

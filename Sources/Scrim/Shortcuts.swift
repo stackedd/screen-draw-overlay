@@ -80,7 +80,7 @@ final class Shortcuts {
         for shortcut in shortcuts {
             hotKeys.append(shortcut.key)
             if shortcut.key.register() {
-                print("ScreenDrawOverlay: hotkey registered - \(shortcut.spoken)")
+                print("Scrim: hotkey registered - \(shortcut.spoken)")
             } else {
                 unavailable.append(shortcut.symbols)
             }
@@ -118,7 +118,7 @@ final class Shortcuts {
                                    releaseHandler: actions.released)
             wheelKeys.append(key)
             if !key.register() {
-                print("ScreenDrawOverlay: wheel shortcut unavailable")
+                print("Scrim: wheel shortcut unavailable")
             }
         }
     }

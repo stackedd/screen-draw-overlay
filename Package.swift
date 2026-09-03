@@ -3,17 +3,17 @@
 import PackageDescription
 
 let package = Package(
-    name: "ScreenDrawOverlay",
+    name: "Scrim",
     platforms: [
         .macOS(.v11)
     ],
     products: [
-        .executable(name: "ScreenDrawOverlay", targets: ["ScreenDrawOverlay"])
+        .executable(name: "Scrim", targets: ["Scrim"])
     ],
     dependencies: [],
     targets: [
         .executableTarget(
-            name: "ScreenDrawOverlay",
+            name: "Scrim",
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("Carbon"),

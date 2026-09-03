@@ -1,6 +1,6 @@
 # How this app is put together
 
-ScreenDrawOverlay puts a transparent window over every screen and lets you draw on it. It
+Scrim puts a transparent window over every screen and lets you draw on it. It
 has no window of its own, no Dock icon, and asks for no system permissions. That last part
 is not an accident and it constrains almost every decision below.
 

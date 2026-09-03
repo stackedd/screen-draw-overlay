@@ -158,7 +158,7 @@ final class OverlayController {
             toolWheel: { [weak self] in self?.openToolWheel() },
             wheelReleased: { [weak self] in self?.wheels.release() },
             quit: {
-                print("ScreenDrawOverlay: emergency quit")
+                print("Scrim: emergency quit")
                 NSApp.terminate(nil)
             }
         ))
@@ -382,7 +382,7 @@ final class OverlayController {
         keptDrawingsLayout = OverlayController.screenLayoutSignature()
 
         let total = keptDrawings.values.reduce(0) { $0 + $1.strokeCount }
-        print("ScreenDrawOverlay: kept \(total) stroke(s) for the next time drawing mode opens")
+        print("Scrim: kept \(total) stroke(s) for the next time drawing mode opens")
     }
 
     private func enterDrawingMode() {
@@ -392,7 +392,7 @@ final class OverlayController {
 
         let screens = NSScreen.screens
         guard !screens.isEmpty else {
-            print("ScreenDrawOverlay: could not enter drawing mode because there are no screens")
+            print("Scrim: could not enter drawing mode because there are no screens")
             forceCloseOverlay(reason: "no screens available")
             return
         }
@@ -424,8 +424,8 @@ final class OverlayController {
         isDrawingMode = true
         isInteractionMode = false
 
-        print("ScreenDrawOverlay: drawing mode ON")
-        print("ScreenDrawOverlay: overlay created on \(windows.count) screen(s)")
+        print("Scrim: drawing mode ON")
+        print("Scrim: overlay created on \(windows.count) screen(s)")
 
         // Only one window can be key, so the secondary panels are just ordered in front.
         // The panels are non-activating, but making one key lets Escape reach keyDown.
@@ -445,7 +445,7 @@ final class OverlayController {
         // restoring them would put someone's annotation on the wrong screen at the wrong
         // scale, so they are dropped rather than guessed at.
         if !keptDrawings.isEmpty, layout != keptDrawingsLayout {
-            print("ScreenDrawOverlay: display layout changed, dropping kept strokes")
+            print("Scrim: display layout changed, dropping kept strokes")
             keptDrawings.removeAll()
             keptDrawingsLayout.removeAll()
             refreshMenuBar()
@@ -467,7 +467,7 @@ final class OverlayController {
         // A display really was plugged in, unplugged or rearranged. The open panels are
         // pinned to frames that may no longer exist, so the safe move is to leave drawing
         // mode rather than re-laying out overlays mid-stroke.
-        print("ScreenDrawOverlay: display layout changed while drawing")
+        print("Scrim: display layout changed while drawing")
         forceCloseOverlay(reason: "display layout changed")
     }
 
@@ -484,7 +484,7 @@ final class OverlayController {
     // clears the drawing; switching modes never does.
     func toggleInteractionMode() {
         guard isDrawingMode, !overlayWindowSnapshot().isEmpty else {
-            print("ScreenDrawOverlay: click-through toggle ignored, drawing mode is off")
+            print("Scrim: click-through toggle ignored, drawing mode is off")
             return
         }
 
@@ -512,14 +512,14 @@ final class OverlayController {
             // Hand the real pointer back; the drawn one belongs to drawing mode only.
             stopHoldingCursor()
             windows.forEach { $0.drawingView.releaseDrawingCursor() }
-            print("ScreenDrawOverlay: click-through mode ON (drawing kept, clicks pass through)")
+            print("Scrim: click-through mode ON (drawing kept, clicks pass through)")
         } else {
             // Key again, so that keys land here and stop instead of reaching the app under a
             // screen the overlay is covering.
             let keyPanel = windows.first { $0.drawingView.showsBadge } ?? windows[0]
             keyPanel.makeKeyAndOrderFront(nil)
             takeCursorBack()
-            print("ScreenDrawOverlay: click-through mode OFF (drawing again)")
+            print("Scrim: click-through mode OFF (drawing again)")
         }
 
         refreshMenuBar()
@@ -593,7 +593,7 @@ final class OverlayController {
 
     // A way to take the hold out of the picture, so that "is the hold closing the gap or
     // causing the flicker?" is a question an experiment answers. See CursorLog.
-    private static let holdsCursor = ProcessInfo.processInfo.environment["SDO_CURSOR_HOLD"] != "0"
+    private static let holdsCursor = ProcessInfo.processInfo.environment["SCRIM_CURSOR_HOLD"] != "0"
 
     // For as long as the overlay is taking the mouse. It stops on click-through, where the
     // pointer belongs to the app underneath, and when the overlay goes away.
@@ -661,7 +661,7 @@ final class OverlayController {
         windows.forEach { window in
             window.orderOut(nil)
             window.close()
-            print("ScreenDrawOverlay: overlay destroyed")
+            print("Scrim: overlay destroyed")
         }
 
         // The panels carried the transparent cursor; with them gone, make sure this app
@@ -673,7 +673,7 @@ final class OverlayController {
         overlayScreenLayout.removeAll()
 
         if isDrawingMode || !windows.isEmpty {
-            print("ScreenDrawOverlay: drawing mode OFF (\(reason))")
+            print("Scrim: drawing mode OFF (\(reason))")
         }
 
         isDrawingMode = false

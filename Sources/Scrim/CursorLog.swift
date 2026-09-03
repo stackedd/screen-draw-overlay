@@ -7,7 +7,7 @@
 //
 // So the app can say what it sees, on the machine where it happens:
 //
-//     SDO_CURSOR_LOG=1 dist/ScreenDrawOverlay.app/Contents/MacOS/ScreenDrawOverlay
+//     SCRIM_CURSOR_LOG=1 dist/Scrim.app/Contents/MacOS/Scrim
 //
 // It samples NSCursor.currentSystem - what the window server is drawing, as opposed to
 // NSCursor.current, which is this app's own idea of it and has been right the whole time -
@@ -16,7 +16,7 @@
 //
 // The other switch takes the cursor hold out of the picture:
 //
-//     SDO_CURSOR_LOG=1 SDO_CURSOR_HOLD=0 dist/.../ScreenDrawOverlay
+//     SCRIM_CURSOR_LOG=1 SCRIM_CURSOR_HOLD=0 dist/.../Scrim
 //
 // so that "is the hold closing the gap, or is it causing the flicker?" becomes a question an
 // experiment answers rather than an argument.
@@ -33,7 +33,7 @@ enum CursorLog {
     private static let started = Date()
 
     static var isOn: Bool {
-        ProcessInfo.processInfo.environment["SDO_CURSOR_LOG"] != nil
+        ProcessInfo.processInfo.environment["SCRIM_CURSOR_LOG"] != nil
     }
 
     static func startIfAsked(reporting state: @escaping () -> String) {
@@ -41,7 +41,7 @@ enum CursorLog {
             return
         }
 
-        print("ScreenDrawOverlay: cursor log on, sampling what the screen shows every 4ms")
+        print("Scrim: cursor log on, sampling what the screen shows every 4ms")
         print("CURSOR      time  what the screen shows   what the app thinks")
 
         let timer = Timer(timeInterval: 0.004, repeats: true) { _ in

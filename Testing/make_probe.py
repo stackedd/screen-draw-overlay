@@ -24,7 +24,7 @@ probe = io.open("Testing/probes/" + name + ".swift", encoding="utf-8").read()
 shutil.rmtree(pkg, ignore_errors=True)
 os.makedirs(src)
 io.open(pkg + "/Package.swift", "w", encoding="utf-8").write(
-    io.open("Package.swift", encoding="utf-8").read().replace("ScreenDrawOverlay", target))
+    io.open("Package.swift", encoding="utf-8").read().replace("Scrim", target))
 
 # Where a spliced probe's body goes: the end of applicationDidFinishLaunching, after the
 # app has finished setting itself up. The probe closes that method and then declares its
@@ -53,11 +53,11 @@ OPEN_UP = [
 ]
 
 spliced = False
-for source in sorted(os.listdir("Sources/ScreenDrawOverlay")):
+for source in sorted(os.listdir("Sources/Scrim")):
     if source == "main.swift" and not splice:
         continue
 
-    text = io.open("Sources/ScreenDrawOverlay/" + source, encoding="utf-8").read()
+    text = io.open("Sources/Scrim/" + source, encoding="utf-8").read()
     if splice and ANCHOR in text:
         # Probes drive the app with Carbon key codes and hot key events, which the file
         # they are spliced into has no reason to import on its own.

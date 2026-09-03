@@ -190,15 +190,15 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
         do {
             if SMAppService.mainApp.status == .enabled {
                 try SMAppService.mainApp.unregister()
-                print("ScreenDrawOverlay: will no longer open at login")
+                print("Scrim: will no longer open at login")
             } else {
                 try SMAppService.mainApp.register()
-                print("ScreenDrawOverlay: will open at login")
+                print("Scrim: will open at login")
             }
         } catch {
             // Nothing to shout about: macOS refuses this for copies in odd places, and the
             // app works exactly the same either way.
-            print("ScreenDrawOverlay: could not change the login item - \(error.localizedDescription)")
+            print("Scrim: could not change the login item - \(error.localizedDescription)")
         }
 
         refreshLoginItem()

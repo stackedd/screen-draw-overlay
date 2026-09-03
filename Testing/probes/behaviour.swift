@@ -6,7 +6,7 @@
         let kind = release ? UInt32(kEventHotKeyReleased) : UInt32(kEventHotKeyPressed)
         guard CreateEvent(nil, OSType(kEventClassKeyboard), kind, GetCurrentEventTime(),
                           UInt32(kEventAttributeNone), &event) == noErr, let event else { return }
-        var hotKeyID = EventHotKeyID(signature: OSType(UInt32(ascii: "SDO1")), id: id)
+        var hotKeyID = EventHotKeyID(signature: OSType(UInt32(ascii: "SCRM")), id: id)
         SetEventParameter(event, EventParamName(kEventParamDirectObject),
                           EventParamType(typeEventHotKeyID), MemoryLayout<EventHotKeyID>.size, &hotKeyID)
         SendEventToEventTarget(event, GetApplicationEventTarget())
