@@ -1165,3 +1165,59 @@ than eight of forty-five, and with an odd number nothing sits exactly opposite t
 straight left lands on the boundary between two sectors, so the eraser takes the side that a
 dead-left push resolves to and text takes the other: a caret put down by accident is nothing
 until somebody types into it, and an eraser reached by accident takes a line away.
+
+
+## 35. A wheel holds the pointer only if this app owns the window under it
+
+**The report, for the third time:** "picking something still flashes the system arrow." Twice
+before, the answer was to set the cursor more often - twenty times a second, then sixty, then a
+burst at a hundred and twenty after a panel appears - and each time the probe measured clean
+and the symptom came back.
+
+**What the probe had never done was move the mouse.** `probes/cursorflash.swift` warped once
+and held still, because holding still was the case the earlier reports described. Pushing the
+mouse the way a hand pushes it - twenty steps over a third of a second, which is what opening a
+wheel actually is - measured this (2026-09-04, 0.9, Mac15,6, macOS 26.6.2):
+
+| gesture | what the screen showed |
+| --- | --- |
+| a colour, overlay drawing | `8x8` throughout - ours, no arrow |
+| the first tool, no overlay open yet | **`SYSTEM ARROW` for 627ms**, the whole gesture |
+| a colour, in click-through | **`SYSTEM ARROW` throughout** |
+
+**The reason is one line of AppKit's behaviour that nothing here had written down:**
+`NSCursor.set()` only reaches the screen while the window under the pointer belongs to this
+app. Setting it a hundred and twenty times a second changes nothing when the window under the
+pointer is somebody else's. And the wheel panel set `ignoresMouseEvents = true`, so it was
+never the window under the pointer - its `resetCursorRects` had been dead code since the day it
+was written. With an overlay up nobody noticed, because the overlay owns the pointer and the
+wheel was riding on that. With no overlay - the first pick of a session, or any pick after
+hiding - and in click-through, where the overlay hands the mouse away on purpose, there was
+nothing of ours under the pointer at all.
+
+**So the wheel takes the mouse, but only when nothing else of ours has it.** Three things had
+to be true together, and each one was measured on its own before the next was added:
+
+1. `ignoresMouseEvents = false` while the app does not own the pointer - the panel has to be
+   the window under it.
+2. `acceptsMouseMovedEvents = true` - a window that is told nothing when the mouse moves never
+   applies its cursor rects. This alone changed nothing, which is how it was ruled out.
+3. **Key.** A window's cursor rects are honoured while it is the key window, and a borderless
+   panel cannot become key unless it says so. With `canBecomeKey` and `makeKeyAndOrderFront`,
+   the arrow window fell from 627ms to 15ms. The panel is non-activating either way, so the
+   application in front stays in front - the presenter keeps their slideshow.
+
+**And the last 15ms** is the one the burst was invented for: a window that appears under a
+stationary pointer is handed the plain arrow by the window server about 25ms later (entry 6).
+The wheel now runs the same burst the overlay does - 120 a second for a third of a second -
+which takes it to about one frame. That is the floor without owning the cursor before the
+window exists.
+
+**Where it deliberately does nothing:** while the overlay is drawing, the wheel leaves the
+mouse alone. The overlay already owns the pointer, and taking the keyboard off it would take it
+off the text tool mid-word.
+
+**After** (same probe, same machine, same day): no arrow at all on any pick over a drawing;
+about a frame as a wheel appears with nothing of ours underneath; and in click-through the
+wheel holds the cursor while it is up and gives it back to the app underneath when it goes,
+which is what click-through means.

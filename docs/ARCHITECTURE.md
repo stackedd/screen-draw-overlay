@@ -259,6 +259,11 @@ then a cursor of ours is not drawn at all.** Measured against a stand-in for a s
 can neither detect that (`NSCursor.currentSystem` reports a visible cursor either way, in the
 hiding process too) nor undo it (`CGDisplayShowCursor` from another process does nothing).
 
+**And setting a cursor only works while the window under the pointer is ours.** That is the
+whole of entry 35: a wheel opening with no overlay behind it, or over a click-through overlay,
+had nothing of this app under the pointer, so the hold below was setting a cursor that never
+reached the screen. The wheel takes the mouse and becomes key in exactly those cases now.
+
 So the pointer is a picture on a layer, the window server is handed a cursor that shows
 nothing, and the cursor hold re-sets that sixty times a second so a lost cursor cannot leave
 an arrow standing next to ours for more than about a frame. It was twenty a second first, and

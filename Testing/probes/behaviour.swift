@@ -1091,6 +1091,43 @@
         controller.toggleDrawingMode()
         check("and when the overlay goes away", controller.cursorHold == nil ? "yes" : "no", "yes")
 
+        // Who owns the pointer while a wheel is up. NSCursor.set() only reaches the screen
+        // while the window under the pointer belongs to this app, so with no overlay open - or
+        // in click-through, where the overlay hands the mouse over - a wheel that ignored the
+        // mouse came up next to a plain arrow and nothing could take it back
+        // (docs/DECISIONS.md 35). It takes the mouse in exactly those cases and not otherwise.
+        if state != "OFF" {
+            controller.toggleDrawingMode()
+        }
+
+        check("with no overlay open, the wheel takes the mouse",
+              controller.wheels.appOwnsThePointer?() == false ? "takes it" : "leaves it",
+              "takes it")
+
+        controller.toggleDrawingMode()
+        check("while the overlay is drawing, it leaves the mouse alone",
+              controller.wheels.appOwnsThePointer?() == true ? "leaves it" : "takes it",
+              "leaves it")
+
+        controller.toggleInteractionMode()
+        check("and in click-through it takes it again",
+              controller.wheels.appOwnsThePointer?() == false ? "takes it" : "leaves it",
+              "takes it")
+        controller.toggleInteractionMode()
+
+        // The burst after a wheel appears, which is the other half: a window that appears
+        // under a stationary pointer is handed the plain arrow about 25ms later, so the
+        // cursor is re-set 120 times a second for a third of a second. Like every timer here
+        // it has to stop.
+        controller.openToolWheel()
+        heldOpen()
+        check("a wheel that has appeared is holding the cursor",
+              controller.wheels.settling != nil ? "yes" : "no", "yes")
+        controller.wheels.close()
+        check("and it stops when the wheel goes",
+              controller.wheels.settling == nil ? "yes" : "no", "yes")
+        controller.toggleDrawingMode()
+
         // The settings window, last of all because showing it activates the app and takes the
         // keyboard, which is exactly what the checks above are about.
         //

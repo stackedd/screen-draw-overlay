@@ -132,23 +132,39 @@ warp(to: middle)
 gesture("a colour", key: 7, push: NSPoint(x: -120, y: 0))
 warp(to: middle)
 
-// The keyboard, which changes the tool without any window appearing or going away - and
-// which nothing was holding the cursor for.
-func key(_ what: String, _ code: Int, _ chars: String) {
-    watch(what, seconds: 3.0, script: [
-        (0.10, {
-            guard let panel = controller.overlayWindowSnapshot().first else { return }
-            NSApp.sendEvent(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
-                                             timestamp: 0, windowNumber: panel.windowNumber,
-                                             context: nil, characters: chars,
-                                             charactersIgnoringModifiers: chars, isARepeat: false,
-                                             keyCode: UInt16(code))!)
+// Pushing the mouse the way a hand does, rather than one jump: the window server asks the
+// window under the pointer for a cursor on every move, so a moving pointer is the case where
+// owning that window matters. A hand pushes for about a third of a second.
+func push(from start: NSPoint, to end: NSPoint, over seconds: Double, steps: Int = 20) -> [(Double, () -> Void)] {
+    (1...steps).map { step in
+        let t = Double(step) / Double(steps)
+        return (seconds * t + 0.30, {
+            warp(to: NSPoint(x: start.x + (end.x - start.x) * CGFloat(t),
+                             y: start.y + (end.y - start.y) * CGFloat(t)))
         })
-    ])
+    }
 }
 
-key("the H key: the marker, no window involved", 4, "h")
-key("the ] key: one step thicker", 30, "]")
+func swept(_ what: String, key: UInt32, to end: NSPoint) {
+    watch(what, seconds: 3.0, script:
+        [(0.10, { fireHotKey(id: key) })]
+        + push(from: middle, to: end, over: 0.35)
+        + [(0.75, { fireHotKey(id: key, release: true) })])
+}
+
+// A hand actually pushing the mouse, which is what the report is about: with the overlay up
+// this app owns the window under the pointer and the answer should never change.
+swept("a colour, with the mouse pushed the way a hand pushes it",
+      key: 7, to: NSPoint(x: middle.x - 120, y: middle.y))
+warp(to: middle)
+
+// The same push in click-through, where the overlay hands the mouse to the app underneath -
+// so while a wheel is up, the window under the pointer is not ours.
+controller.toggleInteractionMode()
+swept("the same push in click-through, where we own nothing under the pointer",
+      key: 7, to: NSPoint(x: middle.x - 120, y: middle.y))
+controller.toggleInteractionMode()
+warp(to: middle)
 
 // And the way out: letting go in the middle, which hands the screen back.
 gesture("the hub, which hands the screen back", key: 6, push: NSPoint(x: 0, y: 0))

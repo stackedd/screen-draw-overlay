@@ -158,6 +158,16 @@ final class OverlayController {
             self?.takeCursorBack()
         }
 
+        // A wheel can only hold the pointer still if this app owns the window under it, and
+        // that is only true while an overlay is up and taking the mouse.
+        wheels.appOwnsThePointer = { [weak self] in
+            guard let self else {
+                return true
+            }
+
+            return self.isDrawingMode && !self.isInteractionMode
+        }
+
         menuBar = MenuBarItem(actions: MenuBarItem.Actions(
             toggleDrawing: { [weak self] in self?.toggleDrawingMode() },
             toggleClickThrough: { [weak self] in self?.toggleInteractionMode() },

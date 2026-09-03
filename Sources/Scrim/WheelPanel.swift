@@ -93,9 +93,18 @@ final class WheelPanel {
         view.wantsLayer = true
         return view
     }()
-    private let panel: NSPanel
+    // Borderless windows cannot become key unless they say so, and this one has to be able
+    // to: a window's cursor rects are only honoured while it is the key window, which is what
+    // stops the plain arrow appearing next to the wheel (docs/DECISIONS.md 35).
+    private final class Panel: NSPanel {
+        override var canBecomeKey: Bool { true }
+    }
+
+    private let panel: Panel
     private var poll: Timer?
     private var showTimer: Timer?
+    // The burst after this panel appears - see settle().
+    private var settling: Timer?
     private var isShowing = false
     private var centre: NSPoint = .zero
     private var pick: ((Int?) -> Void)?
@@ -109,8 +118,8 @@ final class WheelPanel {
     var selection: Int? { view.highlighted }
 
     init() {
-        panel = NSPanel(contentRect: view.frame, styleMask: [.borderless, .nonactivatingPanel],
-                        backing: .buffered, defer: false)
+        panel = Panel(contentRect: view.frame, styleMask: [.borderless, .nonactivatingPanel],
+                      backing: .buffered, defer: false)
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
@@ -119,7 +128,13 @@ final class WheelPanel {
         // The wheel is driven by a held key and a poll, so it never needs a click - and a
         // panel that took them would be one more thing standing between the user and the
         // app underneath.
+        // Set for real in open(): whether it takes them depends on whether anything else of
+        // ours is already under the pointer. See appOwnsThePointer.
         panel.ignoresMouseEvents = true
+        // Without this a window is told nothing when the mouse moves over it, and a window
+        // that hears nothing never applies its cursor rects - which is the whole reason this
+        // panel takes the mouse at all.
+        panel.acceptsMouseMovedEvents = true
         // NSPanel hides itself when the app deactivates unless told otherwise, which for a
         // background app means never appearing at all.
         panel.hidesOnDeactivate = false
@@ -150,6 +165,11 @@ final class WheelPanel {
             origin.x = min(max(origin.x, bounds.minX + 8), bounds.maxX - extent - 8)
             origin.y = min(max(origin.y, bounds.minY + 8), bounds.maxY - extent - 8)
         }
+
+        // Taking the mouse is how this panel gets to own the cursor, and it only needs to
+        // when nothing else of ours does. While the overlay is drawing it keeps its hands off,
+        // so a stroke in progress goes on getting its events.
+        panel.ignoresMouseEvents = appOwnsThePointer?() ?? true
 
         view.wheel = wheel
         view.centreLabel = centreLabel
@@ -214,7 +234,15 @@ final class WheelPanel {
 
         isShowing = true
         panel.alphaValue = 0
-        panel.orderFrontRegardless()
+
+        // Key only when it is the one holding the cursor. While the overlay is drawing it
+        // already owns both, and taking the keyboard off it would take it off the text tool.
+        // The panel is non-activating either way, so the app in front stays in front.
+        if panel.ignoresMouseEvents {
+            panel.orderFrontRegardless()
+        } else {
+            panel.makeKeyAndOrderFront(nil)
+        }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.10
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
@@ -222,6 +250,35 @@ final class WheelPanel {
         }
         panel.invalidateCursorRects(for: view)
         PointerCursor.invisible.set()
+        settle()
+    }
+
+    // A window that appears under a stationary pointer is handed the plain arrow by the window
+    // server about 25ms later, whatever the app set before that - the overlay has had a burst
+    // against exactly this since it was measured (docs/DECISIONS.md 6), and the wheel had only
+    // its own poll, which is sixty a second. Measured with probes/cursorflash.swift: the arrow
+    // was on screen for 15ms as the wheel came up. This is the same burst: 120 a second for a
+    // third of a second, then the poll carries it.
+    private static let settleInterval: TimeInterval = 1.0 / 120
+    private static let settleTicks = 42
+
+    private func settle() {
+        settling?.invalidate()
+
+        var ticks = 0
+        let timer = Timer(timeInterval: WheelPanel.settleInterval, repeats: true) { [weak self] timer in
+            ticks += 1
+            PointerCursor.invisible.set()
+
+            guard ticks >= WheelPanel.settleTicks || self == nil else {
+                return
+            }
+
+            timer.invalidate()
+            self?.settling = nil
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        settling = timer
     }
 
     // The held key came up. Whatever the pointer is pushing towards is the answer; the dead
@@ -229,6 +286,10 @@ final class WheelPanel {
     func release() {
         // Released before the wheel ever appeared: a tap, and a tap chooses nothing. The hub
         // is only ever reached by letting go in the middle of a wheel that is on screen.
+        // Hands the mouse back before anything else, the way forceCloseOverlay does: a panel
+        // that is fading out and still taking clicks is the one thing this app must not be.
+        panel.ignoresMouseEvents = true
+
         let tapped = !isShowing
         let chosen = view.highlighted
         let answer = tapped ? nil : pick
@@ -237,6 +298,8 @@ final class WheelPanel {
         poll = nil
         showTimer?.invalidate()
         showTimer = nil
+        settling?.invalidate()
+        settling = nil
 
         // The choice first, so that whatever it changed - the tool, and with it the cursor -
         // has already happened by the time this window goes away.
@@ -274,13 +337,27 @@ final class WheelPanel {
     // has to take the cursor back: the pointer has not moved, so nothing else will ask it to.
     var onClose: (() -> Void)?
 
+    // Whether this app already owns the window under the pointer - which is to say, whether
+    // an overlay is up and taking the mouse. Set by OverlayController, asked on every open.
+    //
+    // It decides whether this panel takes mouse events, and that decides whether the pointer
+    // flickers. `NSCursor.set()` only reaches the screen while the window under the pointer
+    // belongs to this app: with no overlay open, or in click-through, the window underneath
+    // belongs to somebody else, so setting a cursor sixty times a second changes nothing at
+    // all and the wheel comes up next to a plain arrow. Measured, and the numbers are in
+    // docs/DECISIONS.md 35.
+    var appOwnsThePointer: (() -> Bool)?
+
     // The way out that does not wait for anything: the overlay is going away, or the app is.
     func close() {
+        panel.ignoresMouseEvents = true
         let wasOpen = poll != nil
         poll?.invalidate()
         poll = nil
         showTimer?.invalidate()
         showTimer = nil
+        settling?.invalidate()
+        settling = nil
         isShowing = false
         showing += 1
         panel.orderOut(nil)
