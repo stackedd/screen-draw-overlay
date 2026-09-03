@@ -11,7 +11,7 @@
 import AppKit
 import Carbon
 
-final class SettingsWindow: NSObject, NSWindowDelegate {
+final class SettingsWindow: NSObject, NSWindowDelegate, NSTextFieldDelegate {
     private let settings: ShortcutSettings
     // Recording a shortcut means pressing keys this app has registered system-wide, so they
     // have to be taken down while a recorder is armed - otherwise pressing ⌥X to record it
@@ -77,8 +77,20 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             let name = NSTextField(labelWithString: action.label)
             let recorder = RecorderButton()
             recorder.onRecording = { [weak self] recording in
-                self?.suspendShortcuts(recording)
-                self?.say(recording ? "Press the keys you want for \(action.label)." : "")
+                guard let self else {
+                    return
+                }
+
+                // Only one at a time: arming this one puts any other one down, so two rows
+                // cannot both be waiting for the same keypress.
+                if recording {
+                    for (other, button) in self.recorders where other != action {
+                        button.cancelRecording()
+                    }
+                }
+
+                self.suspendShortcuts(recording)
+                self.say(recording ? "Press the keys you want for \(action.label)." : "")
             }
             recorder.onCapture = { [weak self] event in
                 self?.record(event, for: action)
@@ -92,6 +104,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
                 field.formatter = SettingsWindow.milliseconds
                 field.target = self
                 field.action = #selector(delayChanged(_:))
+                field.delegate = self
                 field.tag = ShortcutSettings.Action.allCases.firstIndex(of: action) ?? 0
                 field.toolTip = "Milliseconds before the wheel appears. 0 opens it at once."
                 delayFields[action] = field
@@ -204,6 +217,14 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         refresh()
     }
 
+    // Typing in a delay field is doing something else, so it puts a waiting recorder down -
+    // on the way in rather than on the way out. Ending an edit fires the field's action, and
+    // that happens when the focus *leaves* it, which is often because a recorder was just
+    // clicked: disarming there would put down the recorder the click had only just armed.
+    func controlTextDidBeginEditing(_ notification: Notification) {
+        disarm()
+    }
+
     @objc private func delayChanged(_ sender: NSTextField) {
         let actions = ShortcutSettings.Action.allCases
         guard actions.indices.contains(sender.tag) else {
@@ -215,8 +236,21 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     }
 
     @objc private func resetToDefaults() {
+        // Anything else in this window means the recorder is not what you are doing any more.
+        // Clicking a button does not move the first responder on macOS, so a recorder left
+        // armed goes on swallowing keystrokes behind whatever you clicked: reset the row and
+        // the next key you press is taken as a new shortcut for it.
+        disarm()
         settings.resetToDefaults()
-        say("")
+        say("Back to ⌥A ⌥S ⌥D for the wheels, ⌥Z undo, ⌥X actions, ⌥C clear.")
+        refresh()
+    }
+
+    // Puts every recorder down and takes the keyboard focus off them, which is what makes the
+    // hot keys come back (cancelRecording tells the controller to re-register).
+    private func disarm() {
+        recorders.values.forEach { $0.cancelRecording() }
+        window?.makeFirstResponder(nil)
         refresh()
     }
 

@@ -1091,6 +1091,49 @@
         controller.toggleDrawingMode()
         check("and when the overlay goes away", controller.cursorHold == nil ? "yes" : "no", "yes")
 
+        // The settings window, last of all because showing it activates the app and takes the
+        // keyboard, which is exactly what the checks above are about.
+        //
+        // The fault being checked: clicking a button on macOS does not move the first
+        // responder, so a recorder left waiting for keys went on waiting behind whatever was
+        // clicked next - reset the shortcuts and the next key you pressed was taken as a new
+        // one for the row you had armed.
+        var suspended = 0
+        let settingsPanel = SettingsWindow(settings: controller.shortcutSettings) { asked in
+            suspended += asked ? 1 : -1
+        }
+        settingsPanel.show()
+
+        // Armed through the method the button's own action calls, not performClick: a window
+        // that is not key does not always hand a button the first responder in a test run, and
+        // AppKit's click plumbing is not what is being checked here.
+        settingsPanel.recorders[.tools]?.beginRecording()
+        check("arming a shortcut leaves it waiting for keys",
+              settingsPanel.recorders[.tools]?.isRecording == true ? "armed" : "not armed",
+              "armed")
+        check("and the hot keys come down while it waits", suspended > 0 ? "down" : "up", "down")
+
+        settingsPanel.resetToDefaults()
+        check("reset puts every recorder down",
+              settingsPanel.recorders.values.contains { $0.isRecording } ? "still armed" : "all down",
+              "all down")
+        check("and the hot keys go back up", suspended <= 0 ? "up" : "down", "up")
+        check("and the keys are the defaults again",
+              ShortcutSettings.Action.allCases
+                  .map { controller.shortcutSettings.binding(for: $0).spoken }
+                  .joined(separator: " "),
+              ShortcutSettings.Action.allCases
+                  .map { $0.fallback.spoken }
+                  .joined(separator: " "))
+
+        // Two rows cannot both be waiting for the same keypress.
+        settingsPanel.recorders[.tools]?.beginRecording()
+        settingsPanel.recorders[.colours]?.beginRecording()
+        check("arming one row puts the other down",
+              settingsPanel.recorders[.tools]?.isRecording == true ? "both" : "one",
+              "one")
+        settingsPanel.window?.close()
+
         // Where the mouse was before the laser checks warped it. Somebody is sitting in front
         // of this machine and their pointer should be where they left it.
         CGWarpMouseCursorPosition(CGPoint(x: mouseWasAt.x,

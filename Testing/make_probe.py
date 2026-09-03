@@ -41,6 +41,7 @@ HEAD = """            controller.reportUnavailableShortcuts(unavailable)
 # private is file scoped, so a probe can otherwise only reach what its own file can see.
 OPEN_UP = [
     ("    private func ", "    func "),
+    ("    @objc private func ", "    @objc func "),
     ("    private var ", "    var "),
     ("    private lazy var ", "    lazy var "),
     ("    private let ", "    let "),
