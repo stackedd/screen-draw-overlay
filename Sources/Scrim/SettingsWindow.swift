@@ -14,7 +14,7 @@ import Carbon
 final class SettingsWindow: NSObject, NSWindowDelegate, NSTextFieldDelegate {
     private let settings: ShortcutSettings
     // Recording a shortcut means pressing keys this app has registered system-wide, so they
-    // have to be taken down while a recorder is armed - otherwise pressing ⌥X to record it
+    // have to be taken down while a recorder is armed - otherwise pressing ⌥A to record it
     // opens the tools wheel over the window.
     private let suspendShortcuts: (Bool) -> Void
 
@@ -242,7 +242,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSTextFieldDelegate {
         // the next key you press is taken as a new shortcut for it.
         disarm()
         settings.resetToDefaults()
-        say("Back to ⌥A ⌥S ⌥D for the wheels, ⌥Z undo, ⌥X actions, ⌥C clear.")
+        say("Back to ⌥A tools, ⌥S size, ⌥D colour, ⌥Z undo, ⌥X actions, ⌥C clear.")
         refresh()
     }
 

@@ -998,7 +998,7 @@ key travels up the responder chain and ends in a system beep, and `⌘Q` in the 
 stroke is not what anybody meant.
 
 
-## 31. Undo is a key of its own, on `⌥Z`, and the row moved right
+## 31. Undo is a key of its own, on `⌥Z`, and the row moved right *(the row moved again - see 36)*
 
 **Was:** undo was the hub of the `⌥V` wheel. A tap of that key took one thing back, which
 worked and was measurably fast, but it had to be learned twice over - that a tap is different
@@ -1221,3 +1221,47 @@ off the text tool mid-word.
 about a frame as a wheel appears with nothing of ours underneath; and in click-through the
 wheel holds the cursor while it is up and gives it back to the app underneath when it goes,
 which is what click-through means.
+
+
+## 36. Two rows under the left hand, and clear is a press
+
+**The complaint:** clearing the screen was a sector of a wheel, which is hold, push, release -
+two deliberate steps for the thing you do when a slide is finished and the next one is already
+up. It used to be the bare letter `C`, and that was worse for the reason entry 30 gives, but
+"deliberate" had gone too far in the other direction.
+
+**Now**, six keys in two rows, and the rows mean something:
+
+| | | |
+| --- | --- | --- |
+| `⌥A` tools | `⌥S` size | `⌥D` colour |
+| `⌥Z` undo | `⌥X` redo · temporary ink · hide | `⌥C` clear |
+
+The top row is **what you draw with**; the bottom row is **what happens to what you have
+drawn**. Every one of them is under the left hand without moving it, and the fingers that find
+`Z X C` for undo, cut and copy everywhere else find them here for undo, the actions wheel and
+clear.
+
+**Clear left the wheel** for the reason undo left it (31): one thing in two places is one place
+too many, and the wheel's answer was the one that needed explaining. The `⌥X` wheel is three
+sectors now - redo, temporary ink, hide - which the wheel drew without a line of code changing,
+because it has always taken its angle from how many items it was given.
+
+**Against clearing by accident**, which is the argument that put clear on a wheel in the first
+place: it is undoable, and it says so. Pressing it flashes **"Cleared · ⌥Z puts it back"** on
+the badge for a second and a half, through the same `flash(_:)` that says what switching
+temporary ink did. Somebody who has just watched a slide's worth of annotation vanish is not in
+a state to remember a rule; the screen tells them. And if `⌥C` still feels too close to `⌥Z`
+for comfort, it is one of six rows in Settings and can be moved to anything (32).
+
+**What it costs.** The key registered for the life of the app is now `⌥A` rather than `⌥X`, so
+that is the combination taken from every other application on the machine. The other five come
+and go with the overlay - including clear, because with nothing on screen there is nothing to
+clear.
+
+**Muscle memory.** This is the third arrangement in a fortnight: `⌃⌥⌘D` and bare letters (4, 5),
+then `⌥Z X C V` with the wheels (30), then `Z X C V B` when undo took `Z` (31), and now two
+rows. Nothing has been released, so the cost is one person's fingers - and the reason it kept
+moving is worth writing down: each arrangement was right for the number of things the app had
+at the time, and the app kept growing. Six is where it stops without a modifier: the row below
+the home row is full.

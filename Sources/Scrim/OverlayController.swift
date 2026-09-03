@@ -4,12 +4,12 @@
 // Three things worth knowing before changing anything here:
 //
 //   1. The mode model. Off, drawing, click-through, and one gesture moves between all three:
-//      ⌥X holds a wheel open, pushing at a tool opens the overlay and hands you that tool,
+//      ⌥A holds a wheel open, pushing at a tool opens the overlay and hands you that tool,
 //      and letting go in the middle leaves - the screen back to the app underneath first,
 //      then the overlay away with the drawing kept.
 //   2. Overlay lifetime. Panels are created per screen on entry and destroyed on exit, so
 //      the drawing is lifted out and filed by display beforehand - hiding is not erasing,
-//      only CLEAR on the ⌥B wheel erases - along with the undo history that goes with it.
+//      only ⌥C erases - along with the undo history that goes with it.
 //   3. Recovery. forceCloseOverlay releases the mouse before it closes anything, and
 //      overlayWindowSnapshot deliberately re-scans NSApp.windows for panels that fell out
 //      of our own records. Both exist because a stuck overlay traps the user's clicks.
@@ -39,23 +39,20 @@ final class OverlayController {
         items: toolOrder.map { Wheel.Item(label: $0.label, symbol: $0.symbolName) },
         centreLabel: "CLICK-THROUGH")
 
-    // What you do *to* a drawing rather than with it, on ⌥B. Undo is not here: it is a key
-    // of its own now (⌥Z, where every other application on this machine keeps it), and one
-    // thing in two places is one place too many. CLEAR being here is the point - it used to be
-    // the bare letter C, which is both easy to hit by accident and only worked when this app
-    // happened to have the keyboard.
-    private static let actionOrder: [Action] = [.redo, .clear, .temporaryInk, .hide]
+    // What you do *to* a drawing rather than with it, on ⌥X. Neither undo nor clear is here:
+    // each has a key of its own now (⌥Z and ⌥C), and one thing in two places is one place too
+    // many - the same reasoning that took undo off this wheel took clear off it
+    // (docs/DECISIONS.md 31 and 36).
+    private static let actionOrder: [Action] = [.redo, .temporaryInk, .hide]
 
     enum Action {
         case redo
-        case clear
         case temporaryInk
         case hide
 
         var label: String {
             switch self {
             case .redo: return "REDO"
-            case .clear: return "CLEAR"
             case .temporaryInk: return "TEMP INK"
             case .hide: return "HIDE"
             }
@@ -64,7 +61,6 @@ final class OverlayController {
         var symbolName: String {
             switch self {
             case .redo: return "arrow.uturn.forward"
-            case .clear: return "trash"
             case .temporaryInk: return "timer"
             case .hide: return "eye.slash"
             }
@@ -300,7 +296,8 @@ final class OverlayController {
             actions: { [weak self] in self?.openActionWheel() },
             released: { [weak self] in self?.wheels.release() },
             undo: { [weak self] in self?.undoPressed() },
-            undoReleased: { [weak self] in self?.undoReleased() }
+            undoReleased: { [weak self] in self?.undoReleased() },
+            clear: { [weak self] in self?.clearNow() }
         ))
     }
 
@@ -337,6 +334,19 @@ final class OverlayController {
     private func undoReleased() {
         undoRepeat?.invalidate()
         undoRepeat = nil
+    }
+
+    // ⌥C: the screen the pointer is on, back to empty. One press, because reaching for it
+    // through a wheel in the middle of a sentence was the thing being complained about.
+    //
+    // It says what it did and how to take it back. Clearing is undoable and always has been,
+    // but somebody who has just watched a slide's worth of annotation vanish is not in a
+    // state to remember that - so the badge says it, the way switching temporary ink on says
+    // what it did (docs/DECISIONS.md 36).
+    private func clearNow() {
+        onTheScreenUnderThePointer { $0.clear() }
+        let undo = shortcutSettings.binding(for: .undo).spoken
+        drawingViews.forEach { $0.flash("Cleared · \(undo) puts it back") }
     }
 
     // The tools wheel carries the mode as well as the tool, which is the whole shape of the
@@ -429,10 +439,6 @@ final class OverlayController {
             switch OverlayController.actionOrder[index] {
             case .redo:
                 self.undoOnScreenUnderPointer(redo: true)
-            case .clear:
-                // The screen the pointer is on, like undo - so that taking it back afterwards
-                // puts back what was actually cleared.
-                self.onTheScreenUnderThePointer { $0.clear() }
             case .temporaryInk:
                 // Said out loud, because ink that disappears by itself is alarming if you did
                 // not mean to switch it on - and the badge, which says so permanently, is a
@@ -808,7 +814,7 @@ final class OverlayController {
     // the way out.
     private func forceCloseOverlay(reason: String) {
         // Before anything else: the wheels belong to an overlay that is about to stop
-        // existing, and ⌥X ⌥C ⌥V have to go back to typing what they type. ⌥Z stays
+        // existing, and ⌥S ⌥D ⌥Z ⌥X ⌥C have to go back to typing what they type. ⌥A stays
         // registered for the life of the app, because it is the only way back in.
         stopWheels()
         stopHoldingCursor()

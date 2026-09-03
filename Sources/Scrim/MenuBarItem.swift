@@ -102,7 +102,7 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
         // The whole interface is a key nobody can see, so the one place the app has to itself
         // says what it is. Somebody who installed this a month ago and forgot opens the menu,
         // not the README.
-        let hint = NSMenuItem(title: "Hold ⌥X for the tool wheel", action: nil, keyEquivalent: "")
+        let hint = NSMenuItem(title: "Hold ⌥A for the tool wheel", action: nil, keyEquivalent: "")
         hint.isEnabled = false
         menu.addItem(hint)
         menu.addItem(.separator())
@@ -153,7 +153,7 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
     }
 
     func update(isDrawing: Bool, isClickThrough: Bool, hasKeptStrokes: Bool) {
-        // The menu is the way in when ⌥X is taken by something else, so it offers what the
+        // The menu is the way in when ⌥A is taken by something else, so it offers what the
         // wheel offers: start or put away the overlay, and hand the screen back. Click-Through
         // is a state, so it reads as a checkable item rather than a second command that would
         // say the same thing as the first one.
@@ -177,7 +177,7 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
         let tooltip: String
         if !isDrawing {
             symbolName = "scribble"
-            tooltip = "Scrim - hold ⌥X and push at a tool to draw"
+            tooltip = "Scrim - hold ⌥A and push at a tool to draw"
         } else if isClickThrough {
             symbolName = "pencil.slash"
             tooltip = "Click-through: the drawing is showing, clicks go to the app underneath"

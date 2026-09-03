@@ -23,8 +23,8 @@ final class Shortcuts {
     }
 
     // The rest only mean something once there is a canvas, so they come and go with the
-    // overlay: three more wheels, and undo. Every one of them needs both halves of the
-    // keypress - the wheels because they are held, and undo because holding it repeats.
+    // overlay: three more wheels, undo and clear. The wheels need both halves of the keypress
+    // because they are held; undo needs the release to stop repeating; clear is one press.
     struct WheelActions {
         let colours: () -> Void
         let widths: () -> Void
@@ -32,6 +32,7 @@ final class Shortcuts {
         let released: () -> Void
         let undo: () -> Void
         let undoReleased: () -> Void
+        let clear: () -> Void
     }
 
     // Carbon identifies a hot key by a number. Named rather than written out at the call
@@ -44,6 +45,7 @@ final class Shortcuts {
         case widthWheel = 8
         case actionWheel = 9
         case undo = 10
+        case clear = 11
     }
 
     // Held only to keep them registered; nothing here needs to reach one by name.
@@ -127,10 +129,10 @@ final class Shortcuts {
 
         refused = []
 
-        // Z X C V B out of the box, five keys in a row under the left hand: undo, tools,
-        // colour, size, and the things you do to a drawing rather than with it. Undo sits on
-        // Z because that is where every other application on this machine puts it
-        // (docs/DECISIONS.md 31). Any of them can be moved (32).
+        // A S D and Z X C out of the box, two rows under the left hand: the top row is what
+        // you draw with, the bottom row is what happens to what you have drawn
+        // (docs/DECISIONS.md 36). Undo sits on Z because that is where every other application
+        // on this machine puts it (31). Any of them can be moved (32).
         let wheels: [(ID, ShortcutSettings.Action, () -> Void)] = [
             (.colourWheel, .colours, actions.colours),
             (.widthWheel, .widths, actions.widths),
@@ -163,6 +165,20 @@ final class Shortcuts {
         if !undoKey.register() {
             print("Scrim: undo shortcut unavailable")
             refused.append(undo.spoken)
+        }
+
+        // Clear is one press and nothing else - no wheel, no release half. It is here rather
+        // than in the always-live set for the obvious reason: with no overlay open there is
+        // nothing on screen to clear.
+        let clear = settings.binding(for: .clear)
+        let clearKey = GlobalHotKey(id: ID.clear.rawValue,
+                                    keyCode: clear.keyCode,
+                                    modifiers: clear.modifiers,
+                                    handler: actions.clear)
+        wheelKeys.append(clearKey)
+        if !clearKey.register() {
+            print("Scrim: clear shortcut unavailable")
+            refused.append(clear.spoken)
         }
     }
 

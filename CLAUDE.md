@@ -5,18 +5,17 @@ it: over a presentation, a document, anything. Nothing on screen but the drawing
 icon, and **no system permissions of any kind**. It owns one window - the settings sheet where
 the shortcuts are changed - and it is only there when somebody asks for it.
 
-**The Option row is the whole interface**, five keys in a row. `⌥Z` undoes: one press takes
-one thing back and holding it repeats, where every other application on this machine keeps it.
-The other four open a wheel - hold, push the mouse at what you want, let go. `⌥X` is the tools;
-a tool opens the overlay and hands it to you, and the middle is the way out, one step at a
-time. `⌥C` is colour, `⌥V` is size, and `⌥B` is what else you do *to* a drawing: redo, clear,
-temporary ink and hide. `⌃⌥⌘Esc` quits.
+**Two rows under the left hand are the whole interface.** `⌥A` `⌥S` `⌥D` are what you draw
+with - tools, size, colour - and each opens a wheel: hold, push the mouse at what you want, let
+go. `⌥A`'s wheel opens the overlay and hands you a tool, and its middle is the way out, one
+step at a time. `⌥Z` `⌥X` `⌥C` are what happens to what you have drawn: undo (one press, and
+holding it repeats), a wheel of redo/temporary ink/hide, and clear. `⌃⌥⌘Esc` quits.
 
 Every one of them is a global hot key, and that is the point: a non-activating panel only gets
 the keyboard while this app is the active one, so the bare keys this app used to have (`P` for
 pen, `C` to clear, `⌘Z` to undo) worked only sometimes, which is worse than not existing
-(`docs/DECISIONS.md` 30). There are none left. The menu bar item is the way in if `⌥X` is ever
-taken by another app.
+(`docs/DECISIONS.md` 30). There are none left, and every one of these six can be moved in
+Settings (32). The menu bar item is the way in if `⌥A` is ever taken by another app.
 
 ## Stack
 
@@ -133,8 +132,7 @@ easy to repeat.
 9. **Never make drawing mode interact with anything.** No key should escape it, no click
    should reach what is underneath. Interaction is what click-through is for.
 10. **Never let hiding erase.** The wheel's `HIDE` keeps the strokes **and the undo
-    history**; `CLEAR` on the `⌥B` wheel is the only thing that erases, and even that is
-    undoable.
+    history**; `⌥C` is the only thing that erases, and even that is undoable.
 11. **Never let an edit point at a position.** Undo names strokes by `id`. `removeLast()`
     took back the wrong line whenever temporary ink faded out from under the history.
 12. **Never make a bitmap by hand.** `Picture.drawn(size:scale:)` is the one place that gets
@@ -149,8 +147,8 @@ easy to repeat.
 about making it one thing to learn and one thing to trust. It is MIT-licensed and given
 away, so there is nothing in the code that checks, counts, phones home or asks for money.
 
-- **One mechanic.** Five keys on the Option row (`⌥Z` undo, `⌥X` tools, `⌥C` colour, `⌥V`
-  size, `⌥B` what else you do *to* a drawing), all of them global, the four wheels all
+- **One mechanic.** Six keys in two rows (`⌥A` tools, `⌥S` size, `⌥D` colour, `⌥Z` undo,
+  `⌥X` what else you do *to* a drawing, `⌥C` clear), all of them global, the three wheels all
   hold-push-release, with nothing underneath them. The bare keys are gone
   (`docs/DECISIONS.md` 30): they only worked while a non-activating panel happened to be key,
   which is a state the user cannot see. Undo has a key rather than a hub

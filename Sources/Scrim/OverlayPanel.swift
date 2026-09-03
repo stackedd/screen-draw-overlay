@@ -26,7 +26,7 @@ final class OverlayPanel: NSPanel {
     // .popUpMenu (101) clears all of them.
     //
     // Being above the menu bar is only safe because nothing on screen is needed to get out:
-    // ⌥X opens the wheel wherever the pointer is and its middle hands the screen back and then
+    // ⌥A opens the wheel wherever the pointer is and its middle hands the screen back and then
     // puts the overlay away, and ⌃⌥⌘Esc quits the app outright. Both are global hot keys that
     // do not depend on anything the overlay is showing.
     private static let overlayLevel = NSWindow.Level.popUpMenu

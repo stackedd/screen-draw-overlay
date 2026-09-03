@@ -14,11 +14,12 @@ import Carbon
 
 final class ShortcutSettings {
     enum Action: String, CaseIterable {
-        case undo
         case tools
-        case colours
         case widths
+        case colours
+        case undo
         case actions
+        case clear
 
         var label: String {
             switch self {
@@ -27,6 +28,7 @@ final class ShortcutSettings {
             case .colours: return "Colour"
             case .widths: return "Size"
             case .actions: return "Actions"
+            case .clear: return "Clear"
             }
         }
 
@@ -34,26 +36,29 @@ final class ShortcutSettings {
         var explanation: String {
             switch self {
             case .undo: return "one press, one thing back - held, it repeats"
-            case .tools: return "pen, marker, shapes, eraser, laser - and the way out"
+            case .tools: return "pen, marker, text, shapes, eraser, laser - and the way out"
             case .colours: return "six colours"
             case .widths: return "six sizes, of whatever is in your hand"
-            case .actions: return "redo, clear, temporary ink, hide"
+            case .actions: return "redo, temporary ink, hide"
+            case .clear: return "takes the screen back to empty - undo puts it back"
             }
         }
 
-        // Undo is a press, not a gesture, so it has nothing to wait for.
+        // Undo and clear are presses, not gestures, so they have nothing to wait for.
         var opensAWheel: Bool {
-            self != .undo
+            self != .undo && self != .clear
         }
 
-        // Z X C V B, five keys in a row under the left hand.
+        // Two rows under the left hand: A S D for what you draw with, Z X C for what happens
+        // to what you have drawn (docs/DECISIONS.md 36).
         var fallback: Binding {
             switch self {
+            case .tools: return Binding(keyCode: UInt32(kVK_ANSI_A), key: "A")
+            case .widths: return Binding(keyCode: UInt32(kVK_ANSI_S), key: "S")
+            case .colours: return Binding(keyCode: UInt32(kVK_ANSI_D), key: "D")
             case .undo: return Binding(keyCode: UInt32(kVK_ANSI_Z), key: "Z")
-            case .tools: return Binding(keyCode: UInt32(kVK_ANSI_X), key: "X")
-            case .colours: return Binding(keyCode: UInt32(kVK_ANSI_C), key: "C")
-            case .widths: return Binding(keyCode: UInt32(kVK_ANSI_V), key: "V")
-            case .actions: return Binding(keyCode: UInt32(kVK_ANSI_B), key: "B")
+            case .actions: return Binding(keyCode: UInt32(kVK_ANSI_X), key: "X")
+            case .clear: return Binding(keyCode: UInt32(kVK_ANSI_C), key: "C")
             }
         }
     }

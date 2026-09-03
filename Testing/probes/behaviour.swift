@@ -53,8 +53,9 @@
     }
 
     func redoOnce() { pushAction(0) }
-    func clearAll() { pushAction(1) }
-    func toggleTemporaryInk() { pushAction(2) }
+    // ⌥C, one press, like undo: clearing left the actions wheel when it got a key of its own.
+    func clearAll() { controller.clearNow() }
+    func toggleTemporaryInk() { pushAction(1) }
 
     func stroke(finish: Bool = true, y: CGFloat = 300) {
         guard let panel = controller.overlayWindowSnapshot().first else { return }
@@ -166,7 +167,7 @@
 
         let beforeClear = live
         clearAll()
-        check("the wheel's CLEAR clears", "\(live)", "0")
+        check("⌥C clears the screen", "\(live)", "0")
         undoOnce()
         check("undo restores the clear", "\(live)", "\(beforeClear)")
         redoOnce()
@@ -744,9 +745,9 @@
 
         // And the wheel that switches it says which way it is now.
         check("the wheel says temporary ink is off",
-              OverlayController.actionWheel(temporaryInk: false).items[2].label, "TEMP INK")
+              OverlayController.actionWheel(temporaryInk: false).items[1].label, "TEMP INK")
         check("and says so when it is on",
-              OverlayController.actionWheel(temporaryInk: true).items[2].label, "TEMP INK ✓")
+              OverlayController.actionWheel(temporaryInk: true).items[1].label, "TEMP INK ✓")
 
         // What the window server is handed is a cursor that shows nothing - so that nothing
         // else claims the pointer and draws an arrow beside ours - and the pointer itself is
@@ -795,19 +796,22 @@
         pushAction(0)
         check("and pushing right puts it back", "\(live)", "\(beforeUndo)")
 
-        pushAction(1)
-        check("pushing down clears the screen", "\(live)", "0")
+        clearAll()
+        check("⌥C takes the screen back to empty", "\(live)", "0")
         undoOnce()
         check("and that is one thing to take back", "\(live)", "\(beforeUndo)")
+        check("with the badge saying how",
+              controller.overlayWindowSnapshot().first?.drawingView.badge?.notice ?? "nothing",
+              "Cleared · ⌥Z puts it back")
 
         let temporaryBefore = controller.tools.drawsTemporaryInk
-        pushAction(2)
-        check("pushing left switches temporary ink",
+        pushAction(1)
+        check("pushing down switches temporary ink",
               controller.tools.drawsTemporaryInk == temporaryBefore ? "no" : "yes", "yes")
-        pushAction(2)
+        pushAction(1)
 
-        pushAction(3)
-        check("and pushing up puts the overlay away, keeping the drawing", state, "OFF")
+        pushAction(2)
+        check("and pushing left puts the overlay away, keeping the drawing", state, "OFF")
         controller.toggleDrawingMode()
         check("which came back", "\(live)", "\(beforeUndo)")
         clearAll()
@@ -1025,16 +1029,22 @@
         // the machine, two of ours on one combination would leave one of them dead, and the
         // panic key has to stay where it is whatever else has been moved.
         let settings = controller.shortcutSettings
-        check("the keys start where the row starts",
+        check("the actions wheel is three sectors now, without clear",
+              OverlayController.actionOrder.count == 3 ? "three" : "\(OverlayController.actionOrder.count)",
+              "three")
+        check("and clear is a press rather than a wheel",
+              ShortcutSettings.Action.clear.opensAWheel ? "a wheel" : "a press", "a press")
+
+        check("the keys start where the two rows start",
               ShortcutSettings.Action.allCases.map { settings.binding(for: $0).spoken }.joined(separator: " "),
-              "⌥Z ⌥X ⌥C ⌥V ⌥B")
+              "⌥A ⌥S ⌥D ⌥Z ⌥X ⌥C")
 
         var refusal = settings.set(keyCode: UInt32(kVK_ANSI_K), modifiers: 0, key: "K", for: .undo)
         check("a shortcut with no modifier is refused",
               refusal == nil ? "taken" : "refused", "refused")
 
-        refusal = settings.set(keyCode: UInt32(kVK_ANSI_X), modifiers: UInt32(optionKey),
-                               key: "X", for: .undo)
+        refusal = settings.set(keyCode: UInt32(kVK_ANSI_A), modifiers: UInt32(optionKey),
+                               key: "A", for: .undo)
         check("and so is one another action already has",
               refusal == nil ? "taken" : "refused", "refused")
 
@@ -1055,9 +1065,9 @@
               controller.shortcuts.wheelsAreRegistered ? "yes" : "no", "yes")
 
         settings.resetToDefaults()
-        check("and resetting puts the row back",
+        check("and resetting puts the rows back",
               ShortcutSettings.Action.allCases.map { settings.binding(for: $0).spoken }.joined(separator: " "),
-              "⌥Z ⌥X ⌥C ⌥V ⌥B")
+              "⌥A ⌥S ⌥D ⌥Z ⌥X ⌥C")
 
         // The delay is per shortcut, and zero means the wheel is up before the key comes back.
         settings.setDelay(0, for: .actions)

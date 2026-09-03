@@ -150,7 +150,7 @@ final class WheelPanel {
     // A tap - letting go before the wheel ever appeared - does nothing on any of them. Their
     // hubs mean "leave" and "cancel", these are keys the whole system gives up to this app,
     // and a key hit by accident must not move somebody's mode or their colour. Undo used to be
-    // the exception, on ⌥V; it has a key of its own now (docs/DECISIONS.md 31).
+    // the exception; it has a key of its own now, and so does clear (DECISIONS 31 and 36).
     func open(_ wheel: Wheel, centreLabel: String? = nil,
               delay: TimeInterval = WheelPanel.holdBeforeShowing,
               pick: @escaping (Int?) -> Void) {
@@ -210,7 +210,7 @@ final class WheelPanel {
         // overlay holds it: a window that appears under a stationary pointer is handed the
         // plain arrow by the window server about 25ms later, and the wheel is a window that
         // just appeared. The overlay's own hold does not cover the case where there is no
-        // overlay yet, which is exactly the first ⌥X of a session. Every tick rather than
+        // overlay yet, which is exactly the first ⌥A of a session. Every tick rather than
         // every fourth, because a quarter of sixty is a 66ms gap and that is what a flicker
         // is; a wheel is up for about a second, so the whole of it costs 0.05ms x 60.
         let timer = Timer(timeInterval: WheelPanel.pollInterval, repeats: true) { [weak self] _ in
