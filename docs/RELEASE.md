@@ -25,9 +25,16 @@ Manual, because nothing in this repo can inject a real mouse or a real presentat
 
 ## Version
 
-`Packaging/Info.plist`: `CFBundleShortVersionString` is what people see (1.0, 1.1);
-`CFBundleVersion` is a number that only ever goes up. Both change in the release commit, and
-the tag matches it: `git tag -a v1.0 -m "..."` then `git push --tags`.
+`Packaging/Info.plist`: `CFBundleShortVersionString` is what people see; `CFBundleVersion` is a
+number that only ever goes up. Both change in the release commit, and the tag matches it:
+`git tag -a v1.0 -m "..."` then `git push --tags`.
+
+**Where the numbering stands.** Nothing has been released yet, so the app is **0.9**: the
+version that says "this is the shape 1.0 will have". The first public release is **1.0**, and
+until it is cut, 0.9 is what every measurement in `docs/ARCHITECTURE.md` is stamped with. That
+matters more than it sounds: a number in a document with no version beside it is a number
+nobody can weigh, so anything measured from here on says which version it was measured on and
+on what machine.
 
 ## Building what people download
 

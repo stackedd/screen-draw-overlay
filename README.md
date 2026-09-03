@@ -167,10 +167,10 @@ Everything below runs from a clone, on any Mac:
 ./Testing/run.sh
 ```
 
-- **123 behaviour checks** drive the real app: every wheel and what its slices do, hiding and
+- **137 behaviour checks** drive the real app: every wheel and what its slices do, hiding and
   showing keeping the strokes *and* the undo history, the eraser cutting rather than deleting
-  (and taking text away whole), the laser, temporary ink, typing, the rules that keep a
-  changed shortcut usable, and the pointer the overlay hands to the window server.
+  (and taking text away whole), the laser, temporary ink, typing, clearing and taking it back,
+  the rules that keep a changed shortcut usable, and who owns the pointer in each state.
 - **A pixel comparison** of one drawing painted incrementally and painted in a single pass, at
   1x, 2x and 3x backing scale: **0 differing bytes**. That is how "the optimisation did not
   change what is on screen" is proved rather than asserted.
@@ -185,6 +185,11 @@ Measured on a real screen (`Testing/probes/onscreen.swift`), as a percentage of 
 | Pointer moving over 200 strokes | ~1.7% |
 | Drawing over 200 strokes | ~5.9% |
 | Overlay closed | 0.0% |
+
+*Taken 2026-09-02 on a 14-inch MacBook Pro (M3 Pro), macOS 26.6 - before the text tool and the
+current key layout, and not taken again since. Every number in `docs/ARCHITECTURE.md` carries a
+stamp like this one, so you can tell at a glance how old it is; the ones from
+`./Testing/run.sh` are current, because anybody can take them again in a minute.*
 
 The permission claim is checkable in two commands rather than taken on trust:
 

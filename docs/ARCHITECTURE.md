@@ -108,13 +108,25 @@ These exist because something went wrong once. Do not remove them without readin
 
 Numbers, not guesses. Re-measure before contradicting any of them.
 
-**Window levels** (macOS 26.5.1, Keynote 13.2). A Keynote slideshow puts its windows at
+**Every number below says when it was taken and on what.** A measurement with no stamp is a
+measurement nobody can weigh, and this file has been through enough rounds that "is this still
+true?" is a fair question about any of them. The rule: a number describing something that has
+changed since its stamp is not to be trusted until it is taken again, and a number that cannot
+be reproduced by running the command beside it does not belong here.
+
+The stamps use the app's own version. **0.9** is everything up to the first public release;
+before that there were no released versions at all, so older numbers are dated and described
+rather than given a version they never had.
+
+**Window levels.** *Measured 2026-08-24, before the app had a version, on macOS 26.5.1 with
+Keynote 13.2 - the one thing here that nothing since could have moved.* A Keynote slideshow puts its windows at
 level 9, its fade at 26; the menu bar is 24 and status items 25. The overlay sits at
 `.popUpMenu` (101), above all of it. It was at 23 for a while so the menu bar item stayed
 clickable, and that turned out worse in use: the menu bar took the pointer and the clicks
 whenever the cursor went near the top of the screen.
 
-**Cost.** Idle with the overlay closed: 0.0% CPU, ~41MB, and 0.11s of CPU total since
+**Cost.** *Measured 2026-09-02, before the text tool and the two-row key layout; not taken
+again since.* Idle with the overlay closed: 0.0% CPU, ~41MB, and 0.11s of CPU total since
 launch. 200 open/draw/hide cycles leave memory flat at ~45MB and no leaked panels. What the
 overlay costs while it is being used is measured below, and has moved a long way: drawing
 over a canvas of 200 strokes cost 23.4% of a core before anything moved onto a layer and
@@ -129,9 +141,9 @@ exactly at 2x and 3x backing scale; at 1x a handful of pixels differ by 1-10/255
 boundaries. Those last differences were the crosshair, not the ink: once the pointer moved
 onto a layer of its own the two passes agree **exactly, at 1x, 2x and 3x**.
 
-**Where the drawing bill actually goes** (2026-08-30, 1512x982 at 2x,
-`Testing/experiments/repaint_paths.swift`, a trivial paint so that only the asking is being
-measured). Per second of one core:
+**Where the drawing bill actually goes.** *Measured 2026-08-30, before the pointer went back
+onto a layer, on macOS 26.5.1. `Testing/experiments/repaint_paths.swift`, 1512x982 at 2x, a
+trivial paint so that only the asking is being measured.* Per second of one core:
 
 | what is asked for | dirty rect | 15 a second | 60 a second | 120 a second |
 | --- | --- | --- | --- | --- |
@@ -160,24 +172,28 @@ Four things follow, and they govern every performance question in this app:
    one that repaints nothing at all. Compositing a full screen transparent surface is not
    what this app spends its time on.
 
-**What painting itself costs** (`./Testing/run.sh cost`, offscreen, painting only). Small,
-next to the numbers above:
+**What painting itself costs.** *Measured 2026-09-04 on 0.9, Mac15,6 (M3 Pro), macOS 26.6.2:
+`./Testing/run.sh cost`, offscreen, painting only, so anybody can take it again in a minute -
+which is why these are the numbers in this file that are current.* Small, next to the numbers
+above:
 
-- A 60-point drag costs **0.054 ms an event** on an empty canvas and **0.087 ms** with 200
-  strokes already down. At 60 events a second that is 0.3-0.5% CPU. So the reported symptom
-  - it gets worse as the screen fills - is real (+61%) but it is 61% of a very small number.
+- A 60-point drag costs **0.011 ms an event** on an empty canvas and **0.037 ms** with 200
+  strokes already down. At 60 events a second that is under a tenth of a percent of a core. So
+  the reported symptom - it gets worse as the screen fills - is real, and it is a multiple of a
+  number small enough that the multiple does not matter. Before a stroke painted only what a
+  repaint asked for, the same two were 0.054 and 0.087.
 - One unbroken stroke used to be **quadratic**: painting means rasterising every segment, so
   a 5000-point line cost five thousand segments' worth of work on every mouse move - including
   the moves that only touched its last inch. A stroke now paints only the segments whose ink
   could land inside the rectangle being repainted, which is a walk over its points instead:
   arithmetic against rasterisation. Measured on the same 5000-point session: the last tenth
-  went from **0.309 ms an event to 0.025**, the ratio between first tenth and last from
-  **13.5x to 3.1x**, and the whole session from **833 ms to 83**. Below 48 points a stroke is
+  went from **0.309 ms an event to 0.026**, the ratio between first tenth and last from
+  **13.5x to 3.5x**, and the whole session from **833 ms to 86**. Below 48 points a stroke is
   painted whole, because the walk costs more than it saves.
 - A fade paints **nothing at all** now, which is what the cost suite's fourth sweep exists
   to keep true.
 - **A slow hand** - 1500 events less than a point apart, which is what drawing carefully at
-  sixty events a second actually produces - costs **0.0151 ms an event**, of which 0.0008 is
+  sixty events a second actually produces - costs **0.0150 ms an event**, of which 0.0008 is
   handling the event and the rest is paint. This is the sweep two rejected optimisations were
   measured against; see below.
 - **A wide marker asks for the area it draws on**, not twice it. The rectangle a mouse move
@@ -186,18 +202,18 @@ next to the numbers above:
   widest (56pt), 300 moves over a canvas of 50 strokes: **4.01 Mpx and 0.297 ms an event
   before, 1.13 Mpx and 0.126 ms after**. A layer repaint costs with its area, so this is the
   part of "the fat marker feels coarse" that was the app's own fault.
-- **The laser's trail** costs 0.013 ms an event while it is only extending, and 0.074 ms on
+- **The laser's trail** costs 0.027 ms an event while it is only extending, and 0.082 ms on
   the event that cuts a piece off and paints it into a layer of its own - three passes of the
-  path now that a beam is painted as light rather than as a line, up from 0.038 ms for the
-  single pass. It happens ten times a second, so about 0.07% of a core with sixty pieces
-  alive.
+  path now that a beam is painted as light rather than as a line. It happens ten times a
+  second, so about 0.08% of a core with sixty pieces alive.
 
 Put together: of the ~23% a drag used to cost, painting was roughly half a point and the
 repaints were the rest.
 
-**End to end, before and after** (`Testing/probes/onscreen.swift`: a real `OverlayPanel` on a
-real screen, driven at 60 events a second, this process's own CPU). Ink, badge and pointer
-each moved onto a `CALayer`; nothing about what is painted changed.
+**End to end, before and after.** *Measured 2026-09-01, before the pointer went back onto a
+layer. `Testing/probes/onscreen.swift`: a real `OverlayPanel` on a real screen, driven at 60
+events a second, this process's own CPU.* Ink, badge and pointer each moved onto a `CALayer`;
+nothing about what is painted changed.
 
 | what the user is doing | strokes on screen | before | after |
 | --- | --- | --- | --- |
@@ -214,7 +230,9 @@ Both columns are single runs of the same probe on the same machine; run to run t
 a point or two, which is smaller than anything the table is being used to claim.
 
 **And then the pointer went back onto a layer** (entry 6 in DECISIONS, the presentation case),
-which is the one change in this whole round that costs something. Same probe, same machine:
+which is the one change in that round that cost something. *Measured 2026-09-02, before the
+text tool, the settings window and the two-row key layout: this is the table to take again
+first, and it has not been taken again yet.* Same probe, same machine:
 
 | what the user is doing | as a cursor | as a layer |
 | --- | --- | --- |
