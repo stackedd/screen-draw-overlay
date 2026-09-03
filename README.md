@@ -120,8 +120,10 @@ comes back is the last tool that actually drew.
 **The overlay is taking clicks and the menu bar is out of reach.** Hold `⌥X` and let go in the
 middle; that hands the screen back. If nothing responds at all, `⌃⌥⌘Esc` quits the app.
 
-**The menu bar icon is not there.** The app has no Dock icon and nothing on screen. When the menu bar
-is full macOS hides what does not fit; holding `Command` and dragging the icons makes room.
+**The menu bar icon is not there.** The app has no Dock icon and nothing on screen. When the
+menu bar is full macOS hides what does not fit, without telling the app or you. Scrim notices
+this a couple of seconds after it starts and says so on screen, with the keys you need; holding
+`Command` and dragging the menu bar icons makes room for it again.
 
 **`⌥X` does nothing.** Another app may have registered the same shortcut; macOS allows that
 without reporting a conflict. The menu bar item does the same job, and the shortcuts are

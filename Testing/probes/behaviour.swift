@@ -978,6 +978,13 @@
         controller.wheels.close()
         settings.resetToDefaults()
 
+        // The launch check is a timer too, and a one-shot one: it asks whether there is any
+        // way into the app at all, once, and then there is nothing left running.
+        check("the launch check has been and gone",
+              controller.launchCheck == nil ? "gone" : "still there", "gone")
+        check("and the menu bar icon is on a screen",
+              controller.menuBar?.isOnScreen == true ? "yes" : "no", "yes")
+
         // The cursor hold is what stops the window server leaving an arrow on a pointer that
         // is not moving, and it is a timer, so where it stops matters as much as where it
         // runs: click-through hands the pointer to the app underneath, and a closed overlay

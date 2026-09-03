@@ -45,6 +45,7 @@ Universal binary, macOS 11+.
       ShortcutSettings.swift  which key does what, and how long a wheel waits
       SettingsWindow.swift    the one window: recording a shortcut, setting a delay
       ModeBadge.swift         the corner badge
+      NoticePanel.swift       a card under the menu bar when there is no way in
       Wheel.swift             a radial menu: sectors, hit test, painting
       WheelPanel.swift        the window a wheel opens in, and hold-push-release
       PointerCursor.swift     one cursor per tool, in the colour in hand
@@ -127,8 +128,9 @@ easy to repeat.
    true and stops with it: the pointer poll at 60Hz and the cursor hold at 60Hz (both only
    while drawing mode has the mouse, the hold costing 0.3% of a core), the fade tick (only while
    temporary ink is on screen), and two short-lived ones: the burst that takes the cursor
-   back for a third of a second after a panel appears, and the badge's notice. A wheel's own
-   poll lives and dies with the wheel.
+   back for a third of a second after a panel appears, the badge's notice, the card under
+   the menu bar, and the one-shot launch check two seconds in. A wheel's own poll lives and
+   dies with the wheel.
 9. **Never make drawing mode interact with anything.** No key should escape it, no click
    should reach what is underneath. Interaction is what click-through is for.
 10. **Never let hiding erase.** The wheel's `HIDE` keeps the strokes **and the undo

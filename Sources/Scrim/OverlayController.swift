@@ -116,6 +116,9 @@ final class OverlayController {
     let shortcutSettings = ShortcutSettings()
     private lazy var shortcuts = Shortcuts(settings: shortcutSettings)
     private var settingsWindow: SettingsWindow?
+    private let notice = NoticePanel()
+    // One shot, at launch, and then never again: see checkTheWayInIsThere().
+    private var launchCheck: Timer?
     private var menuBar: MenuBarItem?
     private var overlayWindows: [OverlayPanel] = []
     private var drawingViews: [DrawingView] = []
@@ -167,7 +170,9 @@ final class OverlayController {
                                                name: NSApplication.didChangeScreenParametersNotification,
                                                object: nil)
 
-        return shortcuts.register(alwaysLiveActions())
+        let unavailable = shortcuts.register(alwaysLiveActions())
+        checkTheWayInIsThere(unavailable: unavailable)
+        return unavailable
     }
 
     private func alwaysLiveActions() -> Shortcuts.Actions {
@@ -179,6 +184,52 @@ final class OverlayController {
                 NSApp.terminate(nil)
             }
         )
+    }
+
+    // Whether there is any way in at all, asked once, a couple of seconds after launch.
+    //
+    // Two things can go silently wrong at the same moment: macOS hides the menu bar icon when
+    // the bar is full, and another application can already own the shortcut. Either one alone
+    // is survivable; together they mean an app that is running, taking nothing, and showing
+    // nothing, which looks exactly like an app that did not launch. So it says so, on the
+    // screen, once - the only surface it has left (docs/DECISIONS.md 33).
+    //
+    // A couple of seconds because the menu bar has not finished arranging itself at launch and
+    // an icon can be given its place late. The timer is one-shot and this is the only thing it
+    // does; nothing is left running.
+    private func checkTheWayInIsThere(unavailable: [String]) {
+        launchCheck?.invalidate()
+        let timer = Timer(timeInterval: 2, repeats: false) { [weak self] _ in
+            guard let self else {
+                return
+            }
+
+            self.launchCheck = nil
+            let iconIsMissing = !(self.menuBar?.isOnScreen ?? true)
+            let wayIn = self.shortcutSettings.binding(for: .tools).spoken
+
+            switch (iconIsMissing, unavailable.isEmpty) {
+            case (true, true):
+                self.notice.show("Scrim is running, but the menu bar has no room for its icon",
+                                 "Hold \(wayIn) and push the mouse at a tool to draw. "
+                                 + "⌃⌥⌘⎋ quits. To get the icon back, close something else "
+                                 + "that lives in the menu bar.")
+            case (true, false):
+                self.notice.show("Scrim is running, but you cannot see or reach it",
+                                 "The menu bar has no room for its icon, and macOS refused "
+                                 + "\(unavailable.joined(separator: " ")) - another app has "
+                                 + "it. ⌃⌥⌘⎋ quits, and that always works.")
+            case (false, false):
+                self.notice.show("Another app already has \(unavailable.joined(separator: " "))",
+                                 "macOS gave it to whoever asked first and told neither of us. "
+                                 + "Open Settings from the menu bar icon to choose another key.")
+            case (false, true):
+                break
+            }
+        }
+
+        RunLoop.main.add(timer, forMode: .common)
+        launchCheck = timer
     }
 
     // The window where the keys can be changed, built the first time it is asked for. While a
@@ -384,6 +435,9 @@ final class OverlayController {
     }
 
     func shutDown() {
+        launchCheck?.invalidate()
+        launchCheck = nil
+        notice.close()
         NotificationCenter.default.removeObserver(self)
         forceCloseOverlay(reason: "app terminating")
         shortcuts.unregister()

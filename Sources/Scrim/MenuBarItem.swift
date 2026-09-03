@@ -70,6 +70,23 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
         actions.openSettings()
     }
 
+    // Whether the icon is actually on a screen, which is not the same question as
+    // `statusItem.isVisible` - that one answers "did you ask for it to be shown".
+    //
+    // Measured rather than guessed (`Testing/probes/statusitem.swift`): with forty items
+    // competing for one menu bar, the ones that do not fit are given a window frame off the
+    // left of the screen - (-68, 949, 38, 33) on a 1512pt display - while `isVisible` stays
+    // true for every one of them and `occlusionState` never reports `.visible` for any status
+    // item at all, fitting or not. The frame is the only field that moves, so the frame is
+    // what this asks about.
+    var isOnScreen: Bool {
+        guard let frame = statusItem.button?.window?.frame else {
+            return false
+        }
+
+        return NSScreen.screens.contains { $0.frame.intersects(frame) }
+    }
+
     private func build() {
         let menu = NSMenu()
         // The titles and the enabled state are driven by the current mode, so AppKit must

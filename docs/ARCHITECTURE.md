@@ -33,7 +33,8 @@ version: commands, conventions and the "never do this" list.
 | `ToolSettings.swift` | The pen in hand: colour, width, tool. Shared across screens, remembered between launches. |
 | `ShortcutSettings.swift` | Which key does what and how long each wheel waits, with the rules that keep a binding usable. Remembered between launches. |
 | `SettingsWindow.swift` | The only window this app owns: five recorders, five delays, and the panic key shown but locked. |
-| `ModeBadge.swift` | The badge in the corner - the app's entire on-screen interface. It hands over a picture, snapped to whole pixels; the view carries it on a layer. |
+| `ModeBadge.swift` | The badge in the corner - the app's entire on-screen interface while it draws. It hands over a picture, snapped to whole pixels; the view carries it on a layer. |
+| `NoticePanel.swift` | A card under the menu bar for the two failures that are otherwise silent: no room for the icon, and a shortcut macOS refused. Click-through, and it takes itself away. |
 | `PointerCursor.swift` | The pointer's picture, one per tool in the colour in hand - painted onto a layer, plus the cursor that shows nothing which the window server is handed instead. |
 | `GlobalHotKey.swift` | The global shortcuts, on Carbon, and the ownership rules that keep the callback safe. |
 | `Wheel.swift` | A radial menu: its sectors, which one a direction picks, and how it paints itself. |

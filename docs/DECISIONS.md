@@ -1080,3 +1080,41 @@ and forget.
 **Testing it.** The rules are behaviour checks; the layout is a by-hand report rather than a
 picture, because the window's controls are hosted views and `cacheDisplay(in:to:)` draws
 nothing for them - see `Testing/README.md`.
+
+
+## 33. The app says so when there is no way into it
+
+**The failure.** macOS hides a status item when the menu bar has no room, and tells the app
+nothing. For an app whose entire interface is a menu bar icon and a global shortcut, that plus
+a shortcut another application already owns (entry 32) is indistinguishable from an app that
+did not launch: nothing on screen, nothing in the Dock, nothing answering the keyboard.
+
+**Measured first, because the fields lie** (`Testing/probes/statusitem.swift`, which crowds the
+menu bar with forty items of its own rather than waiting for a busy machine):
+
+| field | fits | does not fit |
+| --- | --- | --- |
+| `statusItem.isVisible` | true | **true** |
+| `button.window.isVisible` | true | **true** |
+| `window.occlusionState` contains `.visible` | **false** | false |
+| `button.window.frame` | (958, 949, 38, 33) | **(-68, 949, 38, 33)** |
+
+Only the frame moves: an item that does not fit is given a place off the left of the screen.
+So `MenuBarItem.isOnScreen` asks whether the button's window frame intersects any screen, and
+nothing else. `occlusionState` is worth naming because it looks like the right question and
+is not - it reports `.visible` for no status item at all, fitting or not.
+
+**What it does about it.** Two seconds after launch - the menu bar is still arranging itself
+before that - it asks the question once, and if there is no way in it puts a card under the
+menu bar saying which it is and what to press. Three messages, because the two failures can
+happen together and the advice differs: with the shortcut working, hold it and draw; with both
+gone, `⌃⌥⌘⎋` quits and that always works.
+
+**Why a card and not a notification.** A notification asks for permission, and this app asks
+for none (entry 1). A dialog blocks and can sit behind everything (entry 11). The card is a
+click-through panel that takes itself away after seven seconds: it cannot eat a click, which
+matters because it appears uninvited, and it is the one thing this app already knows how to do
+well - put a picture on the screen without owning any of it.
+
+**The timer is one-shot.** It runs once, two seconds in, and nothing is left behind; the
+behaviour suite checks that it is gone.

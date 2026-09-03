@@ -93,6 +93,17 @@ screen was showing an arrow.
 
 It warps the pointer around the middle of the main screen and puts it back.
 
+`probes/statusitem.swift` answers "is the icon actually on screen?", which macOS will not
+answer for you. It puts up a status item, and with `CROWD=40` another forty, so the ones that
+do not fit are there to be measured rather than waiting for somebody's menu bar to be busy: an
+item that fits gets a frame on the screen, one that does not gets a frame off the left of it,
+and `isVisible` is true either way. `OUT=` renders the cards the app shows when that happens,
+and `NOTICE_HOLD=1` puts one on the real screen where it can be looked at.
+
+    python3 Testing/make_probe.py statusitem STATUS \
+      && swift build --package-path .build/testing/statusitem -c release \
+      && CROWD=40 OUT=/tmp/notice.png .build/testing/statusitem/.build/release/STATUS
+
 `probes/settings.swift` is the odd one out: it prints the settings window's layout rather than
 rendering it. The controls in that window are hosted views, and `cacheDisplay(in:to:)` draws
 nothing for them - the first version of it produced a picture of four text fields floating in
