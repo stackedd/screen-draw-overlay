@@ -1265,3 +1265,44 @@ rows. Nothing has been released, so the cost is one person's fingers - and the r
 moving is worth writing down: each arrangement was right for the number of things the app had
 at the time, and the app kept growing. Six is where it stops without a modifier: the row below
 the home row is full.
+
+
+## 37. Nothing rebuilds a cursor rect on a pick
+
+**The report, a fourth time, and this time with the moment in it:** "right after picking
+something, the system cursor blinks and goes." Entry 35 had just fixed the other half - the
+wheel coming *up* next to a plain arrow - and this one is the other end of the same gesture.
+
+**Why no probe could see it.** A probe warps the pointer; `CGWarpMouseCursorPosition` moves it
+without a hand's stream of events, and the window server does not re-ask a window for its
+cursor in the same way. Every measurement of the moment after a pick came back clean, four
+rounds running. So this one was found by reading the code with the timing of the report in
+mind: what happens *at the moment a pick completes*, that would only show on a pointer that is
+moving?
+
+**`invalidateCursorRects` happened on every pick, twice.** `toolSettingsChanged()` rebuilt the
+view's cursor rects on every tool, colour and width change, and `setDrawingCursor()` did it
+again from `takeCursorBack()`, which runs whenever a wheel closes. Rebuilding means AppKit
+throws the rect away and asks for it again - and a window with no cursor rect is a window the
+window server answers for, with the arrow, the moment the pointer moves.
+
+**And there was nothing to rebuild.** The rect holds `PointerCursor.invisible` and has held it
+for every tool since the pointer became a layer (entry 6): what changes with the tool is the
+*picture on the layer*, not the cursor the window server is handed. The rebuild was left over
+from the round when each tool really did hand over a different cursor. It was doing no work and
+opening a gap.
+
+**Now** the rect is rebuilt only where what it holds actually changes - `isInteractionMode`,
+which decides whether there is a rect at all - and a pick sets the cursor without touching the
+rects. `probes/behaviour.swift` counts `resetCursorRects` calls across a tool, a colour and a
+width change and requires zero; run against the old code it reports one, which is how it is
+known the check has teeth.
+
+**How to see it happen on a machine where it still does**, because a fourth fix deserves the
+same doubt as the first three:
+
+    SCRIM_CURSOR_LOG=1 dist/Scrim.app/Contents/MacOS/Scrim
+
+Every change of what the screen is showing, with how long the last one lasted and what the app
+thought it was doing, and a summary on the way out of every moment the screen showed something
+that was not ours while the overlay had the mouse.

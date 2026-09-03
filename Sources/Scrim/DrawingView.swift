@@ -439,8 +439,13 @@ final class DrawingView: NSView {
     // Three ways to claim the cursor, because any one of them can be missed: the cursor
     // rect for a plain pointer move, cursorUpdate for when the window server asks us
     // directly, and mouseEntered for arriving from another app's window.
+    // Counted, because "how often are these rebuilt?" turned out to be a question worth
+    // asking: the answer was "on every pick", and that was the flash (docs/DECISIONS.md 37).
+    private(set) var cursorRectRebuilds = 0
+
     override func resetCursorRects() {
         super.resetCursorRects()
+        cursorRectRebuilds += 1
         guard !isInteractionMode else {
             return
         }
@@ -713,10 +718,16 @@ final class DrawingView: NSView {
     // coloured dot for the laser and a crosshair for everything else, so both pictures
     // belong to the tool. Redrawn on every screen, not just the one the key was pressed on.
     func toolSettingsChanged() {
-        // The ring is drawn in the tool's colour and sized to its nib, so the cursor is
-        // rebuilt and set at once rather than at the next mouse move. Safe here: rebuilding
-        // cursor rects is only forbidden from inside cursorUpdate, and this is a keypress.
-        refreshCursorRects()
+        // **No cursor rect rebuild here**, and that is the point rather than an omission. The
+        // rect holds `PointerCursor.invisible` whatever the tool is - it has, since the pointer
+        // became a layer and the window server stopped being handed a picture of the nib
+        // (docs/DECISIONS.md 6). So a tool, colour or width change has nothing to rebuild, and
+        // rebuilding anyway made the window under the pointer briefly have no cursor rect at
+        // all: on a pointer that is moving, which is what a hand does the instant it has picked
+        // something, the window server answers that with the plain arrow (37).
+        //
+        // What is still needed: the cursor set now rather than at the next move, the pointer's
+        // own picture rebuilt in the new colour and size, and the badge redrawn.
         applyDrawingCursor()
         refreshPointer()
         refreshBadge()

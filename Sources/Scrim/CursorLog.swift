@@ -30,7 +30,13 @@ import AppKit
 enum CursorLog {
     private static var timer: Timer?
     private static var last: String?
+    private static var lastChanged = Date()
+    private static var lastState = ""
     private static let started = Date()
+    // Every stretch where the screen showed something that is not ours while drawing mode had
+    // the mouse. This is the list the fault lives in, so it is printed again on the way out -
+    // scrolling back through a minute of lines to find two of them is how a flash gets missed.
+    private static var wrong: [(at: TimeInterval, lasted: TimeInterval, shown: String, state: String)] = []
 
     static var isOn: Bool {
         ProcessInfo.processInfo.environment["SCRIM_CURSOR_LOG"] != nil
@@ -42,7 +48,7 @@ enum CursorLog {
         }
 
         print("Scrim: cursor log on, sampling what the screen shows every 4ms")
-        print("CURSOR      time  what the screen shows   what the app thinks")
+        print("CURSOR      time    for  what the screen shows   what the app thinks")
 
         let timer = Timer(timeInterval: 0.004, repeats: true) { _ in
             sample(state())
@@ -57,9 +63,43 @@ enum CursorLog {
             return
         }
 
+        let now = Date()
+        let held = now.timeIntervalSince(lastChanged)
+
+        // What just ended, if it was the wrong thing to be showing. "Drawing" here means the
+        // overlay has the mouse: in click-through the pointer belongs to the app underneath
+        // and the system arrow is the right answer, not the fault.
+        if let last, last != "ours (shows nothing)", lastState.hasPrefix("drawing") {
+            wrong.append((at: lastChanged.timeIntervalSince(started), lasted: held,
+                          shown: last, state: lastState))
+        }
+
         last = shown
-        print(String(format: "CURSOR %8.3fs  %-22@  %@",
-                     Date().timeIntervalSince(started), shown as NSString, state as NSString))
+        lastChanged = now
+        lastState = state
+        print(String(format: "CURSOR %8.3fs %5.0fms  %-22@  %@",
+                     now.timeIntervalSince(started), held * 1000,
+                     shown as NSString, state as NSString))
+    }
+
+    // Printed on the way out, because the thing being hunted is two lines in a hundred.
+    static func summarise() {
+        guard isOn else {
+            return
+        }
+
+        print("")
+        print("CURSOR summary: \(wrong.count) moment(s) where the screen showed something "
+              + "that was not ours while the overlay had the mouse")
+        for moment in wrong {
+            print(String(format: "CURSOR   at %6.3fs for %5.0fms  %@   (%@)",
+                         moment.at, moment.lasted * 1000,
+                         moment.shown as NSString, moment.state as NSString))
+        }
+
+        if let longest = wrong.map(\.lasted).max() {
+            print(String(format: "CURSOR   the longest was %.0fms", longest * 1000))
+        }
     }
 
     private static func describe(_ cursor: NSCursor?) -> String {

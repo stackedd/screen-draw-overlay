@@ -44,6 +44,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         print("Scrim: app terminating")
         controller.shutDown()
+        // Only prints anything when the log was asked for, and then it is the whole point of
+        // having asked: every moment the screen showed a cursor that was not ours.
+        CursorLog.summarise()
     }
 
     private static func anotherInstanceIsRunning() -> Bool {

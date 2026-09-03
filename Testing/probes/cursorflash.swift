@@ -166,6 +166,31 @@ swept("the same push in click-through, where we own nothing under the pointer",
 controller.toggleInteractionMode()
 warp(to: middle)
 
+// The moment the report is about now: letting go, and then **carrying on moving the mouse**,
+// which is what a hand does. Every move asks the window server for a cursor again, and between
+// the wheel handing the mouse back and the overlay having it there is a window where the
+// answer comes from somebody else.
+func pickedAndKeptMoving(_ what: String, key: UInt32, to end: NSPoint) {
+    watch(what, seconds: 3.0, script:
+        [(0.10, { fireHotKey(id: key) })]
+        + push(from: middle, to: end, over: 0.30)
+        + [(0.62, { fireHotKey(id: key, release: true) })]
+        // Still moving, for half a second after the pick.
+        + push(from: end, to: NSPoint(x: end.x, y: end.y - 100), over: 0.50).map { ($0.0 + 0.35, $0.1) })
+}
+
+// From nothing: the pick that creates the overlay, with the hand still going.
+controller.toggleDrawingMode()
+warp(to: middle)
+pickedAndKeptMoving("the first tool, and the hand keeps moving after the pick",
+                    key: 6, to: NSPoint(x: middle.x + 120, y: middle.y))
+warp(to: middle)
+
+// And over an overlay that is already up.
+pickedAndKeptMoving("a colour, and the hand keeps moving after the pick",
+                    key: 7, to: NSPoint(x: middle.x - 120, y: middle.y))
+warp(to: middle)
+
 // And the way out: letting go in the middle, which hands the screen back.
 gesture("the hub, which hands the screen back", key: 6, push: NSPoint(x: 0, y: 0))
 

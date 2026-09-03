@@ -1119,6 +1119,23 @@
               controller.wheels.appOwnsThePointer?() == true ? "leaves it" : "takes it",
               "leaves it")
 
+        // A tool change must not rebuild the cursor rects. The rect holds the same invisible
+        // cursor whatever the tool - it has since the pointer became a layer - so rebuilding it
+        // left the window under the pointer with no rect for as long as that took, and a moving
+        // pointer is answered with the plain arrow in that gap (docs/DECISIONS.md 37). AppKit
+        // calls resetCursorRects when it rebuilds, so counting those is the check.
+        if let view = controller.drawingViewSnapshot(from: controller.overlayWindowSnapshot()).first {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            let before = view.cursorRectRebuilds
+            controller.tools.select(tool: .highlighter)
+            controller.tools.selectColor(3)
+            controller.tools.selectWidth(4)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            check("picking a tool, a colour and a size rebuilds no cursor rects",
+                  "\(view.cursorRectRebuilds - before)", "0")
+            controller.tools.select(tool: .pen)
+        }
+
         controller.toggleInteractionMode()
         check("and in click-through it takes it again",
               controller.wheels.appOwnsThePointer?() == false ? "takes it" : "leaves it",

@@ -791,9 +791,15 @@ final class OverlayController {
         cursorSettling = nil
     }
 
+    // Sets the cursor and nothing else. It used to rebuild each view's cursor rects as well,
+    // and this runs on every wheel closing - so every pick threw away the cursor rect of the
+    // window under the pointer and built it again, which is a window with no cursor rect for
+    // as long as that takes. The rect has held the same invisible cursor whatever the tool
+    // since the pointer became a layer, so there was nothing to rebuild and something to lose
+    // (docs/DECISIONS.md 37). The rect is rebuilt where what it holds actually changes: the
+    // view's own isInteractionMode.
     private func setDrawingCursor() {
         drawingViewSnapshot(from: overlayWindowSnapshot()).forEach { drawingView in
-            drawingView.refreshCursorRects()
             drawingView.applyDrawingCursor()
         }
     }
