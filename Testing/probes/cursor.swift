@@ -22,7 +22,8 @@ let tools = ToolSettings()
 // has to look big, or the size control is invisible again.
 let shown: [(DrawingTool, Int, Int)] = [
     (.pen, 0, 0), (.pen, 0, 5), (.highlighter, 2, 0), (.highlighter, 2, 2),
-    (.highlighter, 2, 5), (.eraser, 0, 0), (.eraser, 0, 5), (.line, 3, 2)
+    (.highlighter, 2, 5), (.eraser, 0, 0), (.eraser, 0, 5), (.line, 3, 2),
+    (.text, 4, 0), (.text, 4, 5)
 ]
 
 let cell = 96.0

@@ -20,13 +20,18 @@ import AppKit
 import Foundation
 
 final class OverlayController {
-    // The wheels, and what each sector means. The order runs clockwise from due right, so
-    // the two that need no thought are a flick right for the pen and a flick left for the
-    // eraser.
+    // The wheels, and what each sector means. The order runs clockwise from due right, so the
+    // two that need no thought are a flick right for the pen and a flick left for the eraser.
     //
-    // Eight tools. Getting out is not one of them: that is what the hub is for.
+    // With nine sectors a flick straight left lands on the line between two of them rather
+    // than in the middle of one, so the eraser takes the side that a dead-left push resolves
+    // to and text takes the other - because a caret put down by accident is nothing until
+    // somebody types into it, and an eraser reached by accident takes a line away.
+    //
+    // Nine tools. Getting out is not one of them: that is what the hub is for.
     private static let toolOrder: [DrawingTool] = [.pen, .highlighter, .line, .arrow,
-                                                   .eraser, .rectangle, .ellipse, .laser]
+                                                   .text, .eraser, .rectangle, .ellipse,
+                                                   .laser]
 
     // Built from the order above rather than written out beside it: the two lists had to
     // agree, sector for sector, and nothing was checking that they did.
@@ -95,6 +100,13 @@ final class OverlayController {
                 let largest = ToolSettings.eraserRadius(at: ToolSettings.widths.count - 1)
                 let shown = 6 + (radius - smallest) / (largest - smallest) * 13
                 return Wheel.Item(label: "\(Int(radius * 2))", symbol: "", disc: shown)
+            }
+
+            // With text in hand the six settings are point sizes, so the sector says the size
+            // rather than drawing a line nobody is going to draw.
+            guard tool != .text else {
+                let points = ToolSettings.textSizes[index]
+                return Wheel.Item(label: "\(Int(points))pt", symbol: "textformat")
             }
 
             // The laser draws light, not a line, so its sectors are beams: the same halo,

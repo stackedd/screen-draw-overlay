@@ -171,6 +171,81 @@ final class Canvas {
         return finished.repaintBounds
     }
 
+    // MARK: - Text
+
+    // Typed rather than dragged, so it does not go through beginStroke: the mouse puts a caret
+    // somewhere and every keystroke rebuilds the stroke in hand. It is an ordinary stroke in
+    // every other way - one point, a path that is the box the glyphs fill - so undo, the fade,
+    // hiding and the repaint rules all work on it without knowing it is text.
+    func beginText(at point: NSPoint, with tools: ToolSettings) -> NSRect {
+        let size = tools.renderWidth
+        let life = tools.drawnInkLife
+        let bounds = Stroke.textBounds("", at: point, size: size)
+        strokeInProgress = Stroke(points: [point], path: NSBezierPath(rect: bounds),
+                                  color: tools.color, width: size, style: .text,
+                                  createdAt: life == nil ? nil : Date(),
+                                  life: life ?? Stroke.fadeDuration, text: "")
+        lastPoint = point
+
+        return bounds.insetBy(dx: -2, dy: -2)
+    }
+
+    // What is being typed, or nil if nothing is.
+    var textInProgress: String? {
+        guard let stroke = strokeInProgress, stroke.style == .text else {
+            return nil
+        }
+
+        return stroke.text
+    }
+
+    // The whole string every time rather than the letter that changed: laying out text is
+    // measured in microseconds and a diff would be a second place for the two to disagree.
+    func typeText(_ string: String) -> NSRect? {
+        guard let existing = strokeInProgress, existing.style == .text,
+              let point = existing.points.first else {
+            return nil
+        }
+
+        let before = existing.repaintBounds
+        let bounds = Stroke.textBounds(string, at: point, size: existing.width)
+        strokeInProgress = Stroke(id: existing.id, points: [point],
+                                  path: NSBezierPath(rect: bounds), color: existing.color,
+                                  width: existing.width, style: .text,
+                                  createdAt: existing.createdAt, life: existing.life,
+                                  text: string)
+
+        return before.union(bounds.insetBy(dx: -2, dy: -2))
+    }
+
+    // Nothing typed is nothing left behind: an empty text stroke would be an invisible mark
+    // sitting in the undo history waiting to confuse somebody.
+    @discardableResult
+    func finishText() -> NSRect? {
+        guard let existing = strokeInProgress, existing.style == .text else {
+            return nil
+        }
+
+        guard let typed = existing.text,
+              !typed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return cancelText()
+        }
+
+        return finishStroke()
+    }
+
+    @discardableResult
+    func cancelText() -> NSRect? {
+        guard let existing = strokeInProgress, existing.style == .text else {
+            return nil
+        }
+
+        strokeInProgress = nil
+        lastPoint = nil
+
+        return existing.repaintBounds
+    }
+
     // Cuts the beam being drawn into its next piece, if the one in hand has run long enough,
     // and says what changed. The new piece starts where the old one ended, so the trail has no
     // gap in it; each piece then fades on its own, which is what makes the light thin out
@@ -226,6 +301,28 @@ final class Canvas {
             let reach = radius + stroke.width / 2
             guard stroke.repaintBounds.insetBy(dx: -reach, dy: -reach)
                 .intersects(swept.insetBy(dx: -reach, dy: -reach)) else {
+                continue
+            }
+
+            // A line can be cut in half and still be a line; half a word is not a word. Text
+            // is taken away whole when the eraser reaches the box its glyphs sit in, which is
+            // also how shapes used to work before they were cut (entry 16).
+            if stroke.style == .text {
+                guard Canvas.samples(from: from, to: point, every: max(radius / 2, 1))
+                    .contains(where: { centre in
+                        stroke.path.bounds.insetBy(dx: -radius, dy: -radius).contains(centre)
+                    }) else {
+                    continue
+                }
+
+                if let made = erasePieces.firstIndex(where: { $0.id == stroke.id }) {
+                    erasePieces.remove(at: made)
+                } else {
+                    eraseOriginals.append(Removal(index: index, stroke: stroke))
+                }
+
+                dirty.append(stroke.repaintBounds)
+                strokes.remove(at: index)
                 continue
             }
 

@@ -271,9 +271,9 @@
         //
         // The pointer is put in the middle of the screen first, and this is not a nicety:
         // whether the laser lights depends on the pointer being over the panel, so with the
-        // mouse left in a corner - or over another display - these two checks failed for a
-        // reason that had nothing to do with the code. Warping needs no permission, and where
-        // the mouse was is put back before the summary.
+        // mouse left in a corner - or on another display - these two checks failed for a
+        // reason that had nothing to do with the code. Warping needs no permission, and
+        // where the mouse was is put back at the end of the suite.
         let mouseWasAt = NSEvent.mouseLocation
         if let screen = NSScreen.main {
             CGWarpMouseCursorPosition(CGPoint(x: screen.frame.midX,
@@ -940,6 +940,86 @@
         controller.toggleDrawingMode()
         check("and hiding kept the drawing", "\(live)", "\(beforeHiding)")
 
+        // The text tool: a click puts a caret down and the keyboard does the rest. It is the
+        // one tool here that is typed rather than dragged, and the one that needs the app to
+        // come forward for as long as somebody is typing (docs/DECISIONS.md 34).
+        clearAll()
+        controller.tools.select(tool: .text)
+
+        func click(at point: NSPoint) {
+            guard let panel = controller.overlayWindowSnapshot().first else {
+                return
+            }
+
+            let event = NSEvent.mouseEvent(with: .leftMouseDown, location: point,
+                                           modifierFlags: [], timestamp: 0,
+                                           windowNumber: panel.windowNumber, context: nil,
+                                           eventNumber: 0, clickCount: 1, pressure: 1)!
+            panel.drawingView.mouseDown(with: event)
+            panel.drawingView.mouseUp(with: event)
+        }
+
+        func type(_ characters: String, code: Int = 0) {
+            guard let panel = controller.overlayWindowSnapshot().first else {
+                return
+            }
+
+            let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                                         timestamp: 0, windowNumber: panel.windowNumber,
+                                         context: nil, characters: characters,
+                                         charactersIgnoringModifiers: characters,
+                                         isARepeat: false, keyCode: UInt16(code))!
+            panel.drawingView.keyDown(with: event)
+        }
+
+        let beforeTyping = live
+        click(at: NSPoint(x: 300, y: 400))
+        check("a click with the text tool puts a caret down",
+              controller.overlayWindowSnapshot().first?.drawingView.canvas.textInProgress ?? "nothing", "")
+        check("and nothing is on the canvas yet", "\(live)", "\(beforeTyping)")
+
+        type("Hello")
+        check("typing goes into it", controller.overlayWindowSnapshot().first?.drawingView.canvas.textInProgress ?? "", "Hello")
+        type("\u{8}", code: kVK_Delete)
+        check("and delete takes a letter back",
+              controller.overlayWindowSnapshot().first?.drawingView.canvas.textInProgress ?? "", "Hell")
+
+        type("\r", code: kVK_Return)
+        check("return leaves one mark on the canvas", "\(live)", "\(beforeTyping + 1)")
+        check("and nothing is being typed any more",
+              controller.overlayWindowSnapshot().first?.drawingView.canvas.textInProgress ?? "nothing", "nothing")
+
+        undoOnce()
+        check("which undo takes back like anything else", "\(live)", "\(beforeTyping)")
+        redoOnce()
+
+        // Escape means never mind, and an empty one leaves nothing behind: an invisible mark
+        // sitting in the undo history is a trap.
+        let beforeEscape = live
+        click(at: NSPoint(x: 300, y: 460))
+        type("gone")
+        type("\u{1b}", code: kVK_Escape)
+        check("escape leaves nothing behind", "\(live)", "\(beforeEscape)")
+
+        click(at: NSPoint(x: 300, y: 500))
+        type("\r", code: kVK_Return)
+        check("and so does typing nothing at all", "\(live)", "\(beforeEscape)")
+
+        // A line can be cut in half and still be a line; half a word is not a word.
+        controller.tools.select(tool: .eraser)
+        let beforeErasing = live
+        if let view = controller.overlayWindowSnapshot().first?.drawingView {
+            view.canvas.beginErase(at: NSPoint(x: 305, y: 405))
+            view.canvas.erase(at: NSPoint(x: 305, y: 405), radius: controller.tools.eraserRadius)
+            view.canvas.finishErase()
+        }
+
+        check("the eraser takes a whole word away", "\(live)", "\(beforeErasing - 1)")
+        undoOnce()
+        check("and one undo puts it back", "\(live)", "\(beforeErasing)")
+        controller.tools.select(tool: .pen)
+        clearAll()
+
         // The shortcuts are settings now, and the rules around them are what keep the app
         // usable: a binding with no modifier would take a bare key from every application on
         // the machine, two of ours on one combination would leave one of them dead, and the
@@ -1011,8 +1091,8 @@
         controller.toggleDrawingMode()
         check("and when the overlay goes away", controller.cursorHold == nil ? "yes" : "no", "yes")
 
-        // Somebody is sitting in front of this machine, and their pointer should be where
-        // they left it.
+        // Where the mouse was before the laser checks warped it. Somebody is sitting in front
+        // of this machine and their pointer should be where they left it.
         CGWarpMouseCursorPosition(CGPoint(x: mouseWasAt.x,
                                           y: (NSScreen.main?.frame.maxY ?? 0) - mouseWasAt.y))
 

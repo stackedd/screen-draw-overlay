@@ -73,6 +73,33 @@ set { tools.select(tool: .highlighter) }; drag(from: NSPoint(x: 60, y: 620), to:
 set { tools.selectWidth(ToolSettings.widths.count - 1) }
 drag(from: NSPoint(x: 80, y: 680), to: NSPoint(x: 780, y: 660), steps: 30)
 set { tools.selectWidth(2) }
+
+// Typed, not dragged: a caret goes down, letters go in one at a time, and Return finishes it.
+// Text is painted from a string rather than from a path, so it is the one thing on this canvas
+// whose incremental repaint could disagree with a full one for a reason none of the others
+// could have.
+func type(_ characters: String, at point: NSPoint) {
+    view.mouseDown(with: mouse(.leftMouseDown, point)); flush()
+    view.mouseUp(with: mouse(.leftMouseUp, point)); flush()
+    for character in characters {
+        view.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                                            timestamp: 0, windowNumber: 0, context: nil,
+                                            characters: String(character),
+                                            charactersIgnoringModifiers: String(character),
+                                            isARepeat: false, keyCode: 0)!)
+        flush()
+    }
+
+    view.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                                        timestamp: 0, windowNumber: 0, context: nil,
+                                        characters: "\r", charactersIgnoringModifiers: "\r",
+                                        isARepeat: false, keyCode: UInt16(kVK_Return))!)
+    flush()
+}
+
+set { tools.selectColor(5) }; set { tools.select(tool: .text) }
+type("Scrim", at: NSPoint(x: 620, y: 700))
+set { tools.selectWidth(2) }
 set { tools.select(tool: .eraser) }; drag(from: NSPoint(x: 400, y: 230), to: NSPoint(x: 405, y: 230), steps: 4)
 set { view.undo() }
 set { view.redo() }

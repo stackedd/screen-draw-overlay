@@ -22,13 +22,21 @@ enum DrawingTool: Hashable {
     case ellipse
     case eraser
     case laser
+    case text
 
     var style: StrokeStyle {
         switch self {
         case .highlighter: return .highlighter
         case .laser: return .beam
+        case .text: return .text
         default: return .pen
         }
+    }
+
+    // Typed rather than dragged: the mouse puts the caret somewhere and the keyboard does the
+    // rest, which is the only tool here that works that way.
+    var isTyped: Bool {
+        self == .text
     }
 
     var isShape: Bool {
@@ -66,6 +74,7 @@ enum DrawingTool: Hashable {
         case .ellipse: return "ellipse"
         case .eraser: return "eraser"
         case .laser: return "laser"
+        case .text: return "text"
         }
     }
 
@@ -79,6 +88,7 @@ enum DrawingTool: Hashable {
         case "ellipse": self = .ellipse
         case "eraser": self = .eraser
         case "laser": self = .laser
+        case "text": self = .text
         default: return nil
         }
     }
@@ -141,7 +151,7 @@ enum DrawingTool: Hashable {
     }
 
     // What the tool is called, written the way macOS writes things. The wheel shouts it -
-    // eight of them read at a glance, across a room, in the second a wheel is up - and the
+    // nine of them read at a glance, across a room, in the second a wheel is up - and the
     // badge does not, because a permanent sign in the corner of somebody's screen that shouts
     // is the thing that makes an app look like it came from somewhere else.
     var name: String {
@@ -152,6 +162,7 @@ enum DrawingTool: Hashable {
         case .arrow: return "Arrow"
         case .rectangle: return "Rect"
         case .ellipse: return "Oval"
+        case .text: return "Text"
         case .eraser: return "Eraser"
         case .laser: return "Laser"
         }
@@ -173,6 +184,7 @@ enum DrawingTool: Hashable {
         case .ellipse: return "circle"
         case .eraser: return "eraser"
         case .laser: return "dot.circle.and.hand.point.up.left.fill"
+        case .text: return "textformat"
         }
     }
 }
@@ -191,6 +203,9 @@ enum StrokeStyle {
     case pen
     case highlighter
     case beam
+    // Typed, not drawn: the stroke carries a string, its `width` is a point size rather than a
+    // line width, and its path is the rectangle the glyphs land in.
+    case text
 
     var widthMultiplier: CGFloat {
         self == .highlighter ? 4 : 1
@@ -223,6 +238,12 @@ enum StrokeStyle {
     // which is where "it feels coarse" was reported - that was 112pt of rectangle for a stroke
     // 56pt wide.
     func reach(at width: CGFloat) -> CGFloat {
+        // Text is measured, not stroked: its path is already the box the glyphs fill, and a
+        // point covers the antialiasing along the edge of them.
+        if self == .text {
+            return 1
+        }
+
         guard self == .beam else {
             return width / 2 + 1
         }
@@ -290,8 +311,13 @@ struct Stroke {
     var points: [NSPoint]
     let path: NSBezierPath
     let color: NSColor
+    // A line width, except for text, where it is the point size.
     let width: CGFloat
     let style: StrokeStyle
+    // What was typed, and nil for everything that was drawn. A text stroke keeps one point -
+    // where the caret was put - and a path that is the box the glyphs fill, so that every rule
+    // about repainting and erasing goes on working without knowing what text is.
+    let text: String?
     // nil for ink that stays. Set for a temporary stroke, which is what a presenter wants
     // for "look here" marks that should not pile up on the slide.
     let createdAt: Date?
@@ -343,6 +369,15 @@ struct Stroke {
     }
 
     private func paint(_ line: NSBezierPath) {
+        // Typed rather than drawn: the string goes down at the caret, in the colour and at the
+        // point size the stroke was made with.
+        if let text, style == .text {
+            NSAttributedString(string: text,
+                               attributes: Stroke.textAttributes(size: width, colour: renderColor))
+                .draw(with: line.bounds, options: [.usesLineFragmentOrigin])
+            return
+        }
+
         guard style == .beam else {
             // A tap: one point, no length. With a round cap that paints a dot, and with the
             // marker's butt cap it paints nothing at all, so the mark a chisel would leave is
@@ -435,7 +470,7 @@ struct Stroke {
     // when a stroke is rebuilt.
     init(id: UUID = UUID(), points: [NSPoint], path: NSBezierPath, color: NSColor,
          width: CGFloat, style: StrokeStyle, createdAt: Date?, isShape: Bool = false,
-         life: TimeInterval = Stroke.fadeDuration) {
+         life: TimeInterval = Stroke.fadeDuration, text: String? = nil) {
         self.id = id
         self.points = points
         self.path = path
@@ -445,6 +480,30 @@ struct Stroke {
         self.createdAt = createdAt
         self.isShape = isShape
         self.life = life
+        self.text = text
+    }
+
+    // MARK: - Text
+
+    // One font and one size, because the size wheel is the only thing that says anything about
+    // text and it says a point size. A tool that also asked which typeface would be a tool
+    // somebody has to stop and think about in the middle of talking to a room.
+    static func textAttributes(size: CGFloat, colour: NSColor) -> [NSAttributedString.Key: Any] {
+        [.font: NSFont.systemFont(ofSize: size, weight: .medium), .foregroundColor: colour]
+    }
+
+    // The box the glyphs will fill, from the caret out. Everything that repaints or erases a
+    // text stroke asks this, so it is measured once and kept as the stroke's path.
+    static func textBounds(_ string: String, at point: NSPoint, size: CGFloat) -> NSRect {
+        let measured = NSAttributedString(string: string.isEmpty ? " " : string,
+                                          attributes: textAttributes(size: size, colour: .black))
+            .boundingRect(with: NSSize(width: CGFloat.greatestFiniteMagnitude,
+                                       height: CGFloat.greatestFiniteMagnitude),
+                          options: [.usesLineFragmentOrigin])
+
+        // Room for the caret, which is drawn just past the last glyph while it is being typed.
+        return NSRect(x: point.x, y: point.y,
+                      width: ceil(measured.width) + 2, height: ceil(measured.height))
     }
 
     // The same mark, with its life starting now.
@@ -460,7 +519,7 @@ struct Stroke {
         }
 
         return Stroke(id: id, points: points, path: path, color: color, width: width,
-                      style: style, createdAt: Date(), isShape: isShape, life: life)
+                      style: style, createdAt: Date(), isShape: isShape, life: life, text: text)
     }
 
     // What the eraser leaves behind: the same pen, colour and life, a shorter line, and a

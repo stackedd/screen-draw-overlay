@@ -7,7 +7,7 @@
 // colour has to be painted onto a copy of the image, inside that copy's own context, where
 // `sourceAtop` can only touch the glyph itself.
 //
-// And they are cached, because there are a few dozen in the whole app - eight tools, lit and
+// And they are cached, because there are a few dozen in the whole app - nine tools, lit and
 // unlit, plus the badge's - and building one on every repaint was most of what following a
 // wheel with the mouse cost.
 

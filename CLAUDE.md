@@ -40,7 +40,7 @@ Universal binary, macOS 11+.
       FadingInk.swift         temporary ink, on its way out, one layer each
       LaserDot.swift          the laser's glow, following the pointer
       Canvas.swift            the drawing: strokes, eraser, undo/redo, fading
-      Stroke.swift            what a mark is made of; what each tool draws
+      Stroke.swift            what a mark is made of; what each tool draws, typing included
       ToolSettings.swift      the pen in hand, shared and remembered
       ShortcutSettings.swift  which key does what, and how long a wheel waits
       SettingsWindow.swift    the one window: recording a shortcut, setting a delay
@@ -82,11 +82,10 @@ easy to repeat.
 ## Conventions
 
 - **Every tool brings its own context.** The width wheel shows widths, the eraser's cursor is
-  the size of what it rubs out, and reaching for colour with the eraser in hand says so on the
-  badge instead of changing the tool. (A text tool, if one is ever added, would take the pen's
-  colour as its colour and its width as a point size; there is no text tool today.) The same
-  way the menu bar changes with the app in front: what is in hand decides what the interface
-  offers, rather than one interface offering everything.
+  the size of what it rubs out, the same wheel shows point sizes with the text tool in hand,
+  and reaching for colour with the eraser says so on the badge instead of changing the tool.
+  The same way the menu bar changes with the app in front: what is in hand decides what the
+  interface offers, rather than one interface offering everything.
 - **Measure, do not assume.** Every performance or platform claim in this repo has a number
   behind it. If you change something for speed, show the before and after; if you cannot
   measure it, say so instead of asserting it.

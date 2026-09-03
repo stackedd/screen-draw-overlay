@@ -1,7 +1,8 @@
 // A radial menu: hold a key, push the mouse in a direction, let go.
 //
 // The whole point is that it costs no aim. There is no small target to hit - a sector is a
-// forty-five degree wedge of the screen around wherever the pointer already was - so it can
+// wedge of the screen around wherever the pointer already was, forty degrees of it or more -
+// so it can
 // be driven at speed without looking, which is what a tool you use in the middle of talking
 // to a room has to be.
 //
@@ -167,7 +168,7 @@ struct Wheel {
     private func drawSector(_ index: Int, item: Item, at centre: NSPoint, lit: Bool) {
         let middle = direction(of: index)
         let half = sweep / 2
-        // A hairline of space between wedges, so eight of them read as eight and not as a
+        // A hairline of space between wedges, so nine of them read as nine and not as a
         // disc with lines on it.
         let gap: CGFloat = 0.012
 

@@ -126,6 +126,9 @@ enum PointerCursor {
         case .laser: return 6
         case .pen: return min(56, Barrel(width: width, chisel: false).length + casing + 2)
         case .highlighter: return min(56, Barrel(width: width, chisel: true).length + casing + 2)
+        // The text pointer is a caret the size of the line it will put down, so that the
+        // point size in hand is visible before a word of it is typed.
+        case .text: return min(40, width / 2 + casing + 4)
         default: return 18
         }
     }
@@ -143,6 +146,8 @@ enum PointerCursor {
             drawPen(at: tip, colour: colour, width: width, chisel: false)
         case .highlighter:
             drawPen(at: tip, colour: colour, width: width, chisel: true)
+        case .text:
+            drawCaret(at: tip, colour: colour, height: width)
         default:
             // The shape tools place a corner, so they get a crosshair and nothing else. A
             // crosshair with a little picture beside it was two cursors in one place.
@@ -231,5 +236,31 @@ enum PointerCursor {
         cross.lineWidth = 1.2
         NSColor.black.withAlphaComponent(0.85).setStroke()
         cross.stroke()
+    }
+
+    // A caret the height of the type it will set, with the serifs a text cursor has had since
+    // before any of this - it is the one pointer whose job is to say "the keyboard goes here",
+    // and the shape everybody already reads that way is the I-beam.
+    private static func drawCaret(at centre: NSPoint, colour: NSColor, height: CGFloat) {
+        let half = min(18, max(7, height / 2))
+        let serif: CGFloat = 3.5
+
+        let beam = NSBezierPath()
+        beam.move(to: NSPoint(x: centre.x, y: centre.y - half))
+        beam.line(to: NSPoint(x: centre.x, y: centre.y + half))
+        for end in [centre.y - half, centre.y + half] {
+            beam.move(to: NSPoint(x: centre.x - serif, y: end))
+            beam.line(to: NSPoint(x: centre.x + serif, y: end))
+        }
+        beam.lineCapStyle = .round
+
+        // The white casing first and the colour over it, like every other pointer here: it is
+        // what keeps the thing readable over a white slide and a black one.
+        beam.lineWidth = casing
+        NSColor.white.withAlphaComponent(0.95).setStroke()
+        beam.stroke()
+        beam.lineWidth = 1.6
+        colour.setStroke()
+        beam.stroke()
     }
 }

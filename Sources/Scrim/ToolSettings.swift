@@ -81,9 +81,21 @@ final class ToolSettings {
     // (docs/DECISIONS.md 27). It is one and a half times the width in hand now, so the middle
     // setting is still the 6 it has always been and the ends are a thin pointer and a fat one.
     var renderWidth: CGFloat {
-        tool == .laser
-            ? ToolSettings.laserWidth(at: widthIndex)
-            : ToolSettings.widths[widthIndex] * style.widthMultiplier
+        switch tool {
+        case .laser: return ToolSettings.laserWidth(at: widthIndex)
+        // What a width means with text in hand is a point size, and everything that asks for
+        // the width - the pointer, the badge, the stroke itself - wants that number.
+        case .text: return textSize
+        default: return ToolSettings.widths[widthIndex] * style.widthMultiplier
+        }
+    }
+
+    // What the six settings mean with the text tool in hand: point sizes, not line widths.
+    // Read across a room at the top end and small enough to label a diagram at the bottom.
+    static let textSizes: [CGFloat] = [14, 18, 24, 32, 44, 60]
+
+    var textSize: CGFloat {
+        ToolSettings.textSizes[min(max(widthIndex, 0), ToolSettings.textSizes.count - 1)]
     }
 
     // Half again as wide as the same setting in a pen, so the middle one is the 6pt beam the

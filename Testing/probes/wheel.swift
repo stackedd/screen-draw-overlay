@@ -24,7 +24,8 @@ let panels: [(String, Wheel, Int?)] = [
     ("widths, pen", OverlayController.widthWheel(for: .pen, in: .systemRed), 3),
     ("widths, eraser", OverlayController.widthWheel(for: .eraser, in: .systemRed), 3),
     // The laser's sizes are beams, painted the way it will paint them, in the colour in hand.
-    ("widths, laser", OverlayController.widthWheel(for: .laser, in: .systemRed), 3)
+    ("widths, laser", OverlayController.widthWheel(for: .laser, in: .systemRed), 3),
+    ("widths, text", OverlayController.widthWheel(for: .text, in: .systemRed), 3)
 ]
 
 let sheet = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(side * CGFloat(panels.count) * scale),

@@ -59,6 +59,8 @@ final class DrawingView: NSView {
     private let laserLayer = LaserDot.makeLayer()
     private let pointerLayer = LaserDot.makeLayer()
     private var pointerPoll: Timer?
+    // Who was in front before typing pulled the app forward, so that finishing hands it back.
+    private var appToGoBackTo: NSRunningApplication?
     private var lastPointerPoint: NSPoint?
     private var lastPointerUpdate = Date.distantPast
 
@@ -355,6 +357,19 @@ final class DrawingView: NSView {
         updateBadgeHover(at: point)
         followPointer(to: point)
 
+        // Typed rather than dragged: a click puts the caret somewhere. Clicking again while
+        // something is being typed finishes it and starts the next one where the click was,
+        // which is what every other text tool on this machine does.
+        guard !tools.tool.isTyped else {
+            if canvas.textInProgress != nil {
+                finishTyping()
+            }
+
+            invalidateInk(canvas.beginText(at: point, with: tools))
+            takeTheKeyboard()
+            return
+        }
+
         guard tools.tool != .eraser else {
             // One drag is one thing to take back, however many strokes it cuts through.
             canvas.beginErase(at: point)
@@ -400,6 +415,13 @@ final class DrawingView: NSView {
     override func mouseUp(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         updateBadgeHover(at: point)
+
+        // A caret that was just put down is not a finished mark: it is waiting to be typed
+        // into, and the button coming up is not the end of anything.
+        guard canvas.textInProgress == nil else {
+            return
+        }
+
         finishStrokeInProgress()
     }
 
@@ -521,6 +543,71 @@ final class DrawingView: NSView {
     // on every letter. Escape included - it used to leave drawing mode, and it threw the
     // drawing away just as somebody pressed Escape to get out of a presentation.
     override func keyDown(with event: NSEvent) {
+        // The one exception to the rule above, and it is not a shortcut: with the text tool in
+        // hand and a caret on screen, the keyboard is the tool. Everything else is still
+        // swallowed, including every key while nothing is being typed.
+        guard let typed = canvas.textInProgress else {
+            return
+        }
+
+        switch event.keyCode {
+        case UInt16(kVK_Escape):
+            // Nothing is left behind, the way Escape means everywhere else.
+            if let dirty = canvas.cancelText() {
+                invalidateInk(dirty)
+            }
+
+            releaseTheKeyboard()
+        case UInt16(kVK_Return), UInt16(kVK_ANSI_KeypadEnter):
+            finishTyping()
+        case UInt16(kVK_Delete):
+            if !typed.isEmpty, let dirty = canvas.typeText(String(typed.dropLast())) {
+                invalidateInk(dirty)
+            }
+        default:
+            // Control characters are what the keys this app does not handle arrive as - arrows,
+            // function keys, the lot - and putting them in the string would draw a box.
+            let characters = (event.characters ?? "").filter { !$0.unicodeScalars.contains { scalar in
+                CharacterSet.controlCharacters.contains(scalar)
+            } }
+
+            if !characters.isEmpty, let dirty = canvas.typeText(typed + characters) {
+                invalidateInk(dirty)
+            }
+        }
+    }
+
+    // Committing what was typed, from the keyboard or from a click somewhere else.
+    func finishTyping() {
+        if let dirty = canvas.finishText() {
+            startFadingIfNeeded()
+            syncFadingInk()
+            invalidateInk(dirty)
+        }
+
+        releaseTheKeyboard()
+    }
+
+    // Typing is the one thing here that needs the keyboard, and a non-activating panel does
+    // not get keystrokes while another application is in front (docs/DECISIONS.md 34). So the
+    // app comes forward for as long as somebody is typing, and hands the front back afterwards
+    // - which matters most in the case this app is for, where what was in front is a slideshow.
+    private func takeTheKeyboard() {
+        if NSApp.isActive == false {
+            appToGoBackTo = NSWorkspace.shared.frontmostApplication
+        }
+
+        NSApp.activate(ignoringOtherApps: true)
+        window?.makeKeyAndOrderFront(nil)
+    }
+
+    private func releaseTheKeyboard() {
+        guard let previous = appToGoBackTo else {
+            return
+        }
+
+        appToGoBackTo = nil
+        previous.activate()
     }
 
     // Escape can also arrive as a cancel action rather than a plain keyDown; swallow it
@@ -551,6 +638,17 @@ final class DrawingView: NSView {
 
         if let inProgress = canvas.strokeInProgress, inProgress.repaintBounds.intersects(dirtyRect) {
             inProgress.paint(meeting: dirtyRect)
+
+            // A caret, so that a text tool with nothing typed yet is not an invisible tool.
+            // It does not blink: a blink is a timer running for as long as somebody is
+            // thinking about what to write, and this app does not leave timers running for
+            // decoration.
+            if inProgress.style == .text {
+                let box = inProgress.path.bounds
+                inProgress.color.withAlphaComponent(0.9).setFill()
+                NSRect(x: box.maxX - 1, y: box.minY + 2,
+                       width: max(1, inProgress.width / 14), height: box.height - 4).fill()
+            }
         }
     }
 
@@ -565,6 +663,12 @@ final class DrawingView: NSView {
     }
 
     func finishStrokeInProgress() {
+        // Something being typed is finished the same way, and the keyboard goes back with it.
+        guard canvas.textInProgress == nil else {
+            finishTyping()
+            return
+        }
+
         // An eraser drag is finished the same way a stroke is, and for the same reason:
         // whenever the tool is taken away mid-drag it has to be committed, not dropped.
         canvas.finishErase()

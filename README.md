@@ -17,7 +17,7 @@ access, no account.
 ## What it does
 
 - **Draws over everything**, including full-screen presentations: pen, marker, line, arrow,
-  eraser, rectangle, oval, and a laser pointer.
+  text, eraser, rectangle, oval, and a laser pointer.
 - **Steps aside in one gesture.** Clicks, scrolls and keystrokes go back to the app underneath
   while the drawing stays on screen; the same gesture again puts the drawing away and keeps it.
 - **Costs nothing to leave running.** No window, no Dock icon, and no CPU at all while the
@@ -53,14 +53,14 @@ and 12, add it under System Settings → General → Login Items.
 
 Five keys sit next to each other on the Option row: `Z X C V B`. `⌥Z` undoes; the other four
 open a wheel. **Hold one, push the mouse, let go.** The wheel opens right where the pointer is,
-and each slice covers 45°, so you push in a direction rather than hitting a target. All five
+and each slice is a 40° wedge, so you push in a direction rather than hitting a target. All five
 work whatever app is in front, because they are registered with the system rather than with a
 window.
 
 | Key | What it does |
 | --- | --- |
 | `⌥Z` | **Undo.** One press takes one thing back; hold it and it keeps going, like `⌘Z` anywhere else |
-| `⌥X` | Tools: pen, marker, line, arrow, eraser, rectangle, oval, laser, in that order round the wheel, starting on the right |
+| `⌥X` | Tools: pen, marker, line, arrow, text, eraser, rectangle, oval, laser, in that order round the wheel, starting on the right |
 | `⌥C` | Colours |
 | `⌥V` | Size of the pen, the marker, the hole the eraser takes out, or the laser's beam |
 | `⌥B` | What else to do to a drawing: redo, clear, temporary ink, hide |
@@ -92,7 +92,8 @@ opens it the moment you press the key.
 | Pen | A plain line. Six colours, six widths. |
 | Marker | Four times wider and see-through, like a highlighter over text. |
 | Line, arrow, rectangle, oval | Two-point shapes. Holding `Shift` while dragging snaps to 45°, or makes a square or a circle. |
-| Eraser | Rubs out the part of a stroke it passes over: it cuts strokes rather than deleting them. Its size is the hole it leaves. |
+| Text | Click where you want it and type. `Return` finishes, `Escape` throws it away, clicking somewhere else finishes one and starts the next. The size wheel is the point size. |
+| Eraser | Rubs out the part of a stroke it passes over: it cuts strokes rather than deleting them. Its size is the hole it leaves. Text is taken away whole - half a word is not a word. |
 | Laser | A glow that follows the pointer. Hold the button down and it leaves a beam of light that thins out behind your hand and is gone in about half a second. Nothing is left on the drawing. |
 
 **Temporary ink**, on the `⌥B` wheel, makes every mark fade out three seconds after it is

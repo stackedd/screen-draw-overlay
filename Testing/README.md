@@ -23,7 +23,8 @@ on screen" gets proved rather than asserted.
 
 `differingBytes` and `fullInkInvalidations` are the results; `strokes` only describes the
 session and moves whenever the session's own behaviour changes - it went 5 to 7 when the
-eraser started cutting shapes instead of removing them.
+eraser started cutting shapes instead of removing them, and 8 to 9 when the session started
+typing a word as well as drawing.
 
 **cost** (`probes/cost.swift`) drives the same view and paints, into an offscreen bitmap at
 a Retina backing scale, every rectangle the view asks to have repainted - then times it. Seven

@@ -660,7 +660,8 @@ the old code first to confirm they fail: 2 where 1 is wanted, and 1 where 2 is w
 
 The tool keys work and are not going anywhere, but they ask the user to remember seven
 letters. A radial menu asks them to remember one key and a direction, and the direction is a
-forty-five degree wedge of the whole screen rather than a target to hit - so it can be driven
+wedge of the whole screen rather than a target to hit - forty degrees of it with nine tools on
+the wheel - so it can be driven
 at speed, without looking, in the middle of talking to a room. That is the difference between
 a tool you use while presenting and a tool you stop presenting to use.
 
@@ -1118,3 +1119,49 @@ well - put a picture on the screen without owning any of it.
 
 **The timer is one-shot.** It runs once, two seconds in, and nothing is left behind; the
 behaviour suite checks that it is gone.
+
+
+## 34. The text tool, and the one thing it needs that nothing else here does
+
+**What it is.** Click where the words go, type them, `Return` finishes. `Escape` throws it
+away, clicking somewhere else finishes one and starts the next. The colour is the colour in
+hand and the size wheel becomes six point sizes - 14 to 60 - because "every tool brings its own
+context" is the rule this app has been following since the eraser's wheel started showing
+holes instead of lines (entry 27).
+
+**It is an ordinary stroke.** One point, where the caret went; a path that is the box the
+glyphs fill; a string. Undo, redo, the fade, hiding, the incremental repaint and the kept
+drawing all work on it without knowing what text is - the rendering suite paints one in its
+session now and the two passes still agree byte for byte at 1x, 2x and 3x.
+
+**The eraser takes it away whole.** A line can be cut in half and still be a line; half a word
+is not a word. This is what shapes used to do before they were cut (entry 16), and it is the
+one place in `Canvas.erase` that asks what kind of stroke it is looking at.
+
+**The thing it needs: the keyboard.** These panels are `nonactivatingPanel` on purpose - a
+presenter must not lose their focus to us - and the price is that they get no keystrokes while
+another application is in front. That is the whole of entry 30 and the reason there are no bare
+keys left. Typing cannot be done with a global hot key, so the app **comes forward while
+somebody is typing and hands the front back when they finish**: `NSApp.activate` on the click
+that puts the caret down, and the application that was in front is remembered and reactivated
+on `Return`, on `Escape`, and on anything else that finishes the text.
+
+**What that costs, honestly.** For as long as a caret is on screen, this app is the active one.
+A presenting app that is watching for focus changes can notice. Measured by hand against a real
+Keynote slideshow before this shipped; if it ever turns out to disturb one, the fallback is
+already written down: no activation, typing only while the panel has the keyboard, and the
+badge saying when it does not.
+
+**No blinking caret.** A blink is a timer running for as long as somebody is thinking about
+what to write, and this app does not leave timers running for decoration (CLAUDE.md, never
+number 8). The caret is drawn once, with the text, and moves when a letter does.
+
+**What is deliberately missing:** choosing a typeface, editing text after it is finished, and
+selecting words with the mouse. Each is a text editor, and this is a tool for putting three
+words on a slide in the middle of a sentence.
+
+**The ninth sector.** Adding text made the tools wheel nine sectors of forty degrees rather
+than eight of forty-five, and with an odd number nothing sits exactly opposite the pen. A flick
+straight left lands on the boundary between two sectors, so the eraser takes the side that a
+dead-left push resolves to and text takes the other: a caret put down by accident is nothing
+until somebody types into it, and an eraser reached by accident takes a line away.
