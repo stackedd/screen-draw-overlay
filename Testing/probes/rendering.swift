@@ -111,8 +111,22 @@ let moved = beforeMove != nil && beforeMove != afterMove
 
 set { tools.selectWidth(2) }
 set { tools.select(tool: .eraser) }; drag(from: NSPoint(x: 400, y: 230), to: NSPoint(x: 405, y: 230), steps: 4)
+
+// And a box taken out of the middle of things, which cuts several strokes at once and leaves
+// the pieces where they were.
+set { tools.select(tool: .eraseArea) }
+drag(from: NSPoint(x: 150, y: 330), to: NSPoint(x: 320, y: 400), steps: 8)
+
+let orderBefore = view.capturedStrokes().map { "\(Int($0.points.first?.x ?? 0)),\(Int($0.points.first?.y ?? 0))" }
 set { view.undo() }
 set { view.redo() }
+let orderAfter = view.capturedStrokes().map { "\(Int($0.points.first?.x ?? 0)),\(Int($0.points.first?.y ?? 0))" }
+if orderBefore != orderAfter {
+    print("      undo+redo changed the order:")
+    print("        before \(orderBefore.joined(separator: " "))")
+    print("        after  \(orderAfter.joined(separator: " "))")
+}
+
 
 let full = bitmap()
 render(full, frame)
@@ -120,5 +134,89 @@ render(full, frame)
 let bytes = full.bytesPerRow * full.pixelsHigh
 let a = incremental.bitmapData!, b = full.bitmapData!
 var diff = 0, maxDelta = 0
-for i in 0..<bytes where a[i] != b[i] { diff += 1; maxDelta = max(maxDelta, abs(Int(a[i]) - Int(b[i]))) }
+// Where they differ, not just how much: a count says something is wrong and a box says what.
+var box: NSRect?
+for i in 0..<bytes where a[i] != b[i] {
+    diff += 1
+    maxDelta = max(maxDelta, abs(Int(a[i]) - Int(b[i])))
+
+    let pixel = i / 4
+    let x = CGFloat(pixel % full.pixelsWide) / CGFloat(scale)
+    let y = CGFloat(pixel / full.pixelsWide) / CGFloat(scale)
+    let point = NSRect(x: x, y: y, width: 1, height: 1)
+    box = box.map { $0.union(point) } ?? point
+}
+
+if let box {
+    print("      differences lie in \(Int(box.minX)),\(Int(box.minY)) "
+          + "\(Int(box.width))x\(Int(box.height))")
+
+    // Which marks are there at all, in view coordinates: the box came from bitmap rows and
+    // this is the only way to say what it is sitting on.
+    let inView = NSRect(x: box.minX, y: size.height - box.maxY,
+                        width: box.width, height: box.height)
+    print("      which is \(Int(inView.minX)),\(Int(inView.minY)) on the canvas")
+    for stroke in view.capturedStrokes() where stroke.repaintBounds.intersects(inView) {
+        print("        touching: \(stroke.style) w\(Int(stroke.width)) "
+              + "bounds \(Int(stroke.repaintBounds.minX)),\(Int(stroke.repaintBounds.minY)) "
+              + "\(Int(stroke.repaintBounds.width))x\(Int(stroke.repaintBounds.height))")
+    }
+
+    // And, if asked, the two of them side by side with the differences marked, because a
+    // count and a box say something is wrong and a picture says what.
+    if let out = ProcessInfo.processInfo.environment["DIFF"] {
+        let marked = NSBitmapImageRep(bitmapDataPlanes: nil,
+                                      pixelsWide: full.pixelsWide, pixelsHigh: full.pixelsHigh,
+                                      bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                      isPlanar: false, colorSpaceName: .deviceRGB,
+                                      bytesPerRow: full.bytesPerRow, bitsPerPixel: 32)!
+        let marks = marked.bitmapData!
+        for i in 0..<bytes {
+            marks[i] = b[i]
+        }
+
+        for i in stride(from: 0, to: bytes, by: 4) where
+            a[i] != b[i] || a[i + 1] != b[i + 1] || a[i + 2] != b[i + 2] || a[i + 3] != b[i + 3] {
+            marks[i] = 255
+            marks[i + 1] = 0
+            marks[i + 2] = 0
+            marks[i + 3] = 255
+        }
+
+        try! marked.representation(using: .png, properties: [:])!
+            .write(to: URL(fileURLWithPath: out))
+        print("      wrote \(out): the single pass, with every differing pixel in red")
+
+        // And the two of them magnified, side by side, over the box where they differ. A
+        // difference of four parts in 255 across a 29x6 band is not visible at size, and
+        // "look at it" is the only way to tell a missing cap from a join drawn twice.
+        let margin: CGFloat = 6
+        let crop = box.insetBy(dx: -margin, dy: -margin)
+        let zoom: CGFloat = 12
+        let sheet = Picture.drawn(size: NSSize(width: crop.width * zoom * 2 + 24,
+                                               height: crop.height * zoom), scale: 1) {
+            NSColor.white.setFill()
+            NSRect(x: 0, y: 0, width: crop.width * zoom * 2 + 24, height: crop.height * zoom).fill()
+            NSGraphicsContext.current?.imageInterpolation = .none
+
+            for (offset, rep) in [(CGFloat(0), incremental), (crop.width * zoom + 24, full)] {
+                // The box came from bitmap rows, which count from the top; a rep draws from
+                // the bottom like everything else here.
+                let from = NSRect(x: crop.minX * CGFloat(scale),
+                                  y: CGFloat(rep.pixelsHigh) - crop.maxY * CGFloat(scale),
+                                  width: crop.width * CGFloat(scale),
+                                  height: crop.height * CGFloat(scale))
+                rep.draw(in: NSRect(x: offset, y: 0, width: crop.width * zoom,
+                                    height: crop.height * zoom),
+                         from: from, operation: .sourceOver, fraction: 1,
+                         respectFlipped: true, hints: [.interpolation: NSImageInterpolation.none])
+            }
+        }
+
+        let zoomed = out.replacingOccurrences(of: ".png", with: "-zoom.png")
+        try! NSBitmapImageRep(cgImage: sheet!).representation(using: .png, properties: [:])!
+            .write(to: URL(fileURLWithPath: zoomed))
+        print("      wrote \(zoomed): incremental on the left, single pass on the right")
+    }
+}
 print("moved=\(moved ? "yes" : "NOTHING") strokes=\(view.capturedStrokes().count) scale=\(scale)x fullInkInvalidations=\(view.fullInvalidations - fullBefore) differingBytes=\(diff)/\(bytes) maxDelta=\(maxDelta)")

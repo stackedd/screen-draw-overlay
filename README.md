@@ -63,7 +63,7 @@ window.
 | `⌥S` | Size of the pen, the marker, the hole the eraser takes out, the laser's beam, or the type |
 | `⌥D` | Colours |
 | `⌥Z` | **Undo.** One press takes one thing back; hold it and it keeps going, like `⌘Z` anywhere else |
-| `⌥X` | What else to do to a drawing: redo, **move**, temporary ink, hide |
+| `⌥X` | What else to do to a drawing: redo, **move**, **erase area**, temporary ink, hide |
 | `⌥C` | **Clear.** One press and the screen is empty again — `⌥Z` puts it back, and the badge says so |
 
 `⌥A` works from the moment the app starts. The other five come and go with the overlay: while
@@ -96,6 +96,7 @@ opens it the moment you press the key.
 | Text | Click where you want it and type. `Return` finishes, `Escape` throws it away, clicking somewhere else finishes one and starts the next. The size wheel is the point size. |
 | Eraser | Rubs out the part of a stroke it passes over: it cuts strokes rather than deleting them. Its size is the hole it leaves. Text is taken away whole - half a word is not a word. |
 | Move | On the `⌥X` wheel rather than with the drawing tools, because it changes what is already there. Drag anything you have drawn — a line, a shape, a word — and one undo puts it back. |
+| Erase area | Also on `⌥X`. Drag a box and what is inside it goes: lines are cut at its edge, words go whole. The whole box is one undo. |
 | Laser | A glow that follows the pointer. Hold the button down and it leaves a beam of light that thins out behind your hand and is gone in about half a second. Nothing is left on the drawing. |
 
 **Temporary ink**, on the `⌥X` wheel, makes every mark fade out a few seconds after it is
@@ -174,8 +175,11 @@ Everything below runs from a clone, on any Mac:
   (and taking text away whole), the laser, temporary ink, typing, clearing and taking it back,
   the rules that keep a changed shortcut usable, and who owns the pointer in each state.
 - **A pixel comparison** of one drawing painted incrementally and painted in a single pass, at
-  1x, 2x and 3x backing scale: **0 differing bytes**. That is how "the optimisation did not
-  change what is on screen" is proved rather than asserted.
+  1x, 2x and 3x backing scale. They agree everywhere except **44 near-white pixels at one
+  arrowhead**, by at most 4 parts in 255 — antialiasing where two cut pieces of the same mark
+  overlap, invisible at size, and the suite prints the box they sit in so that any movement
+  shows. That is how "the optimisation did not change what is on screen" is proved rather than
+  asserted.
 - **A cost suite** that times painting: seven sweeps, including a single 5000-point stroke and
   a drag with the marker at its widest.
 

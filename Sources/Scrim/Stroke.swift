@@ -652,6 +652,96 @@ struct Stroke {
         return runs
     }
 
+    // The same question for a rectangle: what survives having an area taken out of it.
+    //
+    // A rectangle rather than a sweep of circles because the sweep is what it would cost: a
+    // 1000x600 area with a 20pt eraser is fifteen hundred circles against every stroke, where
+    // clipping a segment to a rectangle is a handful of divisions. The shape of the answer is
+    // deliberately identical to the circle's - runs of points, crumbs dropped - so that the
+    // eraser and the area eraser leave a drawing in the same state, and one cut behaves like
+    // the other (docs/DECISIONS.md 42).
+    static func surviving(_ points: [NSPoint], outside area: NSRect,
+                          shorterThan crumb: CGFloat) -> [[NSPoint]] {
+        guard points.count > 1 else {
+            let alone = points.first.map { !area.contains($0) }
+            return alone == true ? [points] : []
+        }
+
+        var runs: [[NSPoint]] = []
+        var run: [NSPoint] = []
+
+        for index in 1..<points.count {
+            let start = points[index - 1]
+            let end = points[index]
+
+            guard let (entry, exit) = crossing(from: start, to: end, into: area) else {
+                if run.isEmpty {
+                    run.append(start)
+                }
+                run.append(end)
+                continue
+            }
+
+            if entry > 0 {
+                if run.isEmpty {
+                    run.append(start)
+                }
+                run.append(point(from: start, to: end, at: entry))
+            }
+
+            if run.count > 1 {
+                runs.append(run)
+            }
+
+            // The tail of this segment survives with its own end point, for the reason spelled
+            // out in the circle version above: recording only the exit loses the end, and on
+            // the last segment that leaves a one-point run, which is dropped - and a whole
+            // tail of a line disappears with it.
+            run = exit < 1 ? [point(from: start, to: end, at: exit), end] : []
+        }
+
+        if run.count > 1 {
+            runs.append(run)
+        }
+
+        return runs.filter { totalLength(of: [$0]) >= crumb }
+    }
+
+    // Where a segment enters and leaves a rectangle, as fractions along it, or nil if it never
+    // does. Liang-Barsky: the segment is clipped against the four edges in turn, and what is
+    // left is the interval inside.
+    private static func crossing(from start: NSPoint, to end: NSPoint,
+                                 into area: NSRect) -> (entry: CGFloat, exit: CGFloat)? {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+
+        var entry: CGFloat = 0
+        var exit: CGFloat = 1
+
+        // Each edge as "how far along is this allowed to go": a zero direction means the
+        // segment is parallel to that pair of edges, and then it is either wholly between
+        // them or wholly outside.
+        for (direction, distance) in [(-dx, start.x - area.minX), (dx, area.maxX - start.x),
+                                      (-dy, start.y - area.minY), (dy, area.maxY - start.y)] {
+            if direction == 0 {
+                if distance < 0 {
+                    return nil
+                }
+
+                continue
+            }
+
+            let t = distance / direction
+            if direction < 0 {
+                entry = max(entry, t)
+            } else {
+                exit = min(exit, t)
+            }
+        }
+
+        return entry < exit ? (entry, exit) : nil
+    }
+
     // The lengths of this stroke that survive the eraser passing over a point. A freehand
     // stroke is a polyline, so this is a circle against each segment in turn: a segment
     // keeps whatever of itself lies outside the circle, and consecutive survivors join back

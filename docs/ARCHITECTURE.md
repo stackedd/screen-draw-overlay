@@ -61,7 +61,7 @@ open a wheel of tools: push at one and the overlay opens, takes the screen and h
 tool; let go in the middle to leave, one step at a time - the screen back to the app
 underneath, then the overlay away with the drawing kept. `⌥S` and `⌥D` do the same for size
 and colour while the overlay is up, and `⌥X` is the wheel of the rest of what you do *to* a
-drawing: redo, move, temporary ink and hide. Two are not wheels at all: `⌥Z` undoes, one press for
+drawing: redo, move, erase area, temporary ink and hide. Two are not wheels at all: `⌥Z` undoes, one press for
 one thing, repeating while it is held, and `⌥C` clears the screen (entries 31 and 36). `⌃⌥⌘Esc` quits the process outright.
 
 All of them are Carbon global hot keys, which is what makes them work whatever has the
@@ -136,10 +136,15 @@ trade in entry 6 of DECISIONS and the reason a pointer is visible during a prese
 
 **Repainting.** A drag invalidates only the new segment and `draw(_:)` skips strokes that
 do not meet `dirtyRect`; repainting the whole view per mouse move was 26x more expensive
-(0.325s against 0.012s for the same 960-event session). Incremental and full repaints agree
-exactly at 2x and 3x backing scale; at 1x a handful of pixels differ by 1-10/255 along clip
-boundaries. Those last differences were the crosshair, not the ink: once the pointer moved
-onto a layer of its own the two passes agree **exactly, at 1x, 2x and 3x**.
+(0.325s against 0.012s for the same 960-event session). Incremental and full repaints agreed
+exactly at 1x, 2x and 3x for a long time - the differences that used to be there were the
+crosshair, and they went when the pointer moved onto a layer of its own.
+
+They agree everywhere but one place now, and that place is measured rather than shrugged at:
+after redoing a cut that split a shape into overlapping pieces, **44 near-white pixels at an
+arrowhead differ by at most 4 parts in 255**. Entry 42 in DECISIONS has what was ruled out -
+the geometry, the order of the pieces, and whether the repaint covered them - and the commands
+to pick it up again.
 
 **Where the drawing bill actually goes.** *Measured 2026-08-30, before the pointer went back
 onto a layer, on macOS 26.5.1. `Testing/experiments/repaint_paths.swift`, 1512x982 at 2x, a

@@ -35,10 +35,11 @@ if [ "$suite" = "all" ] || [ "$suite" = "rendering" ]; then
     done
     echo
     echo "    fullInkInvalidations must be 0: a drag that repaints the whole drawing is the"
-    echo "    bug this suite exists to catch. The differing bytes are antialiasing along"
-    echo "    clip boundaries, not missed paint - expanding every dirty rect makes them"
-    echo "    worse, not better (docs/DECISIONS.md). What matters is that the numbers do"
-    echo "    not move when you change how painting works."
+    echo "    bug this suite exists to catch. The differing bytes are antialiasing where cut"
+    echo "    pieces overlap - 44 near-white pixels at one arrowhead, 4 parts in 255 at the"
+    echo "    worst, and the box they sit in is printed so that any movement shows"
+    echo "    (docs/DECISIONS.md 42). What matters is that these numbers do not move when"
+    echo "    you change how painting works. DIFF=/tmp/d.png writes the picture."
 fi
 
 if [ "$suite" = "all" ] || [ "$suite" = "cost" ]; then

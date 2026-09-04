@@ -30,7 +30,10 @@ final class Canvas {
         // One eraser drag, however many strokes it cut: what it took away and what it left
         // in their place. One edit rather than one per mouse move, or undo would give a
         // drawing back a nibble at a time.
-        case erased(originals: [Removal], pieces: [Stroke])
+        // Both sides carry their place in the list, not only their identity: putting ink
+        // back where it was in the pile matters wherever two marks overlap, and redo used to
+        // drop the pieces on the end (docs/DECISIONS.md 42).
+        case erased(originals: [Removal], pieces: [Removal])
         // One drag of the move tool: the same mark before and after. Named by id like
         // everything else, so undoing it puts back where it was rather than where the list
         // happened to have it (CLAUDE.md, never number 11).
@@ -48,7 +51,7 @@ final class Canvas {
                 return kept.isEmpty ? nil : .removed(kept)
             case .erased(let originals, let pieces):
                 let keptOriginals = originals.filter { $0.stroke.id != id }
-                let keptPieces = pieces.filter { $0.id != id }
+                let keptPieces = pieces.filter { $0.stroke.id != id }
                 return keptOriginals.isEmpty ? nil : .erased(originals: keptOriginals,
                                                              pieces: keptPieces)
             case .moved(let before, _):
@@ -66,7 +69,7 @@ final class Canvas {
                 return kept.isEmpty ? nil : .removed(kept)
             case .erased(let originals, let pieces):
                 let keptOriginals = originals.filter { $0.stroke.createdAt == nil }
-                let keptPieces = pieces.filter { $0.createdAt == nil }
+                let keptPieces = pieces.filter { $0.stroke.createdAt == nil }
                 return keptOriginals.isEmpty ? nil : .erased(originals: keptOriginals,
                                                              pieces: keptPieces)
             case .moved(let before, _):
@@ -96,7 +99,7 @@ final class Canvas {
     private var undoStack: [Edit] = []
     private var redoStack: [Edit] = []
     private var eraseOriginals: [Removal] = []
-    private var erasePieces: [Stroke] = []
+    private var erasePieces: [Removal] = []
     private var lastErasePoint: NSPoint?
 
     var hasTemporaryInk: Bool {
@@ -389,7 +392,7 @@ final class Canvas {
                     continue
                 }
 
-                if let made = erasePieces.firstIndex(where: { $0.id == stroke.id }) {
+                if let made = erasePieces.firstIndex(where: { $0.stroke.id == stroke.id }) {
                     erasePieces.remove(at: made)
                 } else {
                     eraseOriginals.append(Removal(index: index, stroke: stroke))
@@ -417,7 +420,7 @@ final class Canvas {
 
             // A stroke this same drag already cut is not something the drag took away; the
             // thing it took away was whatever that piece came from, and that is recorded.
-            if let made = erasePieces.firstIndex(where: { $0.id == stroke.id }) {
+            if let made = erasePieces.firstIndex(where: { $0.stroke.id == stroke.id }) {
                 erasePieces.remove(at: made)
             } else {
                 eraseOriginals.append(Removal(index: index, stroke: stroke))
@@ -428,10 +431,71 @@ final class Canvas {
 
             let pieces = survivors.compactMap { stroke.piece(of: $0) }
             strokes.insert(contentsOf: pieces, at: index)
-            erasePieces.append(contentsOf: pieces)
+            erasePieces.append(contentsOf: pieces.enumerated().map {
+                Removal(index: index + $0.offset, stroke: $0.element)
+            })
             dirty.append(contentsOf: pieces.map(\.repaintBounds))
         }
 
+        return dirty
+    }
+
+    // Everything inside a rectangle, taken out in one go, as one thing to take back.
+    //
+    // The same shape as an eraser drag - the originals are recorded, the pieces that are left
+    // take their place - so undo puts back exactly what was there, and text goes whole because
+    // half a word is not a word (entry 34).
+    func eraseArea(_ area: NSRect) -> [NSRect] {
+        finishStroke()
+
+        var dirty: [NSRect] = []
+        var originals: [Removal] = []
+        var made: [Removal] = []
+
+        for index in strokes.indices.reversed() {
+            let stroke = strokes[index]
+            let reach = stroke.width / 2
+            guard stroke.repaintBounds.intersects(area.insetBy(dx: -reach, dy: -reach)) else {
+                continue
+            }
+
+            if stroke.style == .text {
+                guard stroke.path.bounds.intersects(area) else {
+                    continue
+                }
+
+                originals.append(Removal(index: index, stroke: stroke))
+                dirty.append(stroke.repaintBounds)
+                strokes.remove(at: index)
+                continue
+            }
+
+            let before = stroke.outline()
+            let survivors = before.flatMap {
+                Stroke.surviving($0, outside: area, shorterThan: stroke.width)
+            }
+
+            guard Stroke.totalLength(of: survivors) < Stroke.totalLength(of: before) else {
+                continue
+            }
+
+            originals.append(Removal(index: index, stroke: stroke))
+            dirty.append(stroke.repaintBounds)
+            strokes.remove(at: index)
+
+            let pieces = survivors.compactMap { stroke.piece(of: $0) }
+            strokes.insert(contentsOf: pieces, at: index)
+            made.append(contentsOf: pieces.enumerated().map {
+                Removal(index: index + $0.offset, stroke: $0.element)
+            })
+            dirty.append(contentsOf: pieces.map(\.repaintBounds))
+        }
+
+        guard !originals.isEmpty else {
+            return []
+        }
+
+        record(.erased(originals: originals.sorted { $0.index < $1.index }, pieces: made))
         return dirty
     }
 
@@ -487,13 +551,13 @@ final class Canvas {
                     dirty.append(removal.stroke.repaintBounds)
                 }
             case .erased(let originals, let pieces):
-                let made = Set(pieces.map(\.id))
+                let made = Set(pieces.map(\.stroke.id))
                 strokes.removeAll { made.contains($0.id) }
                 for removal in originals {
                     strokes.insert(removal.stroke, at: min(removal.index, strokes.count))
                     dirty.append(removal.stroke.repaintBounds)
                 }
-                dirty.append(contentsOf: pieces.map(\.repaintBounds))
+                dirty.append(contentsOf: pieces.map(\.stroke.repaintBounds))
             case .moved(let before, let after):
                 guard let index = strokes.firstIndex(where: { $0.id == after.id }) else {
                     continue
@@ -536,8 +600,13 @@ final class Canvas {
             let taken = Set(originals.map(\.stroke.id))
             dirty.append(contentsOf: strokes.filter { taken.contains($0.id) }.map(\.repaintBounds))
             strokes.removeAll { taken.contains($0.id) }
-            strokes.append(contentsOf: pieces)
-            dirty.append(contentsOf: pieces.map(\.repaintBounds))
+            // Back where they were in the pile, lowest first, rather than on top of
+            // everything: two marks that overlap are a different picture in a different
+            // order, which is how this was caught (docs/DECISIONS.md 42).
+            for piece in pieces.sorted(by: { $0.index < $1.index }) {
+                strokes.insert(piece.stroke, at: min(piece.index, strokes.count))
+                dirty.append(piece.stroke.repaintBounds)
+            }
         case .moved(let before, let after):
             guard let index = strokes.firstIndex(where: { $0.id == before.id }) else {
                 break

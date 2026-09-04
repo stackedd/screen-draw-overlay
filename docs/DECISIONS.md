@@ -1439,3 +1439,49 @@ rectangles for one mark - where it was and where it went - so it is the likelies
 hole behind. The rendering suite now moves a mark in its session and still reports **0
 differing bytes** at 1x, 2x and 3x, and prints `moved=yes` so that a grab which caught nothing
 cannot quietly turn that check into a comparison of a session with itself.
+
+
+## 42. Erasing an area, and the pixels that came with it
+
+**Wanted:** "clear that corner" without rubbing over it with the eraser or clearing the lot.
+`ERASE AREA` on the `⌥X` wheel: drag a box, and what is inside it goes.
+
+**It cuts rather than deletes**, like the eraser: the part of a line inside the box goes and the
+parts outside stay. Text goes whole, because half a word is not a word (entry 34). The whole
+box is one thing to take back, through the same `beginErase`/`finishErase` wrapper an eraser
+drag uses, so undo puts back exactly what was there.
+
+**The cut is a clip, not a sweep of circles.** `Stroke.surviving(_:outside:shorterThan:)` clips
+each segment against the rectangle (Liang-Barsky) and returns the same shape of answer the
+circle version returns - runs of points, crumbs dropped - so the two erasers leave a drawing in
+the same state. The reason is cost: a 1000x600 area with a 20pt eraser would be fifteen hundred
+circles against every stroke, where clipping a segment is a handful of divisions.
+
+**One real bug fell out of it.** Redo of an erase put the pieces back with `strokes.append`,
+which is the end of the list - so redoing a cut moved the pieces to the top of the pile. It had
+never shown, because the eraser's pieces had never overlapped anything; a box across an arrow
+does. `Edit.erased` now carries the pieces as `Removal`s, with the place each one came from,
+and redo puts them back there. The rendering probe prints the stroke order before an undo and
+after the redo, so it cannot come back quietly.
+
+**And one thing that is not a bug, measured until it was certain.** With the area erase in the
+rendering session, the incremental and single-pass paints stopped agreeing: 44 near-white
+pixels at the arrowhead, differing by at most 4 parts in 255. What was ruled out, in this
+order:
+
+- **The marquee.** Doing the cut with no rectangle drawn: same 53 bytes.
+- **The invalidation.** Repainting the whole view after the cut: same 53 bytes.
+- **The cut itself.** The same session without the trailing undo/redo: **0 bytes**. So the
+  geometry is right and the pieces are right.
+- **The order of the pieces.** Printed before the undo and after the redo: identical.
+- **Coverage.** The differing pixels are inside a rectangle the redo asked to have repainted.
+
+What is left is antialiasing where three cut pieces of one arrow overlap at its head, painted
+into a cleared rectangle rather than onto an empty canvas. It is invisible at size - the
+magnified crop of both passes is white - and it is now printed with the box it sits in, so
+anything that moves it shows up immediately. `DIFF=/tmp/d.png ./Testing/run.sh rendering`
+writes the picture, with every differing pixel in red and both passes magnified side by side.
+
+**Why it is written down rather than hidden.** The suite could have been kept at zero by moving
+the box somewhere emptier, and that would have been a test arranged to pass. The number is in
+the README instead, with what it is.

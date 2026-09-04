@@ -59,6 +59,21 @@ final class DrawingView: NSView {
     private let laserLayer = LaserDot.makeLayer()
     private let pointerLayer = LaserDot.makeLayer()
     private var pointerPoll: Timer?
+    // The rectangle being dragged out by the area eraser, from where it started to where the
+    // pointer is now. Nothing else in this app draws a marquee, so it lives here rather than
+    // in Canvas: it is not part of the drawing, it is a gesture in progress.
+    private var areaFrom: NSPoint?
+    private var areaTo: NSPoint?
+
+    private var areaBeingErased: NSRect? {
+        guard let from = areaFrom, let to = areaTo else {
+            return nil
+        }
+
+        return NSRect(x: min(from.x, to.x), y: min(from.y, to.y),
+                      width: abs(to.x - from.x), height: abs(to.y - from.y))
+    }
+
     // Who was in front before typing pulled the app forward, so that finishing hands it back.
     // Only ever set when the setting that pulls it forward is on.
     private var appToGoBackTo: NSRunningApplication?
@@ -380,6 +395,12 @@ final class DrawingView: NSView {
             return
         }
 
+        guard tools.tool != .eraseArea else {
+            areaFrom = point
+            areaTo = point
+            return
+        }
+
         guard tools.tool != .eraser else {
             // One drag is one thing to take back, however many strokes it cuts through.
             canvas.beginErase(at: point)
@@ -404,6 +425,18 @@ final class DrawingView: NSView {
         guard tools.tool != .move else {
             if let dirty = canvas.dragGrabbed(to: point) {
                 invalidateInk(dirty)
+            }
+
+            return
+        }
+
+        guard tools.tool != .eraseArea else {
+            let before = areaBeingErased
+            areaTo = point
+            // Where it was and where it is: the marquee is a line on screen, so both edges
+            // have to be repainted, and neither is the ink.
+            if let dirty = before?.union(areaBeingErased ?? before!) ?? areaBeingErased {
+                invalidateInk(dirty.insetBy(dx: -2, dy: -2))
             }
 
             return
@@ -691,6 +724,19 @@ final class DrawingView: NSView {
             stroke.paint(meeting: dirtyRect)
         }
 
+        // The marquee, which is not ink: it is drawn here because it is over the drawing and
+        // has to be repainted with it, and it goes when the mouse comes up.
+        if let area = areaBeingErased, area.intersects(dirtyRect) {
+            let marquee = NSBezierPath(rect: area)
+            marquee.lineWidth = 1
+            marquee.setLineDash([6, 4], count: 2, phase: 0)
+            NSColor.white.withAlphaComponent(0.9).setStroke()
+            marquee.stroke()
+            NSColor.black.withAlphaComponent(0.6).setFill()
+            marquee.setLineDash([6, 4], count: 2, phase: 6)
+            marquee.stroke()
+        }
+
         if let inProgress = canvas.strokeInProgress, inProgress.repaintBounds.intersects(dirtyRect) {
             inProgress.paint(meeting: dirtyRect)
 
@@ -721,6 +767,22 @@ final class DrawingView: NSView {
         // Something being typed is finished the same way, and the keyboard goes back with it.
         guard canvas.textInProgress == nil else {
             finishTyping()
+            return
+        }
+
+        // The area eraser does its work when the rectangle is let go of - it is one edit for
+        // the whole area, not one per mouse move.
+        if let area = areaBeingErased {
+            areaFrom = nil
+            areaTo = nil
+            invalidateInk(area.insetBy(dx: -2, dy: -2))
+
+            // A rectangle nobody dragged is a click, and a click erases nothing.
+            if area.width > 2, area.height > 2 {
+                canvas.eraseArea(area).forEach(invalidateInk)
+                syncFadingInk()
+            }
+
             return
         }
 

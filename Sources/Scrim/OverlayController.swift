@@ -43,13 +43,14 @@ final class OverlayController {
     // each has a key of its own now (⌥Z and ⌥C), and one thing in two places is one place too
     // many - the same reasoning that took undo off this wheel took clear off it
     // (docs/DECISIONS.md 31 and 36).
-    private static let actionOrder: [Action] = [.redo, .move, .temporaryInk, .hide]
+    private static let actionOrder: [Action] = [.redo, .move, .eraseArea, .temporaryInk, .hide]
 
     enum Action {
         case redo
         // Two of these hand you a tool rather than doing something: they change what is
         // already on the canvas, which is what this wheel is for (docs/DECISIONS.md 41).
         case move
+        case eraseArea
         case temporaryInk
         case hide
 
@@ -57,6 +58,7 @@ final class OverlayController {
             switch self {
             case .redo: return "REDO"
             case .move: return "MOVE"
+            case .eraseArea: return "ERASE AREA"
             case .temporaryInk: return "TEMP INK"
             case .hide: return "HIDE"
             }
@@ -66,6 +68,7 @@ final class OverlayController {
             switch self {
             case .redo: return "arrow.uturn.forward"
             case .move: return DrawingTool.move.symbolName
+            case .eraseArea: return DrawingTool.eraseArea.symbolName
             case .temporaryInk: return "timer"
             case .hide: return "eye.slash"
             }
@@ -451,6 +454,11 @@ final class OverlayController {
                 // wheel, so nothing else would tell you it is in your hand.
                 self.tools.select(tool: .move)
                 self.drawingViews.forEach { $0.flash("Move: drag anything you have drawn") }
+            case .eraseArea:
+                self.tools.select(tool: .eraseArea)
+                self.drawingViews.forEach {
+                    $0.flash("Erase area: drag a box round what should go")
+                }
             case .temporaryInk:
                 // Said out loud, because ink that disappears by itself is alarming if you did
                 // not mean to switch it on - and the badge, which says so permanently, is a

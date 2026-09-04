@@ -9,7 +9,7 @@ the shortcuts are changed - and it is only there when somebody asks for it.
 with - tools, size, colour - and each opens a wheel: hold, push the mouse at what you want, let
 go. `⌥A`'s wheel opens the overlay and hands you a tool, and its middle is the way out, one
 step at a time. `⌥Z` `⌥X` `⌥C` are what happens to what you have drawn: undo (one press, and
-holding it repeats), a wheel of redo/move/temporary ink/hide, and clear. `⌃⌥⌘Esc` quits.
+holding it repeats), a wheel of redo/move/erase area/temporary ink/hide, and clear. `⌃⌥⌘Esc` quits.
 
 Every one of them is a global hot key, and that is the point: a non-activating panel only gets
 the keyboard while this app is the active one, so the bare keys this app used to have (`P` for

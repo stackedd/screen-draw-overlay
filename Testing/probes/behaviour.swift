@@ -1079,6 +1079,65 @@
                   "\(view.canvas.undoDepth)", "\(beforeNudge)")
         }
 
+        // Erase area: a box round what should go. The eraser cuts what it passes over; this
+        // cuts what a rectangle covers, and the answer has the same shape - what is inside
+        // goes, what is outside stays, and the whole area is one thing to take back
+        // (docs/DECISIONS.md 42).
+        controller.tools.select(tool: .pen)
+        clearAll()
+
+        if let view = controller.overlayWindowSnapshot().first?.drawingView {
+            // One long line across the screen, and a box over its middle.
+            view.canvas.beginStroke(at: NSPoint(x: 100, y: 600), with: controller.tools)
+            for x in stride(from: CGFloat(120), through: 700, by: 20) {
+                view.canvas.extendStroke(to: NSPoint(x: x, y: 600), shiftHeld: false,
+                                         with: controller.tools)
+            }
+            view.canvas.finishStroke()
+
+            let before = view.canvas.undoDepth
+            view.canvas.eraseArea(NSRect(x: 300, y: 560, width: 200, height: 80))
+            check("a box over the middle of a line leaves the two ends",
+                  "\(live)", "2")
+            check("and the whole box is one thing to take back",
+                  "\(view.canvas.undoDepth)", "\(before + 1)")
+
+            let ends = view.canvas.strokes.compactMap { $0.points.map(\.x).max() }.sorted()
+            check("with nothing left inside it",
+                  view.canvas.strokes.allSatisfy { stroke in
+                      stroke.points.allSatisfy { $0.x <= 301 || $0.x >= 499 }
+                  } ? "clean" : "crumbs", "clean")
+            check("and the far end still reaching where it did",
+                  "\(Int(ends.last ?? 0))", "700")
+
+            undoOnce()
+            check("one undo puts the whole line back", "\(live)", "1")
+
+            // Text goes whole, the way it does under the ordinary eraser.
+            clearAll()
+            view.canvas.beginText(at: NSPoint(x: 400, y: 300), with: controller.tools)
+            view.canvas.typeText("word")
+            view.canvas.finishText()
+            view.canvas.eraseArea(NSRect(x: 390, y: 290, width: 40, height: 40))
+            check("a box touching a word takes the whole word", "\(live)", "0")
+            undoOnce()
+
+            // A click is not a drag, and erases nothing. Driven through the view, because
+            // that is where the gesture is: the canvas takes any rectangle it is given.
+            controller.tools.select(tool: .eraseArea)
+            let untouched = view.canvas.undoDepth
+            let spot = NSPoint(x: 400, y: 300)
+            let click = NSEvent.mouseEvent(with: .leftMouseDown, location: spot,
+                                           modifierFlags: [], timestamp: 0,
+                                           windowNumber: view.window?.windowNumber ?? 0,
+                                           context: nil, eventNumber: 0, clickCount: 1,
+                                           pressure: 1)!
+            view.mouseDown(with: click)
+            view.mouseUp(with: click)
+            check("a box nobody dragged erases nothing",
+                  "\(view.canvas.undoDepth)", "\(untouched)")
+        }
+
         controller.tools.select(tool: .pen)
         clearAll()
 
@@ -1130,7 +1189,7 @@
         let settings = controller.shortcutSettings
         check("the actions wheel has no clear on it",
               OverlayController.actionOrder.map { $0.label }.joined(separator: " "),
-              "REDO MOVE TEMP INK HIDE")
+              "REDO MOVE ERASE AREA TEMP INK HIDE")
         check("and clear is a press rather than a wheel",
               ShortcutSettings.Action.clear.opensAWheel ? "a wheel" : "a press", "a press")
 
