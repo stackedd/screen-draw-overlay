@@ -1079,6 +1079,28 @@
                   "\(view.canvas.undoDepth)", "\(beforeNudge)")
         }
 
+        // A tool from the ⌥X wheel has to take the screen back, exactly as a tool from the
+        // tools wheel does. Reported from a real presentation: in click-through - which is
+        // where somebody driving a slideshow is - picking MOVE changed the tool and left every
+        // click going to the app underneath, so the tool did nothing, the slideshow took the
+        // clicks, and the badge still said click-through (docs/DECISIONS.md 43).
+        controller.tools.select(tool: .pen)
+        if state == "OFF" {
+            controller.toggleDrawingMode()
+        }
+
+        controller.toggleInteractionMode()
+        check("in click-through to start with", state, "CLICK-THROUGH")
+        pushAction(OverlayController.actionOrder.firstIndex(of: .move) ?? 0)
+        check("picking move from the wheel takes the screen back", state, "DRAWING")
+        check("and hands you the tool", controller.tools.tool.name, "Move")
+
+        controller.toggleInteractionMode()
+        pushAction(OverlayController.actionOrder.firstIndex(of: .eraseArea) ?? 0)
+        check("and so does picking erase area", state, "DRAWING")
+        check("with that tool in hand", controller.tools.tool.name, "Erase area")
+        controller.tools.select(tool: .pen)
+
         // Erase area: a box round what should go. The eraser cuts what it passes over; this
         // cuts what a rectangle covers, and the answer has the same shape - what is inside
         // goes, what is outside stays, and the whole area is one thing to take back

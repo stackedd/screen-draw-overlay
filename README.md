@@ -95,7 +95,7 @@ opens it the moment you press the key.
 | Line, arrow, rectangle, oval | Two-point shapes. Holding `Shift` while dragging snaps to 45°, or makes a square or a circle. |
 | Text | Click where you want it and type. `Return` finishes, `Escape` throws it away, clicking somewhere else finishes one and starts the next. The size wheel is the point size. |
 | Eraser | Rubs out the part of a stroke it passes over: it cuts strokes rather than deleting them. Its size is the hole it leaves. Text is taken away whole - half a word is not a word. |
-| Move | On the `⌥X` wheel rather than with the drawing tools, because it changes what is already there. Drag anything you have drawn — a line, a shape, a word — and one undo puts it back. |
+| Move | On the `⌥X` wheel rather than with the drawing tools, because it changes what is already there. Drag anything you have drawn — a line, a shape, a word — and one undo puts it back. Picking it takes the screen back, the way picking any tool does. |
 | Erase area | Also on `⌥X`. Drag a box and what is inside it goes: lines are cut at its edge, words go whole. The whole box is one undo. |
 | Laser | A glow that follows the pointer. Hold the button down and it leaves a beam of light that thins out behind your hand and is gone in about half a second. Nothing is left on the drawing. |
 

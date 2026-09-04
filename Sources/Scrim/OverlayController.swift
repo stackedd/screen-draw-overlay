@@ -397,6 +397,18 @@ final class OverlayController {
         }
     }
 
+    // A tool is no use without the mouse, and two of these sectors are tools.
+    //
+    // Picking one in click-through used to change the tool and leave every click going to the
+    // application underneath - so the tool did nothing, the slideshow being presented took the
+    // clicks, and the badge still said click-through. The tools wheel has always taken the
+    // screen back when it hands over a tool; this does the same (docs/DECISIONS.md 43).
+    private func handOver(_ tool: DrawingTool, saying announcement: String) {
+        setInteractionMode(false)
+        tools.select(tool: tool)
+        drawingViews.forEach { $0.flash(announcement) }
+    }
+
     private func leaveByTheHub() {
         guard isDrawingMode else {
             return
@@ -452,13 +464,9 @@ final class OverlayController {
                 // A tool, from the wheel of things you do to a drawing rather than with it.
                 // Said out loud because it is the one tool you cannot reach from the tools
                 // wheel, so nothing else would tell you it is in your hand.
-                self.tools.select(tool: .move)
-                self.drawingViews.forEach { $0.flash("Move: drag anything you have drawn") }
+                self.handOver(.move, saying: "Move: drag anything you have drawn")
             case .eraseArea:
-                self.tools.select(tool: .eraseArea)
-                self.drawingViews.forEach {
-                    $0.flash("Erase area: drag a box round what should go")
-                }
+                self.handOver(.eraseArea, saying: "Erase area: drag a box round what should go")
             case .temporaryInk:
                 // Said out loud, because ink that disappears by itself is alarming if you did
                 // not mean to switch it on - and the badge, which says so permanently, is a

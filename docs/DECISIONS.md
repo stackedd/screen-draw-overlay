@@ -1485,3 +1485,33 @@ writes the picture, with every differing pixel in red and both passes magnified 
 **Why it is written down rather than hidden.** The suite could have been kept at zero by moving
 the box somewhere emptier, and that would have been a test arranged to pass. The number is in
 the README instead, with what it is.
+
+
+## 43. A wheel that hands over a tool takes the screen back with it
+
+**Reported from a real presentation:** MOVE does not work. Nothing appears, the click throws
+you out of the slideshow, and the tool is not in your hand afterwards.
+
+**All three are one fault.** Somebody driving a slideshow is in click-through - that is what
+click-through is for, so the clicks reach the slides. Picking MOVE from the `⌥X` wheel changed
+the tool and nothing else, so:
+
+- the overlay was still passing every click to the application underneath, and the tool never
+  saw one;
+- the clicks went to the slideshow instead, which advanced it, and past the last slide a click
+  ends the show - "it throws you out";
+- click-through draws no pointer and the badge says `Click-through`, so nothing on screen said
+  a tool had been picked at all.
+
+The tools wheel has always done the other half: `setInteractionMode(false)` before it selects
+anything, because a tool is no use without the mouse. The two sectors on `⌥X` that hand over a
+tool - MOVE and ERASE AREA - now go through the same door (`handOver(_:saying:)`), which takes
+the screen back, selects the tool, and says which one it is on the badge.
+
+**Written as a check first.** Enter click-through, pick MOVE from the wheel, and the state must
+be `DRAWING` with `Move` in hand. Against the old code that check reported `CLICK-THROUGH`,
+which is exactly what was being described.
+
+**The shape of the mistake, for next time:** the `⌥X` wheel carries two kinds of thing - things
+that happen at once (redo, hide) and tools you then use. When a wheel mixes those, everything
+the tool needs has to be part of handing it over, not left to whatever the user does next.
