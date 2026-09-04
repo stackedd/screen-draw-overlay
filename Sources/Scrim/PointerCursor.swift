@@ -129,6 +129,7 @@ enum PointerCursor {
         // The text pointer is a caret the size of the line it will put down, so that the
         // point size in hand is visible before a word of it is typed.
         case .text: return min(40, width / 2 + casing + 4)
+        case .move: return 16
         default: return 18
         }
     }
@@ -148,6 +149,8 @@ enum PointerCursor {
             drawPen(at: tip, colour: colour, width: width, chisel: true)
         case .text:
             drawCaret(at: tip, colour: colour, height: width)
+        case .move:
+            drawFourArrows(at: tip, colour: colour)
         default:
             // The shape tools place a corner, so they get a crosshair and nothing else. A
             // crosshair with a little picture beside it was two cursors in one place.
@@ -262,5 +265,35 @@ enum PointerCursor {
         beam.lineWidth = 1.6
         colour.setStroke()
         beam.stroke()
+    }
+
+    // Four arrows from one point, which is what every application on this machine draws for
+    // "this can be dragged". Nothing here is a picture of the tool: the move tool has no nib.
+    private static func drawFourArrows(at centre: NSPoint, colour: NSColor) {
+        let arm: CGFloat = 11
+        let head: CGFloat = 3.5
+
+        let arrows = NSBezierPath()
+        for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
+            let tip = NSPoint(x: centre.x + CGFloat(dx) * arm, y: centre.y + CGFloat(dy) * arm)
+            arrows.move(to: centre)
+            arrows.line(to: tip)
+            // The head, as two strokes back from the tip rather than a filled triangle: at
+            // this size a fill is a blob.
+            arrows.move(to: NSPoint(x: tip.x - CGFloat(dx) * head - CGFloat(dy) * head,
+                                    y: tip.y - CGFloat(dy) * head - CGFloat(dx) * head))
+            arrows.line(to: tip)
+            arrows.line(to: NSPoint(x: tip.x - CGFloat(dx) * head + CGFloat(dy) * head,
+                                    y: tip.y - CGFloat(dy) * head + CGFloat(dx) * head))
+        }
+        arrows.lineCapStyle = .round
+        arrows.lineJoinStyle = .round
+
+        arrows.lineWidth = casing
+        NSColor.white.withAlphaComponent(0.95).setStroke()
+        arrows.stroke()
+        arrows.lineWidth = 1.4
+        colour.setStroke()
+        arrows.stroke()
     }
 }

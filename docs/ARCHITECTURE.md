@@ -61,7 +61,7 @@ open a wheel of tools: push at one and the overlay opens, takes the screen and h
 tool; let go in the middle to leave, one step at a time - the screen back to the app
 underneath, then the overlay away with the drawing kept. `⌥S` and `⌥D` do the same for size
 and colour while the overlay is up, and `⌥X` is the wheel of the rest of what you do *to* a
-drawing: redo, temporary ink and hide. Two are not wheels at all: `⌥Z` undoes, one press for
+drawing: redo, move, temporary ink and hide. Two are not wheels at all: `⌥Z` undoes, one press for
 one thing, repeating while it is held, and `⌥C` clears the screen (entries 31 and 36). `⌃⌥⌘Esc` quits the process outright.
 
 All of them are Carbon global hot keys, which is what makes them work whatever has the

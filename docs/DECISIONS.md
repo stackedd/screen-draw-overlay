@@ -1405,3 +1405,37 @@ the per-stroke life was the right shape to begin with (entry 8).
 **What stays out of that window:** colour, width, tool, and whether temporary ink is on. Those
 are wheels, in the hand, while the drawing is in front of you. The window is for what you set
 once - which is the line that decides whether anything else ever goes in it.
+
+
+## 41. Moving something is a tool, and it lives on the `⌥X` wheel
+
+**Wanted:** a way to shift a line or a word that landed in the wrong place. Until now the only
+answer was to erase it and draw it again.
+
+**Where it lives, and why that is not the tools wheel.** The tools wheel is what you draw
+*with*; `⌥X` is what happens to what you have already drawn. Move belongs to the second, even
+though it is a mode you drag with rather than an instant action - so `⌥X` now hands you a tool
+as well as doing things, and the badge says so out loud when it does (a flash: "Move: drag
+anything you have drawn"), because it is the one tool that cannot be reached from the tools
+wheel.
+
+**How it holds on.** `mouseDown` takes the topmost mark under the pointer, by id rather than by
+index, because an undo or an eraser could shuffle the list under a drag. The hit test is
+`Stroke.isUnder(_:slack:)`: the mark's own repaint bounds first, then the distance from the
+point to each segment, with at least 8 points of slack - a 2pt line is two pixels of target and
+nobody aims at that. Text is a box, and a filled shape is still its outline, so a rectangle is
+grabbed by its edge rather than by the empty middle.
+
+**One drag is one edit**, and the edit names the mark: `Edit.moved(before:after:)`. Undo puts it
+back where it was, redo takes it there again, and both find the mark by `id` (never number 11).
+A drag that ends where it started records nothing at all, because that is somebody deciding not
+to move something.
+
+**Temporary ink cannot be moved.** It is on a fading layer of its own; dragging it would mean
+dragging that layer too, for a mark that is about to disappear anyway.
+
+**The risk this had, and what caught it.** Moving is the one edit that invalidates two
+rectangles for one mark - where it was and where it went - so it is the likeliest to leave a
+hole behind. The rendering suite now moves a mark in its session and still reports **0
+differing bytes** at 1x, 2x and 3x, and prints `moved=yes` so that a grab which caught nothing
+cannot quietly turn that check into a comparison of a session with itself.

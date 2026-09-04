@@ -99,6 +99,16 @@ func type(_ characters: String, at point: NSPoint) {
 
 set { tools.selectColor(5) }; set { tools.select(tool: .text) }
 type("Scrim", at: NSPoint(x: 620, y: 700))
+// Moving something is the one edit that invalidates two rectangles for one mark - where it
+// was and where it went - so it is the one most likely to leave a hole behind.
+set { tools.select(tool: .move) }
+let beforeMove = view.capturedStrokes().last?.points.first
+drag(from: NSPoint(x: 620, y: 700), to: NSPoint(x: 500, y: 730), steps: 10)
+let afterMove = view.capturedStrokes().last?.points.first
+// Printed, because a move that grabbed nothing would leave this suite comparing a session
+// that never moved anything and saying it agreed with itself.
+let moved = beforeMove != nil && beforeMove != afterMove
+
 set { tools.selectWidth(2) }
 set { tools.select(tool: .eraser) }; drag(from: NSPoint(x: 400, y: 230), to: NSPoint(x: 405, y: 230), steps: 4)
 set { view.undo() }
@@ -111,4 +121,4 @@ let bytes = full.bytesPerRow * full.pixelsHigh
 let a = incremental.bitmapData!, b = full.bitmapData!
 var diff = 0, maxDelta = 0
 for i in 0..<bytes where a[i] != b[i] { diff += 1; maxDelta = max(maxDelta, abs(Int(a[i]) - Int(b[i]))) }
-print("strokes=\(view.capturedStrokes().count) scale=\(scale)x fullInkInvalidations=\(view.fullInvalidations - fullBefore) differingBytes=\(diff)/\(bytes) maxDelta=\(maxDelta)")
+print("moved=\(moved ? "yes" : "NOTHING") strokes=\(view.capturedStrokes().count) scale=\(scale)x fullInkInvalidations=\(view.fullInvalidations - fullBefore) differingBytes=\(diff)/\(bytes) maxDelta=\(maxDelta)")

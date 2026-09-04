@@ -55,7 +55,7 @@
     func redoOnce() { pushAction(0) }
     // ⌥C, one press, like undo: clearing left the actions wheel when it got a key of its own.
     func clearAll() { controller.clearNow() }
-    func toggleTemporaryInk() { pushAction(1) }
+    func toggleTemporaryInk() { pushAction(OverlayController.actionOrder.firstIndex(of: .temporaryInk) ?? 0) }
 
     func stroke(finish: Bool = true, y: CGFloat = 300) {
         guard let panel = controller.overlayWindowSnapshot().first else { return }
@@ -745,9 +745,13 @@
 
         // And the wheel that switches it says which way it is now.
         check("the wheel says temporary ink is off",
-              OverlayController.actionWheel(temporaryInk: false).items[1].label, "TEMP INK")
+              OverlayController.actionWheel(temporaryInk: false)
+                  .items[OverlayController.actionOrder.firstIndex(of: .temporaryInk) ?? 0].label,
+              "TEMP INK")
         check("and says so when it is on",
-              OverlayController.actionWheel(temporaryInk: true).items[1].label, "TEMP INK ✓")
+              OverlayController.actionWheel(temporaryInk: true)
+                  .items[OverlayController.actionOrder.firstIndex(of: .temporaryInk) ?? 0].label,
+              "TEMP INK ✓")
 
         // What the window server is handed is a cursor that shows nothing - so that nothing
         // else claims the pointer and draws an arrow beside ours - and the pointer itself is
@@ -805,13 +809,13 @@
               "Cleared · ⌥Z puts it back")
 
         let temporaryBefore = controller.tools.drawsTemporaryInk
-        pushAction(1)
-        check("pushing down switches temporary ink",
+        toggleTemporaryInk()
+        check("the temporary ink sector switches it",
               controller.tools.drawsTemporaryInk == temporaryBefore ? "no" : "yes", "yes")
-        pushAction(1)
+        toggleTemporaryInk()
 
-        pushAction(2)
-        check("and pushing left puts the overlay away, keeping the drawing", state, "OFF")
+        pushAction(OverlayController.actionOrder.firstIndex(of: .hide) ?? 0)
+        check("and the hide sector puts the overlay away, keeping the drawing", state, "OFF")
         controller.toggleDrawingMode()
         check("which came back", "\(live)", "\(beforeUndo)")
         clearAll()
@@ -1032,6 +1036,52 @@
         check("the eraser takes a whole word away", "\(live)", "\(beforeErasing - 1)")
         undoOnce()
         check("and one undo puts it back", "\(live)", "\(beforeErasing)")
+        // Move: pick something up, drag it, put it down. One drag is one thing to take back,
+        // and taking it back has to put the mark where it was rather than where the list
+        // happens to have it (docs/DECISIONS.md 41).
+        controller.tools.select(tool: .pen)
+        clearAll()
+        stroke(y: 500)
+
+        if let view = controller.overlayWindowSnapshot().first?.drawingView,
+           let drawn = view.canvas.strokes.last {
+            let wasAt = drawn.points.first ?? .zero
+            controller.tools.select(tool: .move)
+
+            view.canvas.grabStroke(at: wasAt)
+            check("move picks up what is under the pointer",
+                  view.canvas.isHoldingSomething ? "holding" : "nothing", "holding")
+
+            view.canvas.dragGrabbed(to: NSPoint(x: wasAt.x + 90, y: wasAt.y + 40))
+            view.canvas.dropGrabbed()
+            check("and the mark went with it",
+                  "\(Int(view.canvas.strokes.last?.points.first?.x ?? 0))", "\(Int(wasAt.x + 90))")
+            check("without making a second mark", "\(live)", "1")
+
+            undoOnce()
+            check("one undo puts it back where it was",
+                  "\(Int(view.canvas.strokes.last?.points.first?.x ?? 0))", "\(Int(wasAt.x))")
+            redoOnce()
+            check("and redo moves it again",
+                  "\(Int(view.canvas.strokes.last?.points.first?.x ?? 0))", "\(Int(wasAt.x + 90))")
+
+            // Nothing under the pointer is an answer, not a failure.
+            view.canvas.grabStroke(at: NSPoint(x: 20, y: 20))
+            check("grabbing empty screen holds nothing",
+                  view.canvas.isHoldingSomething ? "holding" : "nothing", "nothing")
+
+            // A drag that ends where it started is somebody changing their mind, not an edit.
+            let beforeNudge = view.canvas.undoDepth
+            view.canvas.grabStroke(at: NSPoint(x: wasAt.x + 90, y: wasAt.y + 40))
+            view.canvas.dragGrabbed(to: NSPoint(x: wasAt.x + 90, y: wasAt.y + 40))
+            view.canvas.dropGrabbed()
+            check("and a drag that goes nowhere is not an edit",
+                  "\(view.canvas.undoDepth)", "\(beforeNudge)")
+        }
+
+        controller.tools.select(tool: .pen)
+        clearAll()
+
         // How long temporary ink lasts is a setting, and it has to reach the ink: each stroke
         // carries its own life, so a change moves what is drawn next and leaves what is
         // already on screen exactly as it was (docs/DECISIONS.md 40).
@@ -1078,9 +1128,9 @@
         // the machine, two of ours on one combination would leave one of them dead, and the
         // panic key has to stay where it is whatever else has been moved.
         let settings = controller.shortcutSettings
-        check("the actions wheel is three sectors now, without clear",
-              OverlayController.actionOrder.count == 3 ? "three" : "\(OverlayController.actionOrder.count)",
-              "three")
+        check("the actions wheel has no clear on it",
+              OverlayController.actionOrder.map { $0.label }.joined(separator: " "),
+              "REDO MOVE TEMP INK HIDE")
         check("and clear is a press rather than a wheel",
               ShortcutSettings.Action.clear.opensAWheel ? "a wheel" : "a press", "a press")
 

@@ -373,6 +373,13 @@ final class DrawingView: NSView {
             return
         }
 
+        // Picking something up rather than drawing something new. Nothing under the pointer
+        // is not a failure: it is the answer, and the drag does nothing.
+        guard tools.tool != .move else {
+            canvas.grabStroke(at: point)
+            return
+        }
+
         guard tools.tool != .eraser else {
             // One drag is one thing to take back, however many strokes it cuts through.
             canvas.beginErase(at: point)
@@ -393,6 +400,14 @@ final class DrawingView: NSView {
         // The beam is drawn where the event says the pointer is, so the glow is told the same
         // thing: left to the poll, the light trailed the ink it is supposed to be making.
         followPointer(to: point)
+
+        guard tools.tool != .move else {
+            if let dirty = canvas.dragGrabbed(to: point) {
+                invalidateInk(dirty)
+            }
+
+            return
+        }
 
         guard tools.tool != .eraser else {
             erase(at: point)
@@ -706,6 +721,16 @@ final class DrawingView: NSView {
         // Something being typed is finished the same way, and the keyboard goes back with it.
         guard canvas.textInProgress == nil else {
             finishTyping()
+            return
+        }
+
+        // A mark being dragged is finished the same way too: the tool being taken away
+        // mid-drag must put it down, not drop it.
+        if canvas.isHoldingSomething {
+            if let dirty = canvas.dropGrabbed() {
+                invalidateInk(dirty)
+            }
+
             return
         }
 

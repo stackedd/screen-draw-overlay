@@ -31,6 +31,10 @@ final class Canvas {
         // in their place. One edit rather than one per mouse move, or undo would give a
         // drawing back a nibble at a time.
         case erased(originals: [Removal], pieces: [Stroke])
+        // One drag of the move tool: the same mark before and after. Named by id like
+        // everything else, so undoing it puts back where it was rather than where the list
+        // happened to have it (CLAUDE.md, never number 11).
+        case moved(before: Stroke, after: Stroke)
 
         // Temporary ink is not something anyone can take back: it was drawn to vanish. When
         // it goes, the entries naming it go too, or undo steps over an entry that does
@@ -47,6 +51,8 @@ final class Canvas {
                 let keptPieces = pieces.filter { $0.id != id }
                 return keptOriginals.isEmpty ? nil : .erased(originals: keptOriginals,
                                                              pieces: keptPieces)
+            case .moved(let before, _):
+                return before.id == id ? nil : self
             }
         }
 
@@ -63,6 +69,8 @@ final class Canvas {
                 let keptPieces = pieces.filter { $0.createdAt == nil }
                 return keptOriginals.isEmpty ? nil : .erased(originals: keptOriginals,
                                                              pieces: keptPieces)
+            case .moved(let before, _):
+                return before.createdAt == nil ? self : nil
             }
         }
     }
@@ -169,6 +177,72 @@ final class Canvas {
         lastPoint = nil
 
         return finished.repaintBounds
+    }
+
+    // MARK: - Moving something that is already there
+
+    // What the move tool has hold of: the mark as it was when it was picked up, and where the
+    // pointer was then. Kept as an id rather than an index, because the eraser or an undo
+    // could shuffle the list underneath a drag.
+    private var grabbed: (id: UUID, original: Stroke, from: NSPoint)?
+
+    var isHoldingSomething: Bool {
+        grabbed != nil
+    }
+
+    // How many things there are to take back, which is how the suite asks "was that an edit?"
+    var undoDepth: Int {
+        undoStack.count
+    }
+
+    // The topmost mark under the pointer, if there is one. Temporary ink is not offered: it is
+    // on a layer of its own, fading, and dragging it would mean dragging that layer too.
+    @discardableResult
+    func grabStroke(at point: NSPoint) -> Bool {
+        guard let index = strokes.lastIndex(where: { $0.createdAt == nil && $0.isUnder(point) }) else {
+            grabbed = nil
+            return false
+        }
+
+        grabbed = (id: strokes[index].id, original: strokes[index], from: point)
+        return true
+    }
+
+    // Where it was and where it is: both, because the mark has to be lifted off the old place
+    // as well as put down in the new one.
+    func dragGrabbed(to point: NSPoint) -> NSRect? {
+        guard let held = grabbed,
+              let index = strokes.firstIndex(where: { $0.id == held.id }) else {
+            return nil
+        }
+
+        let before = strokes[index].repaintBounds
+        let moved = held.original.movedBy(NSSize(width: point.x - held.from.x,
+                                                 height: point.y - held.from.y))
+        strokes[index] = moved
+
+        return before.union(moved.repaintBounds)
+    }
+
+    // One drag is one thing to take back. A drag that ended where it started is not an edit at
+    // all - it was somebody deciding not to move something.
+    @discardableResult
+    func dropGrabbed() -> NSRect? {
+        guard let held = grabbed,
+              let index = strokes.firstIndex(where: { $0.id == held.id }) else {
+            grabbed = nil
+            return nil
+        }
+
+        let landed = strokes[index]
+        grabbed = nil
+
+        guard landed.points.first != held.original.points.first else {
+            return nil
+        }
+
+        record(.moved(before: held.original, after: landed))
+        return held.original.repaintBounds.union(landed.repaintBounds)
     }
 
     // MARK: - Text
@@ -420,6 +494,14 @@ final class Canvas {
                     dirty.append(removal.stroke.repaintBounds)
                 }
                 dirty.append(contentsOf: pieces.map(\.repaintBounds))
+            case .moved(let before, let after):
+                guard let index = strokes.firstIndex(where: { $0.id == after.id }) else {
+                    continue
+                }
+
+                strokes[index] = before
+                dirty.append(after.repaintBounds)
+                dirty.append(before.repaintBounds)
             }
 
             redoStack.append(edit)
@@ -456,6 +538,14 @@ final class Canvas {
             strokes.removeAll { taken.contains($0.id) }
             strokes.append(contentsOf: pieces)
             dirty.append(contentsOf: pieces.map(\.repaintBounds))
+        case .moved(let before, let after):
+            guard let index = strokes.firstIndex(where: { $0.id == before.id }) else {
+                break
+            }
+
+            strokes[index] = after
+            dirty.append(before.repaintBounds)
+            dirty.append(after.repaintBounds)
         }
 
         undoStack.append(edit)

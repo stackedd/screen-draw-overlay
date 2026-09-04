@@ -63,7 +63,7 @@ window.
 | `⌥S` | Size of the pen, the marker, the hole the eraser takes out, the laser's beam, or the type |
 | `⌥D` | Colours |
 | `⌥Z` | **Undo.** One press takes one thing back; hold it and it keeps going, like `⌘Z` anywhere else |
-| `⌥X` | What else to do to a drawing: redo, temporary ink, hide |
+| `⌥X` | What else to do to a drawing: redo, **move**, temporary ink, hide |
 | `⌥C` | **Clear.** One press and the screen is empty again — `⌥Z` puts it back, and the badge says so |
 
 `⌥A` works from the moment the app starts. The other five come and go with the overlay: while
@@ -95,6 +95,7 @@ opens it the moment you press the key.
 | Line, arrow, rectangle, oval | Two-point shapes. Holding `Shift` while dragging snaps to 45°, or makes a square or a circle. |
 | Text | Click where you want it and type. `Return` finishes, `Escape` throws it away, clicking somewhere else finishes one and starts the next. The size wheel is the point size. |
 | Eraser | Rubs out the part of a stroke it passes over: it cuts strokes rather than deleting them. Its size is the hole it leaves. Text is taken away whole - half a word is not a word. |
+| Move | On the `⌥X` wheel rather than with the drawing tools, because it changes what is already there. Drag anything you have drawn — a line, a shape, a word — and one undo puts it back. |
 | Laser | A glow that follows the pointer. Hold the button down and it leaves a beam of light that thins out behind your hand and is gone in about half a second. Nothing is left on the drawing. |
 
 **Temporary ink**, on the `⌥X` wheel, makes every mark fade out a few seconds after it is

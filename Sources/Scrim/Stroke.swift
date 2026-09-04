@@ -23,6 +23,10 @@ enum DrawingTool: Hashable {
     case eraser
     case laser
     case text
+    // Two that change what is already on the canvas rather than adding to it, and are picked
+    // from the ⌥X wheel rather than the tools wheel (docs/DECISIONS.md 41).
+    case move
+    case eraseArea
 
     var style: StrokeStyle {
         switch self {
@@ -39,6 +43,12 @@ enum DrawingTool: Hashable {
         self == .text
     }
 
+    // Tools that change what is already there. They are not on the tools wheel and they put
+    // nothing new on the canvas; what they do with a drag is their own.
+    var editsWhatIsThere: Bool {
+        self == .move || self == .eraseArea
+    }
+
     var isShape: Bool {
         self == .line || self == .arrow || self == .rectangle || self == .ellipse
     }
@@ -47,13 +57,13 @@ enum DrawingTool: Hashable {
     // fades in half a second - which is what makes it read as pointing rather than as a
     // dot sliding about.
     var marksTheCanvas: Bool {
-        self != .eraser
+        self != .eraser && !editsWhatIsThere
     }
 
     // Tools worth coming back to. The eraser and the laser are picked up for a moment, so
     // neither is what the app hands you next time.
     var isKeptInHand: Bool {
-        self != .eraser && self != .laser
+        self != .eraser && self != .laser && !editsWhatIsThere
     }
 
     // How long what it draws lasts. Only the laser is different, and it is different by a
@@ -75,6 +85,8 @@ enum DrawingTool: Hashable {
         case .eraser: return "eraser"
         case .laser: return "laser"
         case .text: return "text"
+        case .move: return "move"
+        case .eraseArea: return "eraseArea"
         }
     }
 
@@ -89,6 +101,8 @@ enum DrawingTool: Hashable {
         case "eraser": self = .eraser
         case "laser": self = .laser
         case "text": self = .text
+        case "move": self = .move
+        case "eraseArea": self = .eraseArea
         default: return nil
         }
     }
@@ -163,6 +177,8 @@ enum DrawingTool: Hashable {
         case .rectangle: return "Rect"
         case .ellipse: return "Oval"
         case .text: return "Text"
+        case .move: return "Move"
+        case .eraseArea: return "Erase area"
         case .eraser: return "Eraser"
         case .laser: return "Laser"
         }
@@ -185,6 +201,8 @@ enum DrawingTool: Hashable {
         case .eraser: return "eraser"
         case .laser: return "dot.circle.and.hand.point.up.left.fill"
         case .text: return "textformat"
+        case .move: return "arrow.up.and.down.and.arrow.left.and.right"
+        case .eraseArea: return "rectangle.dashed"
         }
     }
 }
@@ -504,6 +522,50 @@ struct Stroke {
         // Room for the caret, which is drawn just past the last glyph while it is being typed.
         return NSRect(x: point.x, y: point.y,
                       width: ceil(measured.width) + 2, height: ceil(measured.height))
+    }
+
+    // MARK: - Picking one up and putting it down again
+
+    // Whether this mark is under a point, which is what the move tool asks before it grabs
+    // anything. The slack is what makes a hairline pickable: a 2pt line is two pixels of
+    // target, and nobody aims at that.
+    func isUnder(_ point: NSPoint, slack: CGFloat = 8) -> Bool {
+        let reach = max(width / 2, slack)
+        guard repaintBounds.insetBy(dx: -slack, dy: -slack).contains(point) else {
+            return false
+        }
+
+        // Text is a box, not a line: anywhere on the words counts.
+        if style == .text {
+            return path.bounds.insetBy(dx: -slack, dy: -slack).contains(point)
+        }
+
+        // A shape is its outline, and a filled rectangle's middle is not part of it - so the
+        // same segment walk answers both, with the shape's own points closing the figure.
+        let walk = isShape ? outline().flatMap { $0 } : points
+        guard walk.count > 1 else {
+            return walk.first.map { hypot($0.x - point.x, $0.y - point.y) <= reach } ?? false
+        }
+
+        for index in 1..<walk.count
+        where Stroke.distance(from: point, toSegmentFrom: walk[index - 1], to: walk[index]) <= reach {
+            return true
+        }
+
+        return false
+    }
+
+    // The same mark, somewhere else. Same identity on purpose: it is the mark that moved, and
+    // the history has to be able to say so.
+    func movedBy(_ offset: NSSize) -> Stroke {
+        let shift = AffineTransform(translationByX: offset.width, byY: offset.height)
+        let carried = path.copy() as! NSBezierPath
+        carried.transform(using: shift)
+
+        return Stroke(id: id,
+                      points: points.map { NSPoint(x: $0.x + offset.width, y: $0.y + offset.height) },
+                      path: carried, color: color, width: width, style: style,
+                      createdAt: createdAt, isShape: isShape, life: life, text: text)
     }
 
     // The same mark, with its life starting now.
