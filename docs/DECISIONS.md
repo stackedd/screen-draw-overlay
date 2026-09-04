@@ -1489,8 +1489,9 @@ the README instead, with what it is.
 
 ## 43. A wheel that hands over a tool takes the screen back with it
 
-**Reported from a real presentation:** MOVE does not work. Nothing appears, the click throws
-you out of the slideshow, and the tool is not in your hand afterwards.
+**Reported from a real presentation** (Keynote 13.2, full screen, macOS 26.6.2 - the only
+presentation app any of this has been checked against): MOVE does not work. Nothing appears,
+the click throws you out of the slideshow, and the tool is not in your hand afterwards.
 
 **All three are one fault.** Somebody driving a slideshow is in click-through - that is what
 click-through is for, so the clicks reach the slides. Picking MOVE from the `⌥X` wheel changed

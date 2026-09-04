@@ -18,8 +18,11 @@ Manual, because nothing in this repo can inject a real mouse or a real presentat
 
 - The whole `⌥A` gesture with a real hand: open, pick, draw, undo with `⌥Z` (tapped and held),
   leave by the hub.
-- A real slideshow (Keynote or PowerPoint, full screen): the pointer is visible, the laser
-  reads, the overlay is above the slides.
+- A real slideshow, full screen: the pointer is visible, the laser reads, the overlay is above
+  the slides. **Keynote is the only one any of this has ever been checked against** - 13.2, by
+  hand, on this machine. PowerPoint, Google Slides in a browser and a Zoom or Teams share have
+  never been tried. If you try one, write down what happened either way: a second reference is
+  worth more here than another number.
 - **Typing over that slideshow.** Pick the text tool, click, type a word. The keys must arrive
   and the slideshow must keep running - it is the one thing this app cannot check for itself
   (docs/DECISIONS.md 39). If the keys do not arrive, Settings has "come forward while typing".

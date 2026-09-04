@@ -197,6 +197,14 @@ current key layout, and not taken again since. Every number in `docs/ARCHITECTUR
 stamp like this one, so you can tell at a glance how old it is; the ones from
 `./Testing/run.sh` are current, because anybody can take them again in a minute.*
 
+**What the suites cannot check, and what it has been checked against instead.** Nothing here
+can inject a real mouse or start a real slideshow, so the part this app exists for is checked
+by hand — and by hand means **Keynote 13.2, full screen, on one 14-inch MacBook Pro running
+macOS 26.6**. That is the only presentation app any of it has ever been tried with. PowerPoint,
+Google Slides in a browser, and screen sharing in Zoom or Teams have not been tried at all, and
+neither has a second display. If you use one of those, `docs/RELEASE.md` has the list of things
+to look at, and a report either way is worth more to this project than another number.
+
 The permission claim is checkable in two commands rather than taken on trust:
 
 ```bash
