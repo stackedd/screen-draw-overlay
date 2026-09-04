@@ -33,7 +33,9 @@ settings.set(keyCode: UInt32(kVK_ANSI_U), modifiers: UInt32(cmdKey | controlKey)
              key: "U", for: .undo)
 settings.setDelay(0, for: .actions)
 
-let window = SettingsWindow(settings: settings, suspendShortcuts: { _ in })
+// Its own tool settings too, for the same reason: the ink section writes to them.
+let tools = ToolSettings()
+let window = SettingsWindow(settings: settings, tools: tools, suspendShortcuts: { _ in })
 window.show()
 
 guard let content = window.window?.contentView else {

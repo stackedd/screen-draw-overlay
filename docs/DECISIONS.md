@@ -1147,11 +1147,10 @@ somebody is typing and hands the front back when they finish**: `NSApp.activate`
 that puts the caret down, and the application that was in front is remembered and reactivated
 on `Return`, on `Escape`, and on anything else that finishes the text.
 
-**What that costs, honestly.** For as long as a caret is on screen, this app is the active one.
-A presenting app that is watching for focus changes can notice. Measured by hand against a real
-Keynote slideshow before this shipped; if it ever turns out to disturb one, the fallback is
-already written down: no activation, typing only while the panel has the keyboard, and the
-badge saying when it does not.
+**What that cost, and what happened next.** For as long as a caret was on screen, this app was
+the active one - and a real Keynote slideshow did not survive it. Entry 39 is the answer; this
+paragraph is left here because the reasoning that led to activation was sound and the thing
+that made it wrong is worth seeing next to it.
 
 **No blinking caret.** A blink is a timer running for as long as somebody is thinking about
 what to write, and this app does not leave timers running for decoration (CLAUDE.md, never
@@ -1356,3 +1355,36 @@ each one helped without finishing the job. The fourth found it by making the app
 screen was showing next to what it was doing, at 4ms, on the machine where it happened - and
 then by changing one variable between two runs. The probes could not have found it: they warp
 the pointer, and the window server does not answer a warp the way it answers a hand.
+
+
+## 39. Typing takes the keyboard without taking the front
+
+**Reported:** clicking with the text tool throws the presenter out of their slideshow. Entry 34
+said this might happen, said it would be tested by hand, and wrote down the fallback. It
+happened.
+
+**What was doing it:** placing a caret called `NSApp.activate(ignoringOtherApps: true)`. The
+reasoning was that a non-activating panel gets no keystrokes while another application is in
+front, which is the whole of entry 30 - so typing seemed to need the front.
+
+**But it does not, and the style mask says so.** `.nonactivatingPanel` exists to let a window
+take keyboard input **without** activating its application - a character palette is one. Entry
+30's bare keys failed for a different reason: nothing was making the overlay the key window at
+the time, so keys went wherever the user had last clicked. Drawing mode makes the panel key on
+purpose, and in drawing mode nothing else can be clicked, so it stays key.
+
+**Now:** `takeTheKeyboard()` makes the panel key and leaves the front alone.
+
+**With a way out, and a way to see that it is needed.** If that path fails somewhere -
+a keyboard-capture utility, a future macOS - typing would silently go nowhere, which is the
+worst failure a tool can have. So:
+
+- **A setting**, off out of the box: *come forward while typing*, which is exactly the old
+  behaviour including handing the front back afterwards.
+- **The app says when it is not working.** A caret with nothing typed into it, two and a half
+  seconds on, with this app not in front, flashes on the badge: the keys are not arriving and
+  the setting is where to fix it. One-shot timer, gone with the text session.
+
+**Where the judgement lies:** the only thing that can say whether this worked is a real
+slideshow and a pair of eyes, so that is a manual check in `docs/RELEASE.md` rather than a
+number here.

@@ -13,6 +13,8 @@ import Carbon
 
 final class SettingsWindow: NSObject, NSWindowDelegate, NSTextFieldDelegate {
     private let settings: ShortcutSettings
+    // The pen in hand, for the things about ink rather than about keys.
+    private let tools: ToolSettings
     // Recording a shortcut means pressing keys this app has registered system-wide, so they
     // have to be taken down while a recorder is armed - otherwise pressing ⌥A to record it
     // opens the tools wheel over the window.
@@ -21,10 +23,13 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSTextFieldDelegate {
     private var window: NSWindow?
     private var recorders: [ShortcutSettings.Action: RecorderButton] = [:]
     private var delayFields: [ShortcutSettings.Action: NSTextField] = [:]
+    private let comeForward = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let message = NSTextField(labelWithString: "")
 
-    init(settings: ShortcutSettings, suspendShortcuts: @escaping (Bool) -> Void) {
+    init(settings: ShortcutSettings, tools: ToolSettings,
+         suspendShortcuts: @escaping (Bool) -> Void) {
         self.settings = settings
+        self.tools = tools
         self.suspendShortcuts = suspendShortcuts
         super.init()
     }
@@ -142,6 +147,25 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSTextFieldDelegate {
         panicNote.textColor = .tertiaryLabelColor
         grid.addRow(with: [panicName, panicKeys, panicNote])
 
+        // Ink: the things that are not keys. Small on purpose - what belongs in a window is
+        // what you set once, and everything you change while drawing is a wheel.
+        let inkHeading = NSTextField(labelWithString: "Ink")
+        inkHeading.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
+
+        comeForward.title = "Come forward while typing"
+        comeForward.target = self
+        comeForward.action = #selector(comeForwardChanged)
+
+        let comeForwardNote = NSTextField(wrappingLabelWithString:
+            "Off, Scrim takes the keyboard without taking the front, so a slideshow keeps "
+            + "running. Switch it on only if typing does not reach the caret: it works "
+            + "everywhere, but the app in front loses the front while you type.")
+        comeForwardNote.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        comeForwardNote.textColor = .tertiaryLabelColor
+        comeForwardNote.preferredMaxLayoutWidth = SettingsWindow.contentWidth
+        comeForwardNote.widthAnchor
+            .constraint(equalToConstant: SettingsWindow.contentWidth).isActive = true
+
         message.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         message.textColor = .systemRed
 
@@ -152,7 +176,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSTextFieldDelegate {
         let footer = NSStackView(views: [message, NSView(), reset])
         footer.orientation = .horizontal
 
-        let stack = NSStackView(views: [heading, explanation, grid, footer])
+        let stack = NSStackView(views: [heading, explanation, grid,
+                                        NSBox.separator(width: SettingsWindow.contentWidth),
+                                        inkHeading, comeForward, comeForwardNote, footer])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 14
@@ -195,6 +221,13 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSTextFieldDelegate {
             recorders[action]?.show(binding.spoken)
             delayFields[action]?.stringValue = "\(Int((binding.delay * 1000).rounded()))"
         }
+
+        comeForward.state = tools.comesForwardToType ? .on : .off
+    }
+
+    @objc private func comeForwardChanged() {
+        disarm()
+        tools.setComesForwardToType(comeForward.state == .on)
     }
 
     private func record(_ event: NSEvent, for action: ShortcutSettings.Action) {
@@ -350,5 +383,16 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSTextFieldDelegate {
             keyDown(with: event)
             return true
         }
+    }
+}
+
+// A hairline between the sections, which is what a window with more than one thing in it
+// needs and what AppKit gives no shorthand for.
+private extension NSBox {
+    static func separator(width: CGFloat) -> NSBox {
+        let box = NSBox()
+        box.boxType = .separator
+        box.widthAnchor.constraint(equalToConstant: width).isActive = true
+        return box
     }
 }

@@ -22,12 +22,23 @@ final class ToolSettings {
         static let widthIndex = "toolWidthIndex"
         static let tool = "toolName"
         static let temporaryInk = "toolTemporaryInk"
+        static let comesForwardToType = "inkComesForwardToType"
     }
 
     private(set) var colorIndex = 0
     private(set) var widthIndex = 2
     private(set) var tool: DrawingTool = .pen
     private(set) var drawsTemporaryInk = false
+
+    // Whether placing a caret pulls this app in front of whatever is there.
+    //
+    // Off, because on it took a presenter out of their slideshow - which is the one situation
+    // this app exists for (docs/DECISIONS.md 39). A non-activating panel is supposed to be
+    // able to take the keyboard without taking the front, and off is that path. It is a
+    // setting rather than a decision because if that ever fails on somebody's machine, the
+    // way to type is one checkbox away instead of a rebuild.
+    private(set) var comesForwardToType = false
+
     private var lastDrawingTool: DrawingTool = .pen
 
     init() {
@@ -51,6 +62,7 @@ final class ToolSettings {
         }
 
         drawsTemporaryInk = defaults.bool(forKey: Key.temporaryInk)
+        comesForwardToType = defaults.bool(forKey: Key.comesForwardToType)
     }
 
     private func persist() {
@@ -61,6 +73,7 @@ final class ToolSettings {
         // thing that actually drew.
         defaults.set(lastDrawingTool.persistedName, forKey: Key.tool)
         defaults.set(drawsTemporaryInk, forKey: Key.temporaryInk)
+        defaults.set(comesForwardToType, forKey: Key.comesForwardToType)
     }
 
     var style: StrokeStyle {
@@ -150,6 +163,16 @@ final class ToolSettings {
 
     func toggleTemporaryInk() {
         drawsTemporaryInk.toggle()
+        persist()
+        onChange?()
+    }
+
+    func setComesForwardToType(_ comesForward: Bool) {
+        guard comesForward != comesForwardToType else {
+            return
+        }
+
+        comesForwardToType = comesForward
         persist()
         onChange?()
     }

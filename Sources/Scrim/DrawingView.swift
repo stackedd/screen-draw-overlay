@@ -60,7 +60,10 @@ final class DrawingView: NSView {
     private let pointerLayer = LaserDot.makeLayer()
     private var pointerPoll: Timer?
     // Who was in front before typing pulled the app forward, so that finishing hands it back.
+    // Only ever set when the setting that pulls it forward is on.
     private var appToGoBackTo: NSRunningApplication?
+    // One shot, while a caret is waiting for its first keystroke. See watchForKeystrokesArriving().
+    private var typingWatch: Timer?
     private var lastPointerPoint: NSPoint?
     private var lastPointerUpdate = Date.distantPast
 
@@ -593,26 +596,58 @@ final class DrawingView: NSView {
         releaseTheKeyboard()
     }
 
-    // Typing is the one thing here that needs the keyboard, and a non-activating panel does
-    // not get keystrokes while another application is in front (docs/DECISIONS.md 34). So the
-    // app comes forward for as long as somebody is typing, and hands the front back afterwards
-    // - which matters most in the case this app is for, where what was in front is a slideshow.
+    // Typing is the one thing here that needs the keyboard.
+    //
+    // **The panel is made key and the app is left where it is.** A `.nonactivatingPanel` is
+    // documented to be able to take keyboard input without taking the front - it is what a
+    // character palette is - and taking the front is what put a presenter out of their
+    // slideshow (docs/DECISIONS.md 39). If that ever fails somewhere, `comesForwardToType`
+    // in Settings is the old behaviour, off by default.
     private func takeTheKeyboard() {
+        window?.makeKeyAndOrderFront(nil)
+
+        guard tools.comesForwardToType else {
+            // Nothing typed yet, and no way to see that the keys are going elsewhere: say so
+            // rather than leave somebody typing into a caret that is not listening.
+            watchForKeystrokesArriving()
+            return
+        }
+
         if NSApp.isActive == false {
             appToGoBackTo = NSWorkspace.shared.frontmostApplication
         }
 
         NSApp.activate(ignoringOtherApps: true)
-        window?.makeKeyAndOrderFront(nil)
     }
 
     private func releaseTheKeyboard() {
+        typingWatch?.invalidate()
+        typingWatch = nil
+
         guard let previous = appToGoBackTo else {
             return
         }
 
         appToGoBackTo = nil
         previous.activate()
+    }
+
+    // A caret with nothing in it, a couple of seconds later, with this app not in front: the
+    // keys are going somewhere else and nothing on screen says so. One shot, and it dies with
+    // the text session either way (CLAUDE.md, never number 8).
+    private func watchForKeystrokesArriving() {
+        typingWatch?.invalidate()
+
+        let timer = Timer(timeInterval: 2.5, repeats: false) { [weak self] _ in
+            guard let self, self.canvas.textInProgress?.isEmpty == true, !NSApp.isActive else {
+                return
+            }
+
+            self.flash("Typing is not reaching Scrim - switch on \"come forward while typing\" "
+                       + "in Settings")
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        typingWatch = timer
     }
 
     // Escape can also arrive as a cancel action rather than a plain keyDown; swallow it

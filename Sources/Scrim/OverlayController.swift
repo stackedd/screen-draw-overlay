@@ -255,7 +255,8 @@ final class OverlayController {
     // want to record fires the shortcut you already have.
     private func openSettings() {
         if settingsWindow == nil {
-            settingsWindow = SettingsWindow(settings: shortcutSettings) { [weak self] suspend in
+            settingsWindow = SettingsWindow(settings: shortcutSettings,
+                                            tools: tools) { [weak self] suspend in
                 guard let self else {
                     return
                 }

@@ -982,6 +982,17 @@
               controller.overlayWindowSnapshot().first?.drawingView.canvas.textInProgress ?? "nothing", "")
         check("and nothing is on the canvas yet", "\(live)", "\(beforeTyping)")
 
+        // Placing a caret must not pull this app in front. Taking the front is what put a
+        // presenter out of their slideshow, and a non-activating panel does not need it to be
+        // given the keyboard (docs/DECISIONS.md 39). The branch is checked rather than
+        // NSApp.isActive, which a test binary has no reliable opinion about.
+        if let view = controller.overlayWindowSnapshot().first?.drawingView {
+            check("placing a caret leaves the front where it was",
+                  view.appToGoBackTo == nil ? "left it" : "took it", "left it")
+            check("and watches for the keys not arriving instead",
+                  view.typingWatch != nil ? "watching" : "not watching", "watching")
+        }
+
         type("Hello")
         check("typing goes into it", controller.overlayWindowSnapshot().first?.drawingView.canvas.textInProgress ?? "", "Hello")
         type("\u{8}", code: kVK_Delete)
@@ -1021,6 +1032,18 @@
         check("the eraser takes a whole word away", "\(live)", "\(beforeErasing - 1)")
         undoOnce()
         check("and one undo puts it back", "\(live)", "\(beforeErasing)")
+        // And the way back for anybody the panel-key path fails on: the setting, off out of
+        // the box, that takes the front the old way.
+        controller.tools.setComesForwardToType(true)
+        click(at: NSPoint(x: 400, y: 400))
+        if let view = controller.overlayWindowSnapshot().first?.drawingView {
+            check("with the setting on, it does not need the watch",
+                  view.typingWatch == nil ? "no watch" : "watching", "no watch")
+        }
+
+        type("\u{1b}", code: kVK_Escape)
+        controller.tools.setComesForwardToType(false)
+
         controller.tools.select(tool: .pen)
         clearAll()
 
@@ -1171,7 +1194,8 @@
         // clicked next - reset the shortcuts and the next key you pressed was taken as a new
         // one for the row you had armed.
         var suspended = 0
-        let settingsPanel = SettingsWindow(settings: controller.shortcutSettings) { asked in
+        let settingsPanel = SettingsWindow(settings: controller.shortcutSettings,
+                                           tools: controller.tools) { asked in
             suspended += asked ? 1 : -1
         }
         settingsPanel.show()

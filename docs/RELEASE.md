@@ -20,6 +20,9 @@ Manual, because nothing in this repo can inject a real mouse or a real presentat
   leave by the hub.
 - A real slideshow (Keynote or PowerPoint, full screen): the pointer is visible, the laser
   reads, the overlay is above the slides.
+- **Typing over that slideshow.** Pick the text tool, click, type a word. The keys must arrive
+  and the slideshow must keep running - it is the one thing this app cannot check for itself
+  (docs/DECISIONS.md 39). If the keys do not arrive, Settings has "come forward while typing".
 - A second display, if there is one: the badge on one screen, drawing on both.
 - A clean user account: first launch and the Gatekeeper warning.
 
