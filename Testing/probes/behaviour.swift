@@ -1032,6 +1032,32 @@
         check("the eraser takes a whole word away", "\(live)", "\(beforeErasing - 1)")
         undoOnce()
         check("and one undo puts it back", "\(live)", "\(beforeErasing)")
+        // How long temporary ink lasts is a setting, and it has to reach the ink: each stroke
+        // carries its own life, so a change moves what is drawn next and leaves what is
+        // already on screen exactly as it was (docs/DECISIONS.md 40).
+        controller.tools.select(tool: .pen)
+        if !controller.tools.drawsTemporaryInk {
+            controller.tools.toggleTemporaryInk()
+        }
+
+        stroke(y: 420)
+        let atThree = controller.overlayWindowSnapshot().first?.drawingView.canvas.strokes.last?.life
+        controller.tools.setTemporaryInkSeconds(12)
+        stroke(y: 440)
+        let atTwelve = controller.overlayWindowSnapshot().first?.drawingView.canvas.strokes.last?.life
+        check("the ink life setting reaches the next stroke", "\(atTwelve ?? 0)", "12.0")
+        check("and leaves the one already drawn alone", "\(atThree ?? 0)", "3.0")
+
+        controller.tools.setTemporaryInkSeconds(0.1)
+        check("it will not go below a second",
+              "\(controller.tools.temporaryInkSeconds)", "1.0")
+        controller.tools.setTemporaryInkSeconds(500)
+        check("nor above thirty", "\(controller.tools.temporaryInkSeconds)", "30.0")
+        controller.tools.setTemporaryInkSeconds(Stroke.fadeDuration)
+        controller.tools.toggleTemporaryInk()
+        clearAll()
+        controller.tools.select(tool: .text)
+
         // And the way back for anybody the panel-key path fails on: the setting, off out of
         // the box, that takes the front the old way.
         controller.tools.setComesForwardToType(true)

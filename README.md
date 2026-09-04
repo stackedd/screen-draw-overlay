@@ -97,9 +97,10 @@ opens it the moment you press the key.
 | Eraser | Rubs out the part of a stroke it passes over: it cuts strokes rather than deleting them. Its size is the hole it leaves. Text is taken away whole - half a word is not a word. |
 | Laser | A glow that follows the pointer. Hold the button down and it leaves a beam of light that thins out behind your hand and is gone in about half a second. Nothing is left on the drawing. |
 
-**Temporary ink**, on the `⌥X` wheel, makes every mark fade out three seconds after it is
-finished, the way a presenter's pen does. While it is on, the badge in the corner wears an
-orange `TEMP`, so a drawing that disappears is never a surprise.
+**Temporary ink**, on the `⌥X` wheel, makes every mark fade out a few seconds after it is
+finished, the way a presenter's pen does. Three seconds out of the box, and anything from 1 to
+30 in **Settings…** — how long you need depends on how fast you talk. While it is on, the badge
+in the corner wears an orange `TEMP`, so a drawing that disappears is never a surprise.
 
 Colour, width and tool are remembered between launches. The eraser and the laser are not: what
 comes back is the last tool that actually drew.

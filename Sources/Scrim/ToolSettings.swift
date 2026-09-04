@@ -23,6 +23,7 @@ final class ToolSettings {
         static let tool = "toolName"
         static let temporaryInk = "toolTemporaryInk"
         static let comesForwardToType = "inkComesForwardToType"
+        static let temporaryInkSeconds = "inkTemporarySeconds"
     }
 
     private(set) var colorIndex = 0
@@ -38,6 +39,14 @@ final class ToolSettings {
     // setting rather than a decision because if that ever fails on somebody's machine, the
     // way to type is one checkbox away instead of a rebuild.
     private(set) var comesForwardToType = false
+
+    // How long temporary ink lasts once it is finished. Three seconds is a presenter's pen,
+    // which is where this started (Stroke.fadeDuration), but the right number depends on how
+    // fast somebody talks - so it is a setting. Each stroke carries its own life, so changing
+    // this moves what is drawn next and leaves what is on screen alone.
+    static let shortestInkLife: TimeInterval = 1
+    static let longestInkLife: TimeInterval = 30
+    private(set) var temporaryInkSeconds: TimeInterval = Stroke.fadeDuration
 
     private var lastDrawingTool: DrawingTool = .pen
 
@@ -63,6 +72,15 @@ final class ToolSettings {
 
         drawsTemporaryInk = defaults.bool(forKey: Key.temporaryInk)
         comesForwardToType = defaults.bool(forKey: Key.comesForwardToType)
+
+        if defaults.object(forKey: Key.temporaryInkSeconds) != nil {
+            temporaryInkSeconds = ToolSettings.clampedInkLife(
+                defaults.double(forKey: Key.temporaryInkSeconds))
+        }
+    }
+
+    private static func clampedInkLife(_ seconds: TimeInterval) -> TimeInterval {
+        min(max(seconds, shortestInkLife), longestInkLife)
     }
 
     private func persist() {
@@ -74,6 +92,7 @@ final class ToolSettings {
         defaults.set(lastDrawingTool.persistedName, forKey: Key.tool)
         defaults.set(drawsTemporaryInk, forKey: Key.temporaryInk)
         defaults.set(comesForwardToType, forKey: Key.comesForwardToType)
+        defaults.set(temporaryInkSeconds, forKey: Key.temporaryInkSeconds)
     }
 
     var style: StrokeStyle {
@@ -122,7 +141,7 @@ final class ToolSettings {
     // is switched on.
     var drawnInkLife: TimeInterval? {
         guard tool == .laser else {
-            return drawsTemporaryInk ? Stroke.fadeDuration : nil
+            return drawsTemporaryInk ? temporaryInkSeconds : nil
         }
 
         return tool.inkLife
@@ -163,6 +182,17 @@ final class ToolSettings {
 
     func toggleTemporaryInk() {
         drawsTemporaryInk.toggle()
+        persist()
+        onChange?()
+    }
+
+    func setTemporaryInkSeconds(_ seconds: TimeInterval) {
+        let wanted = ToolSettings.clampedInkLife(seconds)
+        guard wanted != temporaryInkSeconds else {
+            return
+        }
+
+        temporaryInkSeconds = wanted
         persist()
         onChange?()
     }

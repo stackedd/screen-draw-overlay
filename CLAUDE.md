@@ -40,7 +40,7 @@ Universal binary, macOS 11+.
       LaserDot.swift          the laser's glow, following the pointer
       Canvas.swift            the drawing: strokes, eraser, undo/redo, fading
       Stroke.swift            what a mark is made of; what each tool draws, typing included
-      ToolSettings.swift      the pen in hand, shared and remembered
+      ToolSettings.swift      the pen in hand and how ink behaves, shared and remembered
       ShortcutSettings.swift  which key does what, and how long a wheel waits
       SettingsWindow.swift    the one window: recording a shortcut, setting a delay
       ModeBadge.swift         the corner badge

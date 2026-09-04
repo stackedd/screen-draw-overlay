@@ -1388,3 +1388,20 @@ worst failure a tool can have. So:
 **Where the judgement lies:** the only thing that can say whether this worked is a real
 slideshow and a pair of eyes, so that is a manual check in `docs/RELEASE.md` rather than a
 number here.
+
+
+## 40. How long temporary ink lasts is a setting
+
+Three seconds is a presenter's pen and it is still the default, but the right number depends on
+how fast somebody talks and how long their sentences are - which is not a thing this app can
+know. One to thirty seconds, in the settings window's ink section, next to the typing checkbox
+(entry 39).
+
+**It reaches the ink the right way round.** Every stroke carries its own `life` from the moment
+it is finished, so changing the setting moves what is drawn next and leaves what is already on
+screen exactly as it was. Nothing had to change in `FadingInk` at all, which is the sign that
+the per-stroke life was the right shape to begin with (entry 8).
+
+**What stays out of that window:** colour, width, tool, and whether temporary ink is on. Those
+are wheels, in the hand, while the drawing is in front of you. The window is for what you set
+once - which is the line that decides whether anything else ever goes in it.

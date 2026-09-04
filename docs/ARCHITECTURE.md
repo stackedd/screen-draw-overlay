@@ -30,7 +30,7 @@ version: commands, conventions and the "never do this" list.
 | `LaserDot.swift` | The laser's glow, and the layer that carries it after the pointer. |
 | `Canvas.swift` | The drawing itself: strokes, the eraser, undo/redo, fading. Knows nothing about windows - it returns the rectangles that changed. |
 | `Stroke.swift` | What a mark is made of, what each tool does with two points, and how each style is painted - a pen line, a marker, a beam of light, or a string of text. |
-| `ToolSettings.swift` | The pen in hand: colour, width, tool. Shared across screens, remembered between launches. |
+| `ToolSettings.swift` | The pen in hand: colour, width, tool - and the two things about ink that are settings rather than gestures, how long temporary ink lasts and whether typing takes the front. Shared across screens, remembered between launches. |
 | `ShortcutSettings.swift` | Which key does what and how long each wheel waits, with the rules that keep a binding usable. Remembered between launches. |
 | `SettingsWindow.swift` | The only window this app owns: five recorders, five delays, and the panic key shown but locked. |
 | `ModeBadge.swift` | The badge in the corner - the app's entire on-screen interface while it draws. It hands over a picture, snapped to whole pixels; the view carries it on a layer. |

@@ -24,6 +24,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSTextFieldDelegate {
     private var recorders: [ShortcutSettings.Action: RecorderButton] = [:]
     private var delayFields: [ShortcutSettings.Action: NSTextField] = [:]
     private let comeForward = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let inkLife = NSTextField(string: "")
     private let message = NSTextField(labelWithString: "")
 
     init(settings: ShortcutSettings, tools: ToolSettings,
@@ -152,6 +153,21 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSTextFieldDelegate {
         let inkHeading = NSTextField(labelWithString: "Ink")
         inkHeading.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
 
+        inkLife.alignment = .right
+        inkLife.formatter = SettingsWindow.seconds
+        inkLife.target = self
+        inkLife.action = #selector(inkLifeChanged)
+        inkLife.delegate = self
+        inkLife.toolTip = "Seconds before temporary ink fades, once a mark is finished."
+        inkLife.widthAnchor.constraint(equalToConstant: 52).isActive = true
+
+        let inkLifeLabel = NSTextField(labelWithString: "Temporary ink lasts")
+        let inkLifeUnit = NSTextField(labelWithString: "seconds")
+        inkLifeUnit.textColor = .secondaryLabelColor
+        let inkLifeRow = NSStackView(views: [inkLifeLabel, inkLife, inkLifeUnit])
+        inkLifeRow.orientation = .horizontal
+        inkLifeRow.spacing = 8
+
         comeForward.title = "Come forward while typing"
         comeForward.target = self
         comeForward.action = #selector(comeForwardChanged)
@@ -178,7 +194,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSTextFieldDelegate {
 
         let stack = NSStackView(views: [heading, explanation, grid,
                                         NSBox.separator(width: SettingsWindow.contentWidth),
-                                        inkHeading, comeForward, comeForwardNote, footer])
+                                        inkHeading, inkLifeRow, comeForward, comeForwardNote,
+                                        footer])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 14
@@ -205,6 +222,14 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSTextFieldDelegate {
     private static let inset: CGFloat = 20
     private static var contentWidth: CGFloat { windowWidth - inset * 2 }
 
+    private static let seconds: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .none
+        formatter.minimum = NSNumber(value: ToolSettings.shortestInkLife)
+        formatter.maximum = NSNumber(value: ToolSettings.longestInkLife)
+        return formatter
+    }()
+
     private static let milliseconds: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .none
@@ -223,6 +248,13 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSTextFieldDelegate {
         }
 
         comeForward.state = tools.comesForwardToType ? .on : .off
+        inkLife.stringValue = "\(Int(tools.temporaryInkSeconds.rounded()))"
+    }
+
+    @objc private func inkLifeChanged() {
+        disarm()
+        tools.setTemporaryInkSeconds(TimeInterval(inkLife.integerValue))
+        refresh()
     }
 
     @objc private func comeForwardChanged() {

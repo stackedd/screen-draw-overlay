@@ -445,7 +445,7 @@ final class OverlayController {
                 // not mean to switch it on - and the badge, which says so permanently, is a
                 // small thing in a corner somebody may not be looking at.
                 self.tools.toggleTemporaryInk()
-                let seconds = Int(Stroke.fadeDuration)
+                let seconds = Int(self.tools.temporaryInkSeconds.rounded())
                 let on = self.tools.drawsTemporaryInk
                 self.drawingViews.forEach {
                     $0.flash(on ? "Temporary ink on - strokes fade after \(seconds) seconds"
